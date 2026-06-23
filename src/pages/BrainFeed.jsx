@@ -85,7 +85,7 @@ const BrainFeed = () => {
      }
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/generate-test', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

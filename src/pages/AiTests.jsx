@@ -133,7 +133,7 @@ const AiTests = ({ onStartTest }) => {
         const compiledSections = [];
 
         for (const sec of aiSections) {
-          const response = await fetch('http://localhost:5000/api/generate-test', {
+          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-test`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -201,7 +201,7 @@ const AiTests = ({ onStartTest }) => {
         if (!fullQCount || !fullDuration) { alert("Please enter the question count and duration."); setLoading(false); return; }
         if (parseInt(fullQCount) > 75) { alert("Maximum limit is 75 questions for a single paper."); setLoading(false); return; }
               
-        const response = await fetch('http://localhost:5000/api/generate-test', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-test`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -285,7 +285,7 @@ const AiTests = ({ onStartTest }) => {
     await ensureAiLabCategory();
 
     try {
-      const response = await fetch('http://localhost:5000/api/generate-test', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
