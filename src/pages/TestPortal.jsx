@@ -248,8 +248,6 @@ const TestPortal = ({ testData, onExit }) => {
     });
 
     const totalObjectiveAttempted = correctCount + incorrectCount;
-    
-    // Calculates precision integer to align perfectly with accuracy integer table column
     const finalAccuracyRate = totalObjectiveAttempted > 0 
       ? Math.round((correctCount / totalObjectiveAttempted) * 100) 
       : 0;
@@ -272,7 +270,6 @@ const TestPortal = ({ testData, onExit }) => {
       time: data.time || 180 
     };
 
-    // 1. Sync Local Fallbacks
     const history = JSON.parse(localStorage.getItem('infinity_test_history')) || [];
     history.unshift(finalReport);
     localStorage.setItem('infinity_test_history', JSON.stringify(history));
@@ -281,14 +278,11 @@ const TestPortal = ({ testData, onExit }) => {
     const updatedDrafts = drafts.filter(d => d.id !== data.id);
     localStorage.setItem('infinity_saved_for_later', JSON.stringify(updatedDrafts));
 
-    // 2. Erase Active Draft from Cloud and Publish Accurate Submitted Record node
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Clear previous active drafts context
         await supabase.from('test_sessions').delete().eq('user_id', user.id).eq('test_id', data.id).eq('status', 'draft');
         
-        // Push actual computed metrics safely into the database row
         const { error: insertError } = await supabase.from('test_sessions').insert([
           {
             user_id: user.id,
@@ -296,7 +290,7 @@ const TestPortal = ({ testData, onExit }) => {
             title: data.title,
             status: 'submitted',
             score: finalScoreString, 
-            accuracy: finalAccuracyRate, // Fixed: Sends pure integer to perfectly match accuracy integer column
+            accuracy: finalAccuracyRate, 
             time_left: Math.floor(globalTimeLeft / 60),
             raw_seconds: globalTimeLeft,
             answers: answers,
@@ -305,7 +299,6 @@ const TestPortal = ({ testData, onExit }) => {
           }
         ]);
 
-        // If PostgreSQL throws an insertion reject, trap it immediately!
         if (insertError) {
           alert(`Supabase Insertion Denied:\nMessage: ${insertError.message}\nDetails: ${insertError.details || 'Check column types.'}`);
           console.error("Supabase technical failure log:", insertError);
@@ -319,15 +312,40 @@ const TestPortal = ({ testData, onExit }) => {
     onExit(finalReport);
   };
 
+  // --- 🔥 UPDATED: MULTI-FILE ASYNC BASE64 CONVERTER PIPELINE (0 MB EXTRA CLOUD STORAGE) ---
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
-    const newUploads = files.map(file => ({
-      url: URL.createObjectURL(file),
-      name: file.name,
-      type: file.type
-    }));
-    setUploads(prev => ({ ...prev, [currentQ]: [...(prev[currentQ] || []), ...newUploads] }));
-    e.target.value = null;
+    
+    files.forEach(file => {
+      const reader = new FileReader();
+      
+      reader.onloadend = () => {
+        const base64String = reader.result; // Pure data:image/jpeg;base64 text matrix data
+        
+        setUploads(prev => ({
+          ...prev,
+          [currentQ]: [
+            ...(prev[currentQ] || []),
+            {
+              url: base64String, // Perfectly compatible with <img src={file.url} /> preview strip
+              name: file.name,
+              type: file.type
+            }
+          ]
+        }));
+      };
+      
+      // Fires the reader stream engine to encode text bits
+      reader.readAsDataURL(file);
+    });
+
+    e.target.value = null; // Flush stream reference immediately
+  };
+
+  const handleFileUploadReset = (fIdx) => {
+    const up = [...(uploads[currentQ] || [])];
+    up.splice(fIdx, 1);
+    setUploads({ ...uploads, [currentQ]: up });
   };
 
   const handlePrevNavigation = () => {
@@ -436,9 +454,101 @@ const TestPortal = ({ testData, onExit }) => {
                       <div style={styles.qrContainer}><div style={styles.qrBox}>QR</div><div style={styles.qrText}>Scan to<br/>Upload</div></div>
                     </div>
                     <div style={styles.previewStrip}>
-                      {(uploads[currentQ] || []).map((file, fIdx) => (                         <div key={fIdx} style={styles.thumbWindow} onClick={() => setSelectedPreview(file)}>                           <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); const up = [...uploads[currentQ]]; up.splice(fIdx, 1); setUploads({...uploads, [currentQ]: up}); }}>❌</button>                           {file.type.includes('image') ? <img src={file.url} style={styles.thumbImg} alt="Thumbnail"/> : <div style={styles.pdfIcon}>PDF</div>}                         </div>                       ))}                     </div>                   </div>                   <textarea style={styles.textArea} placeholder="Type notes or supplementary response lines here..." value={answers[currentQ] || ""} onChange={(e) => setAnswers({ ...answers, [currentQ]: e.target.value })} />                 </div>               )}             </div>           </div>         </div>         {/* SIDEBAR QUESTION PALETTE */}         <aside style={styles.paletteSection}>           <div style={styles.palHeader}>Question Matrix Palette</div>           <div style={styles.pGridScroll}>             {questions.map((qObj, i) => {               const isLocked = isSectionalTimed && qObj.sectionIndex !== currentSectionIdx;               return (                 <div key={i}                    onClick={() => {                      if (isLocked) {                        alert("Security Restriction: Sectional timing configurations restrict navigation to the active segment matrix only.");                        return;                      }                      setCurrentQ(i);                    }}                    style={{                      ...styles.pNum,                       background: currentQ === i ? '#1e293b' : isLocked ? '#e2e8f0' : isAttempted(i) ? '#22c55e' : markedForReview.includes(i) ? '#f59e0b' : '#fff',                       color: isLocked ? '#94a3b8' : (currentQ === i || isAttempted(i) || markedForReview.includes(i)) ? '#fff' : '#64748b',                       borderColor: currentQ === i ? '#6366f1' : '#e2e8f0',                      cursor: isLocked ? 'not-allowed' : 'pointer',                      opacity: isLocked ? 0.6 : 1                    }}                 >                   {i + 1}                 </div>               );             })}           </div>         </aside>       </div>       {/* SUMMARY MODAL */}       {showSummary && (         <div style={styles.overlay}>           <div style={styles.modalSummary}>             <div style={styles.summaryTimerHeader}>Remaining Session Timer: <strong style={{color:'#ef4444'}}>{formatTime(globalTimeLeft)}</strong></div>             <h2 style={{margin:'20px 0'}}>Assessment Submission Summary</h2>             <div style={styles.summaryGrid}>               <div style={styles.sumCard}><span>Total Evaluation Scales</span><strong>{questions.length}</strong></div>               <div style={styles.sumCard}><span>Completed Indices</span><strong style={{color:'#22c55e'}}>{attemptedCount}</strong></div>               <div style={styles.sumCard}><span>Unattempted Indices</span><strong style={{color:'#64748b'}}>{unattemptedCount}</strong></div>               <div style={styles.sumCard}><span>Pending Review</span><strong style={{color:'#f59e0b'}}>{reviewCount}</strong></div>             </div>             <div style={{marginTop:'35px', display:'flex', gap:'12px'}}>               <button onClick={() => setShowSummary(false)} style={{...styles.secBtnSmall, flex:1, height:'48px'}}>Review Questions</button>               <button onClick={handleFinalSubmit} style={{...styles.priBtn, flex:1.5, fontSize:'1rem'}}>Confirm Final Submission</button>             </div>           </div>         </div>       )}       {/* PAUSE MODAL */}       {isPaused && (         <div style={styles.overlay}>           <div style={styles.modal}>             <h2>Assessment Suspended</h2>             <p style={{marginBottom:'25px', fontWeight:'600'}}>Would you like to cache this execution session inside Drafts for later retrieval?</p>             <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>               <button onClick={handleSaveForLater} style={styles.priBtn}>Yes, Save Snapshot Draft</button>               <button onClick={() => setIsPaused(false)} style={styles.secBtnSmall}>No, Resume Active Session</button>             </div>           </div>         </div>       )}       {/* FILE PREVIEW */}       {selectedPreview && (         <div style={styles.fullPreview} onClick={() => setSelectedPreview(null)}>            <div style={styles.prevContent} onClick={e=>e.stopPropagation()}>              {selectedPreview.type.includes('image') ? <img src={selectedPreview.url} style={styles.fullImg} /> : <iframe src={selectedPreview.url} style={styles.pdfFrame} />}              <button style={styles.closeBtn} onClick={() => setSelectedPreview(null)}>Close Window</button>            </div>         </div>       )}     </div>   ); };
+                      {(uploads[currentQ] || []).map((file, fIdx) => (
+                        <div key={fIdx} style={styles.thumbWindow} onClick={() => setSelectedPreview(file)}>
+                          <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); handleFileUploadReset(fIdx); }}>❌</button>
+                          {file.type.includes('image') ? <img src={file.url} style={styles.thumbImg} alt="Thumbnail"/> : <div style={styles.pdfIcon}>PDF</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <textarea style={styles.textArea} placeholder="Type notes or supplementary response lines here..." value={answers[currentQ] || ""} onChange={(e) => setAnswers({ ...answers, [currentQ]: e.target.value })} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
-// --- 🎯 ORIGINAL COLOR CODED INDIGO SPECIFICATIONS EXPLICITLY FIXED ---
-const styles = { portalContainer: { height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff', overflow: 'hidden' }, topBarStyle: { height:'65px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 25px', flexShrink:0 }, headerLeft: { display:'flex', alignItems:'center', gap:'20px' }, testTitle: { fontWeight:'800', fontSize:'1.1rem', display:'flex', alignItems:'center' }, exitBtn: { background:'none', border:'none', color:'#64748b', fontWeight:'700', cursor:'pointer' }, headerRight: { display:'flex', alignItems:'center', gap:'15px' }, timerBox: { background:'#f8fafc', border:'1px solid #e2e8f0', padding:'5px 15px', borderRadius:'8px', textAlign:'center', minWidth: '120px' }, timerLabel: { fontSize:'0.55rem', color:'#94a3b8', display:'block', fontWeight:'800' }, pauseBtn: { padding:'8px 15px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'#fff', cursor:'pointer', fontWeight:'600' }, submitBtn: { padding:'10px 20px', borderRadius:'8px', background:'#22c55e', color:'#fff', border:'none', cursor: 'pointer', fontWeight:'800' }, controlCenterFrame: { background: '#fcfdfe', borderBottom: '1px solid #e2e8f0', padding: '15px 40px', flexShrink: 0 }, qInfoLine: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }, qBadge: { fontWeight:'800', color:'#6366f1', fontSize:'0.9rem' }, marksGroup: { display:'flex', gap:'15px', fontWeight:'800', fontSize:'0.75rem' }, buttonActionLine: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }, leftActions: { display: 'flex', gap: '10px', alignItems: 'center' }, stopwatchBadge: { background: '#f0f9ff', color: '#0369a1', padding: '6px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '0.85rem', border: '1px solid #bae6fd' }, rightActions: { display: 'flex', gap: '10px' }, secBtnSmall: { background: '#fff', border: '1px solid #e2e8f0', padding: '8px 15px', borderRadius: '8px', color: '#64748b', fontWeight: '700', cursor: 'pointer', fontSize: '0.8rem' }, navBtn: { background: '#fff', border: '1px solid #6366f1', padding: '8px 20px', borderRadius: '8px', color: '#6366f1', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }, priBtn: { background: '#6366f1', color: '#fff', border: 'none', padding: '10px 25px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer' }, mainLayout: { display:'flex', flex:1, overflow:'hidden' }, questionSection: { flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }, qContentScroll: { flex: 1, overflowY: 'auto' }, qInnerFrame: { padding:'40px 60px', maxWidth:'900px', margin:'0 auto', width:'100%' }, qText: { fontSize:'1.4rem', lineHeight:'1.6', color:'#1e293b', marginBottom:'35px', fontWeight:'500' }, optionsGrid: { display:'grid', gap:'12px' }, optCard: { padding:'18px', borderRadius:'12px', cursor:'pointer', display:'flex', alignItems:'center', gap:'15px', transition:'0.2s' }, optLabel: { width:'32px', height:'32px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'800', fontSize:'0.85rem' }, subjectiveFrame: { background:'#f8fafc', padding:'25px', borderRadius:'15px', border:'1px solid #e2e8f0', display:'flex', flexDirection:'column', gap:'20px' }, uploadSectionTop: { paddingBottom:'20px', borderBottom:'1px solid #e2e8f0' }, javaTextArea: { width:'100%', height:'250px', border:'none', background:'transparent', outline:'none', fontSize:'1.1rem', resize:'none', padding:'10px' }, uploadActions: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px' }, sectionTitle: { margin:'0 0 10px 0', fontWeight:'700', color:'#475569', fontSize:'0.9rem' }, uploadBtn: { background:'#1e293b', color:'#fff', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'700', fontSize:'0.8rem' }, qrContainer: { display:'flex', alignItems:'center', gap:'10px', borderLeft:'2px solid #e2e8f0', paddingLeft:'15px' }, qrBox: { width:'40px', height:'40px', background:'#fff', border:'1px solid #ccc', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'0.7rem' }, qrText: { fontSize:'0.6rem', color:'#64748b', fontWeight:'700' }, previewStrip: { display:'flex', gap:'10px', overflowX:'auto', padding:'5px 0' }, thumbWindow: { width:'80px', height:'100px', background:'#fff', border:'1px solid #ddd', borderRadius:'6px', position:'relative', overflow:'hidden', flexShrink:0 }, thumbImg: { width:'100%', height:'100%', objectFit:'cover' }, pdfIcon: { height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'0.7rem', color:'#64748b' }, delBtn: { position:'absolute', top:0, right:0, background:'red', color:'#fff', border:'none', width:'20px', height:'20px', cursor:'pointer', fontSize:'10px' }, paletteSection: { width:'280px', background:'#f8fafc', borderLeft:'1px solid #e2e8f0', display:'flex', flexDirection:'column' }, palHeader: { padding:'20px', fontWeight:'800', borderBottom:'1px solid #e2e8f0' }, pGridScroll: { flex:1, padding:'20px', display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'8px', overflowY:'auto' }, pNum: { height:'40px', borderRadius:'8px', border:'1px solid', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'800', fontSize:'0.8rem', transition: 'all 0.2s' }, overlay: { position:'fixed', inset:0, background:'rgba(15, 23, 42, 0.9)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center' }, modal: { background:'#fff', padding:'40px', borderRadius:'24px', textAlign:'center', width:'380px' }, modalSummary: { background:'#fff', padding:'35px', borderRadius:'24px', width:'520px', textAlign:'center' }, summaryTimerHeader: { background:'#fef2f2', padding:'10px', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'800', marginBottom:'10px', border:'1px solid #fee2e2' }, summaryGrid: { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginTop:'20px', textAlign:'left' }, sumCard: { padding:'15px', background:'#f8fafc', borderRadius:'12px', display:'flex', flexDirection:'column', gap:'5px', border:'1px solid #e2e8f0' }, fullPreview: { position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center' }, prevContent: { position:'relative', maxWidth:'90vw', maxHeight:'90vh' }, fullImg: { maxWidth:'100%', maxHeight:'85vh', borderRadius:'12px', border:'4px solid #fff' }, pdfFrame: { width:'80vw', height:'80vh', background:'#fff' }, closeBtn: { position:'absolute', top:'-50px', right:0, background:'#fff', padding:'8px 20px', borderRadius:'8px', fontWeight:'800', cursor:'pointer', border:'none' } };
+        {/* SIDEBAR QUESTION PALETTE */}
+        <aside style={styles.paletteSection}>
+          <div style={styles.palHeader}>Question Matrix Palette</div>
+          <div style={styles.pGridScroll}>
+            {questions.map((qObj, i) => {
+              const isLocked = isSectionalTimed && qObj.sectionIndex !== currentSectionIdx;
+              return (
+                <div key={i} 
+                   onClick={() => {
+                     if (isLocked) {
+                       alert("Security Restriction: Sectional timing configurations restrict navigation to the active segment matrix only.");
+                       return;
+                     }
+                     setCurrentQ(i);
+                   }}
+                   style={{
+                     ...styles.pNum, 
+                     background: currentQ === i ? '#1e293b' : isLocked ? '#e2e8f0' : isAttempted(i) ? '#22c55e' : markedForReview.includes(i) ? '#f59e0b' : '#fff', 
+                     color: isLocked ? '#94a3b8' : (currentQ === i || isAttempted(i) || markedForReview.includes(i)) ? '#fff' : '#64748b', 
+                     borderColor: currentQ === i ? '#6366f1' : '#e2e8f0',
+                     cursor: isLocked ? 'not-allowed' : 'pointer',
+                     opacity: isLocked ? 0.6 : 1
+                   }}
+                >
+                  {i + 1}
+                </div>
+              );
+            })}
+          </div>
+        </aside>
+      </div>
+
+      {/* SUMMARY MODAL */}
+      {showSummary && (
+        <div style={styles.overlay}>
+          <div style={styles.modalSummary}>
+            <div style={styles.summaryTimerHeader}>Remaining Session Timer: <strong style={{color:'#ef4444'}}>{formatTime(globalTimeLeft)}</strong></div>
+            <h2 style={{margin:'20px 0'}}>Assessment Submission Summary</h2>
+            <div style={styles.summaryGrid}>
+              <div style={styles.sumCard}><span>Total Evaluation Scales</span><strong>{questions.length}</strong></div>
+              <div style={styles.sumCard}><span>Completed Indices</span><strong style={{color:'#22c55e'}}>{attemptedCount}</strong></div>
+              <div style={styles.sumCard}><span>Unattempted Indices</span><strong style={{color:'#64748b'}}>{unattemptedCount}</strong></div>
+              <div style={styles.sumCard}><span>Pending Review</span><strong style={{color:'#f59e0b'}}>{reviewCount}</strong></div>
+            </div>
+            <div style={{marginTop:'35px', display:'flex', gap:'12px'}}>
+              <button onClick={() => setShowSummary(false)} style={{...styles.secBtnSmall, flex:1, height:'48px'}}>Review Questions</button>
+              <button onClick={handleFinalSubmit} style={{...styles.priBtn, flex:1.5, fontSize:'1rem'}}>Confirm Final Submission</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PAUSE MODAL */}
+      {isPaused && (
+        <div style={styles.overlay}>
+          <div style={styles.modal}>
+            <h2>Assessment Suspended</h2>
+            <p style={{marginBottom:'25px', fontWeight:'600'}}>Would you like to cache this execution session inside Drafts for later retrieval?</p>
+            <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+              <button onClick={handleSaveForLater} style={styles.priBtn}>Yes, Save Snapshot Draft</button>
+              <button onClick={() => setIsPaused(false)} style={styles.secBtnSmall}>No, Resume Active Session</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FILE PREVIEW */}
+      {selectedPreview && (
+        <div style={styles.fullPreview} onClick={() => setSelectedPreview(null)}>
+           <div style={styles.prevContent} onClick={e=>e.stopPropagation()}>
+             {selectedPreview.type.includes('image') ? <img src={selectedPreview.url} style={styles.fullImg} /> : <iframe src={selectedPreview.url} style={styles.pdfFrame} />}
+             <button style={styles.closeBtn} onClick={() => setSelectedPreview(null)}>Close Window</button>
+           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- STYLES MATRIX ---
+const styles = { portalContainer: { height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff', overflow: 'hidden' }, topBarStyle: { height:'65px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 25px', flexShrink:0 }, headerLeft: { display:'flex', alignItems:'center', gap:'20px' }, testTitle: { fontWeight:'800', fontSize:'1.1rem', display:'flex', alignItems:'center' }, exitBtn: { background:'none', border:'none', color:'#64748b', fontWeight:'700', cursor:'pointer' }, headerRight: { display:'flex', alignItems:'center', gap:'15px' }, timerBox: { background:'#f8fafc', border:'1px solid #e2e8f0', padding:'5px 15px', borderRadius:'8px', textAlign:'center', minWidth: '120px' }, timerLabel: { fontSize:'0.55rem', color:'#94a3b8', display:'block', fontWeight:'800' }, pauseBtn: { padding:'8px 15px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'#fff', cursor:'pointer', fontWeight:'600' }, submitBtn: { padding:'10px 20px', borderRadius:'8px', background:'#22c55e', color:'#fff', border:'none', cursor: 'pointer', fontWeight:'800' }, controlCenterFrame: { background: '#fcfdfe', borderBottom: '1px solid #e2e8f0', padding: '15px 40px', flexShrink: 0 }, qInfoLine: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }, qBadge: { fontWeight:'800', color:'#6366f1', fontSize:'0.9rem' }, marksGroup: { display:'flex', gap:'15px', fontWeight:'800', fontSize:'0.75rem' }, buttonActionLine: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }, leftActions: { display: 'flex', gap: '10px', alignItems: 'center' }, stopwatchBadge: { background: '#f0f9ff', color: '#0369a1', padding: '6px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '0.85rem', border: '1px solid #bae6fd' }, rightActions: { display: 'flex', gap: '10px' }, secBtnSmall: { background: '#fff', border: '1px solid #e2e8f0', padding: '8px 15px', borderRadius: '8px', color: '#64748b', fontWeight: '700', cursor: 'pointer', fontSize: '0.8rem' }, navBtn: { background: '#fff', border: '1px solid #6366f1', padding: '8px 20px', borderRadius: '8px', color: '#6366f1', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }, priBtn: { background: '#6366f1', color: '#fff', border: 'none', padding: '10px 25px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer' }, mainLayout: { display:'flex', flex:1, overflow:'hidden' }, questionSection: { flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }, qContentScroll: { flex: 1, overflowY: 'auto' }, qInnerFrame: { padding:'40px 60px', maxWidth:'900px', margin:'0 auto', width:'100%' }, qText: { fontSize:'1.4rem', lineHeight:'1.6', color:'#1e293b', marginBottom:'35px', fontWeight:'500' }, optionsGrid: { display:'grid', gap:'12px' }, optCard: { padding:'18px', borderRadius:'12px', cursor:'pointer', display:'flex', alignItems:'center', gap:'15px', transition:'0.2s' }, optLabel: { width:'32px', height:'32px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'800', fontSize:'0.85rem' }, subjectiveFrame: { background:'#f8fafc', padding:'25px', borderRadius:'15px', border:'1px solid #e2e8f0', display:'flex', flexDirection:'column', gap:'20px' }, uploadSectionTop: { paddingBottom:'20px', borderBottom:'1px solid #e2e8f0' }, textArea: { width:'100%', height:'250px', border:'none', background:'transparent', outline:'none', fontSize:'1.1rem', resize:'none', padding:'10px' }, uploadActions: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px' }, sectionTitle: { margin:'0 0 10px 0', fontWeight:'700', color:'#475569', fontSize:'0.9rem' }, uploadBtn: { background:'#1e293b', color:'#fff', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'700', fontSize:'0.8rem' }, qrContainer: { display:'flex', alignItems:'center', gap:'10px', borderLeft:'2px solid #e2e8f0', paddingLeft:'15px' }, qrBox: { width:'40px', height:'40px', background:'#fff', border:'1px solid #ccc', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'0.7rem' }, qrText: { fontSize:'0.6rem', color:'#64748b', fontWeight:'700' }, previewStrip: { display:'flex', gap:'10px', overflowX:'auto', padding:'5px 0' }, thumbWindow: { width:'80px', height:'100px', background:'#fff', border:'1px solid #ddd', borderRadius:'6px', position:'relative', overflow:'hidden', flexShrink:0 }, thumbImg: { width:'100%', height:'100%', objectFit:'cover' }, pdfIcon: { height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'0.7rem', color:'#64748b' }, delBtn: { position:'absolute', top:0, right:0, background:'red', color:'#fff', border:'none', width:'20px', height:'20px', cursor:'pointer', fontSize:'10px' }, paletteSection: { width:'280px', background:'#f8fafc', borderLeft:'1px solid #e2e8f0', display:'flex', flexDirection:'column' }, palHeader: { padding:'20px', fontWeight:'800', borderBottom:'1px solid #e2e8f0' }, pGridScroll: { flex:1, padding:'20px', display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'8px', overflowY:'auto' }, pNum: { height:'40px', borderRadius:'8px', border:'1px solid', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'800', fontSize:'0.8rem', transition: 'all 0.2s' }, overlay: { position:'fixed', inset:0, background:'rgba(15, 23, 42, 0.9)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center' }, modal: { background:'#fff', padding:'40px', borderRadius:'24px', textAlign:'center', width:'380px' }, modalSummary: { background:'#fff', padding:'35px', borderRadius:'24px', width:'520px', textAlign:'center' }, summaryTimerHeader: { background:'#fef2f2', padding:'10px', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'800', marginBottom:'10px', border:'1px solid #fee2e2' }, summaryGrid: { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginTop:'20px', textAlign:'left' }, sumCard: { padding:'15px', background:'#f8fafc', borderRadius:'12px', display:'flex', flexDirection:'column', gap:'5px', border:'1px solid #e2e8f0' }, fullPreview: { position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center' }, prevContent: { position:'relative', maxWidth:'90vw', maxHeight:'90vh' }, fullImg: { maxWidth:'100%', maxHeight:'85vh', borderRadius:'12px', border:'4px solid #fff' }, pdfFrame: { width:'80vw', height:'80vh', background:'#fff' }, closeBtn: { position:'absolute', top:'-50px', right:0, background:'#fff', padding:'8px 20px', borderRadius:'8px', fontWeight:'800', cursor:'pointer', border:'none' } };
 
 export default TestPortal;

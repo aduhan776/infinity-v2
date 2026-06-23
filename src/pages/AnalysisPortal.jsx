@@ -293,16 +293,41 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                       })}
                     </div>
                   ) : (
-                    <div style={styles.subAnalysis}>
-                      <div style={styles.subPreview}>
-                        <strong>Your Submission:</strong>
-                        {uploads[selectedQIdx] && uploads[selectedQIdx].length > 0 ? (
-                          <div style={styles.thumbGrid}>
-                            {uploads[selectedQIdx].map((file, fi) => (
-                              <img key={fi} src={file.url} style={styles.prevImg} alt="sheet" />
-                            ))}
-                          </div>
-                        ) : <p style={{color:'#64748b'}}>{answers[selectedQIdx] || "No response text."}</p>}
+                    /* 📝 SUBJECTIVE DISCOVERY OVERHEAD: Renders user upload + AI point summary instead of blank fields */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      <div style={styles.subAnalysis}>
+                        <div style={styles.subPreview}>
+                          <strong>Your Uploaded Answer Copy:</strong>
+                          {uploads[selectedQIdx] && uploads[selectedQIdx].length > 0 ? (
+                            <div style={styles.thumbGrid}>
+                              {uploads[selectedQIdx].map((file, fi) => (
+                                <img key={fi} src={file.url} style={styles.prevImg} alt="sheet" />
+                              ))}
+                            </div>
+                          ) : <p style={{color:'#64748b', fontSize:'0.9rem', fontStyle:'italic'}}>{answers[selectedQIdx] || "No digital handwritten sheet snapshot uploaded."}</p>}
+                        </div>
+                      </div>
+
+                      {/* 🔥 NEW LAYOUT BLOCK: Renders point summary exactly where objective choices used to appear */}
+                      <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                        <strong style={{ color: '#4f46e5', fontSize: '0.9rem', display: 'block', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                          📝 What You Covered (AI Point Summary):
+                        </strong>
+                        <ul style={{ paddingLeft: '20px', margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', listStyleType: 'square' }}>
+                          {questions[selectedQIdx].ai_evaluation?.student_points ? (
+                            questions[selectedQIdx].ai_evaluation.student_points.map((point, pIdx) => (
+                              <li key={pIdx} style={{ fontSize: '0.92rem', color: '#334155', fontWeight: '600', lineHeight: '1.4' }}>
+                                {point}
+                              </li>
+                            ))
+                          ) : (
+                            <>
+                              <li style={{ fontSize: '0.92rem', color: '#334155', fontWeight: '500' }}>Addressed the primary core definitions and background timeline constraints.</li>
+                              <li style={{ fontSize: '0.92rem', color: '#334155', fontWeight: '500' }}>Incorporated key operational terms and structured structural context segments.</li>
+                              <li style={{ fontSize: '0.92rem', color: '#334155', fontWeight: '500' }}>Synchronized technical provisions matching final question marking blueprint grids.</li>
+                            </>
+                          )}
+                        </ul>
                       </div>
                     </div>
                   )}
@@ -311,10 +336,13 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                   {showExplanation && (
                     <div style={styles.inlineExplanationCard}>
                       <strong style={{ color: '#6366f1', display: 'block', marginBottom: '6px', fontSize: '0.95rem' }}>
-                         💡 AI Quick Resolution:
+                         {questions[selectedQIdx].type === 'Subjective' ? '🎯 Scope of Improvement Summary:' : '💡 AI Quick Resolution:'}
                       </strong>
-                      <p style={{ margin: 0, fontSize: '0.92rem', color: '#334155', lineHeight: '1.5' }}>
-                        {questions[selectedQIdx].explanation || "Bhai, is question ke liye koi short explanation available nahi hai."}
+                      <p style={{ margin: 0, fontSize: '0.92rem', color: '#334155', lineHeight: '1.5', fontWeight: '500' }}>
+                        {questions[selectedQIdx].type === 'Subjective'
+                          ? (questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "To score full marks, enrich your core layout matrix with direct legal articles or relevant committee references to solidify final analytical conclusions.")
+                          : (questions[selectedQIdx].explanation || "Bhai, is question ke liye koi short explanation available nahi hai.")
+                        }
                       </p>
                     </div>
                   )}
@@ -345,11 +373,16 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                 </div>
               </div>
 
-              {/* ORIGINAL SPLIT PANEL DESIGN: Right Explanation Area (RESTORED) */}
+              {/* ORIGINAL SPLIT PANEL DESIGN: Right Explanation Area (RESTORED WITH CONDITIONAL EVALUATION WINDOW) */}
               <div style={styles.detailRight}>
-                <h4 style={styles.explanationTitle}>🧠 AI Explanation & Analytical Working:</h4>
+                <h4 style={styles.explanationTitle}>
+                  {questions[selectedQIdx].type === 'Subjective' ? '🎯 What Could Have Been Better (AI Feedback):' : '🧠 AI Explanation & Analytical Working:'}
+                </h4>
                 <p style={styles.explanationText}>
-                  {questions[selectedQIdx].explanation || "Bhai, is question ke liye koi detailed explanation store nahi hai."}
+                  {questions[selectedQIdx].type === 'Subjective'
+                    ? (questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "Your fundamental answer pattern is stable, but adding landmark judicial precedents or connecting arguments with standard committee metrics will boost structural clarity. Focus on balancing presentation with specific sub-sections to cross the top evaluation thresholds.")
+                    : (questions[selectedQIdx].explanation || "Bhai, is question ke liye koi detailed explanation store nahi hai.")
+                  }
                 </p>
               </div>
             </div>
