@@ -1,0 +1,31 @@
+/* index.css */
+
+/* 1. Font aur Reset */
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  
+  /* Background ka color jo poore browser mein dikhega */
+  background-color: #f8fafc; 
+}
+
+/* 2. Margin/Padding reset taaki layout corner se chipak jaye */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 100vw;
+  min-height: 100vh;
+  /* Ye ensure karega ki layout left se hi shuru ho */
+  display: block; 
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}
