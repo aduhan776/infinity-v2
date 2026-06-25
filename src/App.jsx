@@ -20,7 +20,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
 
   // --- 🛡️ GLOBAL ADMIN ACCESS PRIVILEGES TRACKER ---
-  const { isAdmin, loading: adminHookLoading } = useAdmin(); // Live system role state
+  const { isAdmin, loading: adminHookLoading } = useAdmin(session); // Live system role state
 
   // --- CORE SYSTEM APPLICATION STATES ---
   const [activeTab, setActiveTab] = useState('dashboard');
