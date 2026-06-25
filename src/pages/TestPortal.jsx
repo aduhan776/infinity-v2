@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; // ⚡ Linked cloud connection gateway
+import LatexText from '../components/LatexText';
 
 const TestPortal = ({ testData, onExit }) => {
   // --- 1. DATA PARSING & FALLBACKS ---
@@ -432,13 +433,13 @@ const TestPortal = ({ testData, onExit }) => {
            
           <div style={styles.qContentScroll}>
             <div style={styles.qInnerFrame}>
-              <p style={styles.qText}>{questions[currentQ].question}</p>
+              <p style={styles.qText}><LatexText text={questions[currentQ].question} /></p>
               {questions[currentQ].type === 'Objective' ? (
                 <div style={styles.optionsGrid}>
                   {questions[currentQ].options.map((opt, idx) => (
                     <div key={idx} style={{...styles.optCard, border: answers[currentQ] === idx ? '2px solid #6366f1' : '1px solid #e2e8f0', background: answers[currentQ] === idx ? '#f5f7ff' : '#fff'} } onClick={() => setAnswers({ ...answers, [currentQ]: idx })}>
                       <span style={{...styles.optLabel, background: answers[currentQ] === idx ? '#6366f1' : '#f1f5f9', color: answers[currentQ] === idx ? '#fff' : '#1e293b'}}>{String.fromCharCode(65 + idx)}</span>
-                      {opt}
+                      <LatexText text={opt} />
                     </div>
                   ))}
                 </div>

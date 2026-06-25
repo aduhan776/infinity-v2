@@ -344,7 +344,7 @@ const BrainFeed = () => {
                         </div>
                         
                         <div style={scrollableCardContentBody}>
-                          <h2 style={questionTextStyle}>{q.question}</h2>
+                          <h2 style={questionTextStyle}><LatexText text={q.question} /></h2>
 
                           {showWarning && idx === currentIdx && (
                             <div style={inlineCardWarningStyle}>
@@ -387,7 +387,7 @@ const BrainFeed = () => {
                                     cursor: itemChoice !== undefined ? 'default' : 'pointer'
                                   }}
                                 >
-                                  <span style={optLabelMarker}>{String.fromCharCode(64 + oIdx + 1)}.</span> {opt}
+                                  <span style={optLabelMarker}>{String.fromCharCode(64 + oIdx + 1)}.</span> <LatexText text={opt} />
                                 </button>
                               );
                             })}
@@ -409,7 +409,7 @@ const BrainFeed = () => {
                         }}>
                           {itemChoice !== undefined ? (
                             <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569', lineHeight: '1.55', fontWeight: '500' }}>
-                              {q.explanation}
+                              <LatexText text={q.explanation} />
                             </p>
                           ) : (
                             <p style={{ margin: 0, fontSize: '0.85rem', color: '#94a3b8', lineHeight: '1.55', fontWeight: '500', textAlign: 'center' }}>

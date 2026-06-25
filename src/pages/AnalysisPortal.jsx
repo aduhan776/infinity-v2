@@ -261,7 +261,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                   <div style={styles.metaRow}>
                     <span style={styles.metaItem}>⏱️ <strong>Your Time:</strong> {formatTime(timeTracker[selectedQIdx])}</span>
                   </div>
-                  <p style={styles.detailText}>{questions[selectedQIdx].question}</p>
+                  <p style={styles.detailText}><LatexText text={questions[selectedQIdx].question} /> </p>
                    
                   {questions[selectedQIdx].type === 'Objective' ? (
                     <div style={styles.detailOptions}>
@@ -284,7 +284,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                             border: borderStyle,
                             background: bgStyle
                           }}>
-                            <span>{String.fromCharCode(65 + oIdx)}. {opt}</span>
+                            <span>{String.fromCharCode(65 + oIdx)}. <LatexText text={opt} /> </span>
                             {isCorrect && isUserChoice && <span style={{ color: '#22c55e', fontWeight: 'bold' }}>✨ Correct Answer & Your Choice</span>}
                             {isCorrect && !isUserChoice && <span style={{ color: '#16a34a', fontWeight: 'bold' }}>🎯 Correct Answer</span>}
                             {isUserChoice && !isCorrect && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>❌ Your Wrong Choice</span>}
@@ -340,9 +340,9 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                       </strong>
                       <p style={{ margin: 0, fontSize: '0.92rem', color: '#334155', lineHeight: '1.5', fontWeight: '500' }}>
                         {questions[selectedQIdx].type === 'Subjective'
-                          ? (questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "To score full marks, enrich your core layout matrix with direct legal articles or relevant committee references to solidify final analytical conclusions.")
-                          : (questions[selectedQIdx].explanation || "Bhai, is question ke liye koi short explanation available nahi hai.")
-                        }
+  ? <LatexText text={questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "To score full marks, enrich your core layout matrix with direct legal articles or relevant committee references to solidify final analytical conclusions."} />
+  : <LatexText text={questions[selectedQIdx].explanation || "Bhai, is question ke liye koi short explanation available nahi hai."} />
+}
                       </p>
                     </div>
                   )}
@@ -379,10 +379,10 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                   {questions[selectedQIdx].type === 'Subjective' ? '🎯 What Could Have Been Better (AI Feedback):' : '🧠 AI Explanation & Analytical Working:'}
                 </h4>
                 <p style={styles.explanationText}>
-                  {questions[selectedQIdx].type === 'Subjective'
-                    ? (questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "Your fundamental answer pattern is stable, but adding landmark judicial precedents or connecting arguments with standard committee metrics will boost structural clarity. Focus on balancing presentation with specific sub-sections to cross the top evaluation thresholds.")
-                    : (questions[selectedQIdx].explanation || "Bhai, is question ke liye koi detailed explanation store nahi hai.")
-                  }
+                 {questions[selectedQIdx].type === 'Subjective'
+  ? <LatexText text={questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "Your fundamental answer pattern is stable, but adding landmark judicial precedents or connecting arguments with standard committee metrics will boost structural clarity. Focus on balancing presentation with specific sub-sections to cross the top evaluation thresholds."} />
+  : <LatexText text={questions[selectedQIdx].explanation || "Bhai, is question ke liye koi detailed explanation store nahi hai."} />
+}
                 </p>
               </div>
             </div>
