@@ -20,7 +20,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
 
   // --- 🛡️ GLOBAL ADMIN ACCESS PRIVILEGES TRACKER ---
-  const { isAdmin, loading: adminHookLoading } = useAdmin(session); // Live system role state
+  const { isAdmin } = useAdmin(session); // Live system role state
 
   // --- CORE SYSTEM APPLICATION STATES ---
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -360,7 +360,7 @@ function App() {
               Statistics
             </button>
             
-            {/* 🛡️ TAREQE 1 SECURITY INTERFACE: Custom Builder Tab strictly hidden from normal students */}
+            {/* 🛡️ SECURITY INTERFACE: Custom Builder Tab hidden from normal students */}
             {isAdmin && (
               <button className={activeTab === 'custom-builder' ? 'active' : ''} onClick={() => setActiveTab('custom-builder')}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -413,6 +413,7 @@ function App() {
               ↩ Back
             </button>
 
+            {/* 🎯 FIXED STYLE TYPO HERE (stray word 'frame' removed) */}
             <div className="search-box" style={searchEngineWrapperContainer}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }}>
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -464,6 +465,7 @@ function App() {
                   selectedFolder={testSeriesFolder}
                   setSelectedFolder={setTestSeriesFolder}
                   onViewAnalysis={handleViewAnalysis}
+                  session={session}
                 />
               )}
               {activeTab === 'library' && (
@@ -472,7 +474,7 @@ function App() {
               {activeTab === 'analysis-portal' && testResults && (
                 <AnalysisPortal results={testResults} onBackToDashboard={() => setActiveTab('dashboard')} />
               )}
-              {/* 🛡️ TAREQE 1 GATEWAY GUARD: Double checking admin permissions before rendering component */}
+              {/* 🛡️ GATEWAY GUARD: Double checking admin permissions before rendering component */}
               {activeTab === 'custom-builder' && (
                 isAdmin ? (
                   <CustomBuilder onStartTest={startTestHandler} />
