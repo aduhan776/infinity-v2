@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; // ⚡ Linked cloud connection gateway
+import LatexText from '../components/LatexText'; // 👈 YEH IMPORT GAYAB THA BHAI, AB FIXED HAI!
 
 const AnalysisPortal = ({ results, onBackToDashboard }) => {
   const [activeFilter, setActiveFilter] = useState('all');
@@ -23,10 +24,22 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
   // --- 1. PRECISE CALCULATION LOGIC ---
   const totalQ = questions ? questions.length : 0;
   const objectiveIndices = questions ? questions.map((q, i) => q.type === 'Objective' ? i : -1).filter(i => i !== -1) : [];
-  const correctCount = objectiveIndices.filter(idx => answers[idx] === questions[idx]?.correct).length;
   
-  // Ekdum makkhan aur bulletproof logic 
-  const incorrectCount = objectiveIndices.filter(idx => answers[idx] !== undefined && answers[idx] !== null && answers[idx] !== questions[idx]?.correct).length;
+  // 🎯 BULLETPROOF CORRECT/INCORRECT FIELD CHECK (Handles both 'correct' and 'correctOptionIndex')
+  const correctCount = objectiveIndices.filter(idx => {
+    const q = questions[idx];
+    if (!q) return false;
+    const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
+    return answers[idx] !== undefined && parseInt(answers[idx]) === parseInt(correctAns);
+  }).length;
+  
+  const incorrectCount = objectiveIndices.filter(idx => {
+    const q = questions[idx];
+    if (!q) return false;
+    const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
+    return answers[idx] !== undefined && answers[idx] !== null && answers[idx] !== "" && parseInt(answers[idx]) !== parseInt(correctAns);
+  }).length;
+
   const attemptedCount = questions ? questions.filter((_, i) => {
     const hasAns = answers[i] !== undefined && answers[i] !== null && answers[i] !== "";
     const hasUp = uploads[i] && uploads[i].length > 0;
@@ -36,10 +49,13 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
   // Ekdum Dynamic Score Calculator 
   const totalScore = objectiveIndices.reduce((sum, idx) => {
-    if (questions[idx] && answers[idx] === questions[idx].correct) {
-      return sum + parseFloat(questions[idx].marks || 2);
+    const q = questions[idx];
+    if (!q) return sum;
+    const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
+    if (answers[idx] !== undefined && answers[idx] !== null && parseInt(answers[idx]) === parseInt(correctAns)) {
+      return sum + parseFloat(q.marks || 2);
     } else if (answers[idx] !== undefined && answers[idx] !== null && answers[idx] !== "") {
-      return sum + parseFloat(questions[idx]?.neg || -0.66);
+      return sum + parseFloat(q?.neg || -0.66);
     }
     return sum;
   }, 0);
@@ -105,6 +121,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
         return alert("Bhai, ye question pehle se tere library vault mein safe hai! 🔖");
       }
 
+      const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
       const { error } = await supabase
         .from('saved_questions')
         .insert([
@@ -112,7 +129,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
             user_id: user.id,
             topic: "Exam Analysis",
             question: q.question,
-            answer: q.type === 'Objective' ? q.options[q.correct] : "Subjective Verification Required",
+            answer: q.type === 'Objective' && q.options ? q.options[correctAns] : "Subjective Verification Required",
             explanation: q.explanation || "Saved directly via platform test evaluation metrics portal window."
           }
         ]);
@@ -141,7 +158,8 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
     const hasUp = uploads[idx] && uploads[idx].length > 0;
     if (!hasAns && !hasUp) return 'unattempted';
     if (questions[idx].type === 'Objective') {
-      return answers[idx] === questions[idx].correct ? 'correct' : 'incorrect';
+      const correctAns = questions[idx].correct !== undefined ? questions[idx].correct : questions[idx].correctOptionIndex;
+      return parseInt(answers[idx]) === parseInt(correctAns) ? 'correct' : 'incorrect';
     }
     return 'attempted';
   };
@@ -265,9 +283,10 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                    
                   {questions[selectedQIdx].type === 'Objective' ? (
                     <div style={styles.detailOptions}>
-                      {questions[selectedQIdx].options.map((opt, oIdx) => {
-                        const isCorrect = oIdx === questions[selectedQIdx].correct;
-                        const isUserChoice = answers[selectedQIdx] === oIdx;
+                      {(questions[selectedQIdx].options || []).map((opt, oIdx) => {
+                        const correctAns = questions[selectedQIdx].correct !== undefined ? questions[selectedQIdx].correct : questions[selectedQIdx].correctOptionIndex;
+                        const isCorrect = oIdx === parseInt(correctAns);
+                        const isUserChoice = answers[selectedQIdx] !== undefined && oIdx === parseInt(answers[selectedQIdx]);
                         
                         let borderStyle = '1px solid #e2e8f0';
                         let bgStyle = '#fff';
@@ -284,7 +303,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                             border: borderStyle,
                             background: bgStyle
                           }}>
-                            <span>{String.fromCharCode(65 + oIdx)}. <LatexText text={opt} /> </span>
+                            <span>{String.fromCharCode(64 + oIdx + 1)}. <LatexText text={opt} /> </span>
                             {isCorrect && isUserChoice && <span style={{ color: '#22c55e', fontWeight: 'bold' }}>✨ Correct Answer & Your Choice</span>}
                             {isCorrect && !isUserChoice && <span style={{ color: '#16a34a', fontWeight: 'bold' }}>🎯 Correct Answer</span>}
                             {isUserChoice && !isCorrect && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>❌ Your Wrong Choice</span>}
@@ -293,7 +312,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                       })}
                     </div>
                   ) : (
-                    /* 📝 SUBJECTIVE DISCOVERY OVERHEAD: Renders user upload + AI point summary instead of blank fields */
+                    /* 📝 SUBJECTIVE DISCOVERY OVERHEAD */
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                       <div style={styles.subAnalysis}>
                         <div style={styles.subPreview}>
@@ -308,7 +327,6 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                         </div>
                       </div>
 
-                      {/* 🔥 NEW LAYOUT BLOCK: Renders point summary exactly where objective choices used to appear */}
                       <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                         <strong style={{ color: '#4f46e5', fontSize: '0.9rem', display: 'block', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                           📝 What You Covered (AI Point Summary):
@@ -340,9 +358,9 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                       </strong>
                       <p style={{ margin: 0, fontSize: '0.92rem', color: '#334155', lineHeight: '1.5', fontWeight: '500' }}>
                         {questions[selectedQIdx].type === 'Subjective'
-  ? <LatexText text={questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "To score full marks, enrich your core layout matrix with direct legal articles or relevant committee references to solidify final analytical conclusions."} />
-  : <LatexText text={questions[selectedQIdx].explanation || "Bhai, is question ke liye koi short explanation available nahi hai."} />
-}
+                          ? <LatexText text={questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "To score full marks, enrich your core layout matrix with direct legal articles or relevant committee references to solidify final analytical conclusions."} />
+                          : <LatexText text={questions[selectedQIdx].explanation || "Bhai, is question ke liye koi short explanation available nahi hai."} />
+                        }
                       </p>
                     </div>
                   )}
@@ -373,16 +391,16 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                 </div>
               </div>
 
-              {/* ORIGINAL SPLIT PANEL DESIGN: Right Explanation Area (RESTORED WITH CONDITIONAL EVALUATION WINDOW) */}
+              {/* ORIGINAL SPLIT PANEL DESIGN */}
               <div style={styles.detailRight}>
                 <h4 style={styles.explanationTitle}>
                   {questions[selectedQIdx].type === 'Subjective' ? '🎯 What Could Have Been Better (AI Feedback):' : '🧠 AI Explanation & Analytical Working:'}
                 </h4>
                 <p style={styles.explanationText}>
                  {questions[selectedQIdx].type === 'Subjective'
-  ? <LatexText text={questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "Your fundamental answer pattern is stable, but adding landmark judicial precedents or connecting arguments with standard committee metrics will boost structural clarity. Focus on balancing presentation with specific sub-sections to cross the top evaluation thresholds."} />
-  : <LatexText text={questions[selectedQIdx].explanation || "Bhai, is question ke liye koi detailed explanation store nahi hai."} />
-}
+                    ? <LatexText text={questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "Your fundamental answer pattern is stable, but adding landmark judicial precedents or connecting arguments with standard committee metrics will boost structural clarity. Focus on balancing presentation with specific sub-sections to cross the top evaluation thresholds."} />
+                    : <LatexText text={questions[selectedQIdx].explanation || "Bhai, is question ke liye koi detailed explanation store nahi hai."} />
+                  }
                 </p>
               </div>
             </div>
@@ -393,7 +411,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
   );
 };
 
-// --- ORIGINAL STYLES SCHEMA ---
+// --- STYLES SCHEMA ---
 const styles = {
   container: { padding: '30px', background: '#f8fafc', minHeight: '100vh' },
   summaryHeader: { background: '#fff', padding: '30px', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginBottom: '30px' },

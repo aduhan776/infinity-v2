@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
+import LatexText from '../components/LatexText'; // 👈 YEH IMPORT GAYAB THA BHAI, AB FIXED HAI!
 
 const BrainFeed = () => {
   // --- CONFIGURATION FORM STATES ---
@@ -162,7 +163,7 @@ const BrainFeed = () => {
     });
   };
 
-  // 🎯 NEW RE-ENGINEERED OVERWRITE PIPELINE: Updates rows directly inside Profiles columns
+  // 🎯 REALIGNED DATABASE PIPELINE: Ab profiles table ke exact columns (total_attempted, total_correct) use honge!
   const saveSessionMetricsToProfile = async () => {
     const attempted = Object.keys(selectedAnswers).length;
     if (attempted === 0) return;
@@ -173,32 +174,33 @@ const BrainFeed = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // 1. Fetch current historical numbers from user profile row
+        // 1. Database ke asli columns select karo
         const { data: profile } = await supabase
           .from('profiles')
-          .select('brainfeed_count, brainfeed_accuracy')
+          .select('total_attempted, total_correct')
           .eq('id', user.id)
           .single();
 
-        const oldQuestions = profile?.brainfeed_count || 0;
-        const oldAccuracy = profile?.brainfeed_accuracy || 0;
+        const oldAttempted = profile?.total_attempted || 0;
+        const oldCorrect = profile?.total_correct || 0;
 
-        // 2. Perform cumulative mathematical aggregations
-        const oldCorrect = Math.round((oldAccuracy * oldQuestions) / 100);
-        const newTotalQuestions = oldQuestions + attempted;
+        // 2. Perform cumulative aggregations
+        const newTotalQuestions = oldAttempted + attempted;
         const newTotalCorrect = oldCorrect + correct;
+        
+        const oldAccuracy = oldAttempted > 0 ? Math.round((oldCorrect / oldAttempted) * 100) : 0;
         const newOverallAccuracy = newTotalQuestions > 0 ? Math.round((newTotalCorrect / newTotalQuestions) * 100) : 0;
 
-        // 3. Directly overwrite that single data box inside the profile table
+        // 3. Directly update correct columns inside the database profile table
         await supabase
           .from('profiles')
           .update({
-            brainfeed_count: newTotalQuestions,
-            brainfeed_accuracy: newOverallAccuracy
+            total_attempted: newTotalQuestions,
+            total_correct: newTotalCorrect
           })
           .eq('id', user.id);
 
-          // Save to local hooks for rendering summary popups
+          // Summary hooks update
           setMetricsSummary({
             sessionAccuracy,
             beforeAccuracy: oldAccuracy,
@@ -285,8 +287,6 @@ const BrainFeed = () => {
       </div>
     );
   }
-
-  const isCurrentCardAnswered = selectedAnswers[currentIdx] !== undefined;
 
   if (isFeedActive && questions.length > 0) {
     return (

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
+import LatexText from '../components/LatexText'; 
 
 const AiTests = ({ onStartTest }) => {
   const [view, setView] = useState('selection'); // selection, config-full, config-topic, ai-summary, admin-preview, admin-push-cloud
@@ -786,13 +787,13 @@ const AiTests = ({ onStartTest }) => {
                         <span style={{ fontWeight: '800', color: '#64748b', fontSize: '0.78rem', textTransform: 'uppercase' }}>Item #{qIdx + 1} • {q.type}</span>
                         <span style={{ fontWeight: '800', color: '#10b981', fontSize: '0.8rem' }}>Score: {q.marks} | Neg: {q.neg}</span>
                       </div>
-                      <p style={{ fontSize: '1.05rem', fontWeight: '600', margin: '0 0 15px 0', color: '#0f172a', lineHeight: '1.4' }}>{q.question}</p>
+                      <p style={{ fontSize: '1.05rem', fontWeight: '600', margin: '0 0 15px 0', color: '#0f172a', lineHeight: '1.4' }}><LatexText text={q.question} /></p>
                       
                       {q.type === 'Objective' && q.options && (
                         <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
                           {q.options.map((opt, oIdx) => (
                             <div key={oIdx} style={{ padding: '12px 16px', borderRadius: '10px', border: oIdx === q.correct ? '2px solid #10b981' : '1px solid #e2e8f0', background: oIdx === q.correct ? '#f0fdf4' : '#ffffff', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', fontWeight: '500' }}>
-                              <span>{String.fromCharCode(65 + oIdx)}. {opt}</span>
+                              <span>{String.fromCharCode(65 + oIdx)}. <LatexText text={opt} /></span>
                               {oIdx === q.correct && <span style={{ color: '#15803d', fontWeight: '700' }}>🎯 Correct Target</span>}
                             </div>
                           ))}
@@ -800,7 +801,7 @@ const AiTests = ({ onStartTest }) => {
                       )}
                       <div style={{ background: '#f0f9ff', padding: '14px', borderRadius: '10px', borderLeft: '4px solid #0284c7' }}>
                         <strong style={{ color: '#0284c7', fontSize: '0.82rem', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>💡 AI Resolution Matrix:</strong>
-                        <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', lineHeight: '1.5', fontWeight: '500' }}>{q.explanation}</p>
+                        <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', lineHeight: '1.5', fontWeight: '500' }}><LatexText text={q.explanation} /></p>
                       </div>
                     </div>
                   ))}
@@ -814,13 +815,13 @@ const AiTests = ({ onStartTest }) => {
                   <span style={{ fontWeight: '800', color: '#64748b', fontSize: '0.78rem', textTransform: 'uppercase' }}>Item #{qIdx + 1} • {q.type}</span>
                   <span style={{ fontWeight: '800', color: '#10b981', fontSize: '0.8rem' }}>Score: {q.marks} | Neg: {q.neg}</span>
                 </div>
-                <p style={{ fontSize: '1.05rem', fontWeight: '600', margin: '0 0 15px 0', color: '#0f172a', lineHeight: '1.4' }}>{q.question}</p>
+                <p style={{ fontSize: '1.05rem', fontWeight: '600', margin: '0 0 15px 0', color: '#0f172a', lineHeight: '1.4' }}><LatexText text={q.question} /></p>
                 
                 {q.type === 'Objective' && q.options && (
                   <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
                     {q.options.map((opt, oIdx) => (
                       <div key={oIdx} style={{ padding: '12px 16px', borderRadius: '10px', border: oIdx === q.correct ? '2px solid #10b981' : '1px solid #e2e8f0', background: oIdx === q.correct ? '#f0fdf4' : '#ffffff', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', fontWeight: '500' }}>
-                        <span>{String.fromCharCode(65 + oIdx)}. {opt}</span>
+                        <span>{String.fromCharCode(65 + oIdx)}. <LatexText text={opt} /></span>
                         {oIdx === q.correct && <span style={{ color: '#15803d', fontWeight: '700' }}>🎯 Correct Target</span>}
                       </div>
                     ))}
@@ -828,7 +829,7 @@ const AiTests = ({ onStartTest }) => {
                 )}
                 <div style={{ background: '#f0f9ff', padding: '14px', borderRadius: '10px', borderLeft: '4px solid #0284c7' }}>
                   <strong style={{ color: '#0284c7', fontSize: '0.82rem', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>💡 AI Resolution Matrix:</strong>
-                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', lineHeight: '1.5', fontWeight: '500' }}>{q.explanation}</p>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', lineHeight: '1.5', fontWeight: '500' }}><LatexText text={q.explanation} /></p>
                 </div>
               </div>
             ))
@@ -838,7 +839,7 @@ const AiTests = ({ onStartTest }) => {
     );
   }
 
-  // --- 📁 EXCLUSIVE ADMIN WORKSPACE: ROUTING TREE TREE DEPLOYMENT ---
+  // --- 📁 EXCLUSIVE ADMIN WORKSPACE: ROUTING TREE DEPLOYMENT ---
   if (view === 'admin-push-cloud') {
     const categoriesList = Array.from(new Set(cloudMockTestsPool.map(t => t.category_name)))
       .filter(name => name && name !== 'AI Lab Generated');

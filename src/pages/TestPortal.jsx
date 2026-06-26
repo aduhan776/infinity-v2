@@ -155,7 +155,7 @@ const TestPortal = ({ testData, onExit }) => {
     return (ans !== undefined && ans !== null && ans !== "") || (up && up.length > 0);
   };
 
-  // --- DRAFT SAVE FOR LATER (🎯 SUPABASE REAL-TIME DRAFT DUAL-WRITE) ---
+  // --- DRAFT SAVE FOR LATER ---
   const handleSaveForLater = async () => {
     const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
     const draftData = {
@@ -222,11 +222,10 @@ const TestPortal = ({ testData, onExit }) => {
     onExit(null);
   };
 
-  // --- FINAL SUBMIT (🎯 AUTO-SCORE WITH FIXED ACCURACY INTEGRITY) ---
+  // --- FINAL SUBMIT (🎯 AUTO-SCORE WITH KEY INTEGRITY FOR BOTH FIELD VARIATIONS) ---
   const handleFinalSubmit = async () => {
     const attemptedCount = questions.filter((_, i) => isAttempted(i)).length;
     
-    // 🎯 LIVE MATH SCORING CALCULATIONS ENGINE
     let calculatedScore = 0;
     let correctCount = 0;
     let incorrectCount = 0;
@@ -235,7 +234,9 @@ const TestPortal = ({ testData, onExit }) => {
       if (q.type === 'Objective') {
         const userAnswer = answers[i];
         if (userAnswer !== undefined && userAnswer !== null && userAnswer !== "") {
-          if (parseInt(userAnswer) === parseInt(q.correct)) {
+          // 🎯 Handles both local table format ('correct') and raw gemini format ('correctOptionIndex')
+          const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
+          if (parseInt(userAnswer) === parseInt(correctAns)) {
             const posMarks = parseFloat(String(q.marks || '2.0').replace('+', '')) || 0;
             calculatedScore += posMarks;
             correctCount++;
@@ -313,34 +314,28 @@ const TestPortal = ({ testData, onExit }) => {
     onExit(finalReport);
   };
 
-  // --- 🔥 UPDATED: MULTI-FILE ASYNC BASE64 CONVERTER PIPELINE (0 MB EXTRA CLOUD STORAGE) ---
+  // --- MULTI-FILE ASYNC BASE64 CONVERTER PIPELINE ---
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
-    
     files.forEach(file => {
       const reader = new FileReader();
-      
       reader.onloadend = () => {
-        const base64String = reader.result; // Pure data:image/jpeg;base64 text matrix data
-        
+        const base64String = reader.result;
         setUploads(prev => ({
           ...prev,
           [currentQ]: [
             ...(prev[currentQ] || []),
             {
-              url: base64String, // Perfectly compatible with <img src={file.url} /> preview strip
+              url: base64String, 
               name: file.name,
               type: file.type
             }
           ]
         }));
       };
-      
-      // Fires the reader stream engine to encode text bits
       reader.readAsDataURL(file);
     });
-
-    e.target.value = null; // Flush stream reference immediately
+    e.target.value = null; 
   };
 
   const handleFileUploadReset = (fIdx) => {
@@ -351,7 +346,7 @@ const TestPortal = ({ testData, onExit }) => {
 
   const handlePrevNavigation = () => {
     if (currentQ > 0) {
-      if (isSectionalTimed && questions[currentQ - 1].sectionIndex !== currentSectionIdx) {
+      if (isSectionalTimed && questions[currentQ - 1] && questions[currentQ - 1].sectionIndex !== currentSectionIdx) {
         alert("Navigation Locked: Sectional timing constraints prevent returning to previously locked assessment configurations.");
         return;
       }
@@ -361,7 +356,7 @@ const TestPortal = ({ testData, onExit }) => {
 
   const handleNextNavigation = () => {
     if (currentQ < questions.length - 1) {
-      if (isSectionalTimed && questions[currentQ + 1].sectionIndex !== currentSectionIdx) {
+      if (isSectionalTimed && questions[currentQ + 1] && questions[currentQ + 1].sectionIndex !== currentSectionIdx) {
         alert("Navigation Locked: Please wait for the current section countdown to expire or finalize your submission to proceed.");
         return;
       }
@@ -382,7 +377,7 @@ const TestPortal = ({ testData, onExit }) => {
         <div style={styles.headerLeft}>
           <button onClick={() => { if(window.confirm("Warning: Exit test module? Unsaved operational changes will be discarded.")) onExit(null); }} style={styles.exitBtn}>🚪 Exit</button>
           <div style={styles.testTitle}>
-            {data.title} {hasSections && <span style={{fontSize:'0.85rem', background:'#e0e7ff', color:'#4338ca', padding:'3px 8px', borderRadius:'6px', marginLeft:'10px'}}>{questions[currentQ].sectionName}</span>}
+            {data.title} {hasSections && questions[currentQ] && <span style={{fontSize:'0.85rem', background:'#e0e7ff', color:'#4338ca', padding:'3px 8px', borderRadius:'6px', marginLeft:'10px'}}>{questions[currentQ].sectionName}</span>}
           </div>
         </div>
         <div style={styles.headerRight}>
@@ -407,11 +402,13 @@ const TestPortal = ({ testData, onExit }) => {
           <div style={styles.controlCenterFrame}>
             <div style={styles.qInfoLine}>
               <div style={styles.qBadge}>Question {currentQ + 1} of {questions.length}</div>
-              <div style={styles.marksGroup}>
-                <span style={{color:'#22c55e'}}>Weight: {questions[currentQ].marks}</span>
-                <span style={{color:'#ef4444'}}>Penalty: {questions[currentQ].neg}</span>
-                <span style={{color:'#64748b', background:'#f1f5f9', padding:'2px 8px', borderRadius:'4px'}}>{questions[currentQ].type}</span>
-              </div>
+              {questions[currentQ] && (
+                <div style={styles.marksGroup}>
+                  <span style={{color:'#22c55e'}}>Weight: {questions[currentQ].marks}</span>
+                  <span style={{color:'#ef4444'}}>Penalty: {questions[currentQ].neg}</span>
+                  <span style={{color:'#64748b', background:'#f1f5f9', padding:'2px 8px', borderRadius:'4px'}}>{questions[currentQ].type}</span>
+                </div>
+              )}
             </div>
             <div style={styles.buttonActionLine}>
               <div style={styles.leftActions}>
@@ -432,41 +429,48 @@ const TestPortal = ({ testData, onExit }) => {
           </div>
            
           <div style={styles.qContentScroll}>
-            <div style={styles.qInnerFrame}>
-              <p style={styles.qText}><LatexText text={questions[currentQ].question} /></p>
-              {questions[currentQ].type === 'Objective' ? (
-                <div style={styles.optionsGrid}>
-                  {questions[currentQ].options.map((opt, idx) => (
-                    <div key={idx} style={{...styles.optCard, border: answers[currentQ] === idx ? '2px solid #6366f1' : '1px solid #e2e8f0', background: answers[currentQ] === idx ? '#f5f7ff' : '#fff'} } onClick={() => setAnswers({ ...answers, [currentQ]: idx })}>
-                      <span style={{...styles.optLabel, background: answers[currentQ] === idx ? '#6366f1' : '#f1f5f9', color: answers[currentQ] === idx ? '#fff' : '#1e293b'}}>{String.fromCharCode(65 + idx)}</span>
-                      <LatexText text={opt} />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={styles.subjectiveFrame}>
-                  <div style={styles.uploadSectionTop}>
-                    <div style={styles.uploadActions}>
-                      <div style={{flex: 1}}>
-                        <p style={styles.sectionTitle}>Handwritten Attachments (Photo/PDF)</p>
-                        <button onClick={() => fileInputRef.current.click()} style={styles.uploadBtn}>Upload Media File</button>
-                        <input type="file" ref={fileInputRef} multiple accept="image/*, .pdf" style={{display:'none'}} onChange={handleFileUpload} />
+            {/* 🚨 SAFETY LOAD GUARD: Prevents the engine from crashing if questions are temporarily unmapped */}
+            {questions[currentQ] ? (
+              <div style={styles.qInnerFrame}>
+                <p style={styles.qText}><LatexText text={questions[currentQ].question} /></p>
+                {questions[currentQ].type === 'Objective' ? (
+                  <div style={styles.optionsGrid}>
+                    {(questions[currentQ].options || []).map((opt, idx) => (
+                      <div key={idx} style={{...styles.optCard, border: answers[currentQ] === idx ? '2px solid #6366f1' : '1px solid #e2e8f0', background: answers[currentQ] === idx ? '#f5f7ff' : '#fff'} } onClick={() => setAnswers({ ...answers, [currentQ]: idx })}>
+                        <span style={{...styles.optLabel, background: answers[currentQ] === idx ? '#6366f1' : '#f1f5f9', color: answers[currentQ] === idx ? '#fff' : '#1e293b'}}>{String.fromCharCode(65 + idx)}</span>
+                        <LatexText text={opt} />
                       </div>
-                      <div style={styles.qrContainer}><div style={styles.qrBox}>QR</div><div style={styles.qrText}>Scan to<br/>Upload</div></div>
-                    </div>
-                    <div style={styles.previewStrip}>
-                      {(uploads[currentQ] || []).map((file, fIdx) => (
-                        <div key={fIdx} style={styles.thumbWindow} onClick={() => setSelectedPreview(file)}>
-                          <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); handleFileUploadReset(fIdx); }}>❌</button>
-                          {file.type.includes('image') ? <img src={file.url} style={styles.thumbImg} alt="Thumbnail"/> : <div style={styles.pdfIcon}>PDF</div>}
-                        </div>
-                      ))}
-                    </div>
+                    ))}
                   </div>
-                  <textarea style={styles.textArea} placeholder="Type notes or supplementary response lines here..." value={answers[currentQ] || ""} onChange={(e) => setAnswers({ ...answers, [currentQ]: e.target.value })} />
-                </div>
-              )}
-            </div>
+                ) : (
+                  <div style={styles.subjectiveFrame}>
+                    <div style={styles.uploadSectionTop}>
+                      <div style={styles.uploadActions}>
+                        <div style={{flex: 1}}>
+                          <p style={styles.sectionTitle}>Handwritten Attachments (Photo/PDF)</p>
+                          <button onClick={() => fileInputRef.current.click()} style={styles.uploadBtn}>Upload Media File</button>
+                          <input type="file" ref={fileInputRef} multiple accept="image/*, .pdf" style={{display:'none'}} onChange={handleFileUpload} />
+                        </div>
+                        <div style={styles.qrContainer}><div style={styles.qrBox}>QR</div><div style={styles.qrText}>Scan to<br/>Upload</div></div>
+                      </div>
+                      <div style={styles.previewStrip}>
+                        {(uploads[currentQ] || []).map((file, fIdx) => (
+                          <div key={fIdx} style={styles.thumbWindow} onClick={() => setSelectedPreview(file)}>
+                            <button style={styles.delBtn} onClick={(e) => { e.stopPropagation(); handleFileUploadReset(fIdx); }}>❌</button>
+                            {file.type.includes('image') ? <img src={file.url} style={styles.thumbImg} alt="Thumbnail"/> : <div style={styles.pdfIcon}>PDF</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <textarea style={styles.textArea} placeholder="Type notes or supplementary response lines here..." value={answers[currentQ] || ""} onChange={(e) => setAnswers({ ...answers, [currentQ]: e.target.value })} />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{padding: '50px', textAlign: 'center', color: '#64748b', fontSize: '1.1rem', fontWeight: '600'}}>
+                Loading active assessment framework stream matrix...
+              </div>
+            )}
           </div>
         </div>
 
