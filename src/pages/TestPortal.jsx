@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../supabaseClient'; // ⚡ Linked cloud connection gateway
+import { supabase } from '../supabaseClient'; 
 import LatexText from '../components/LatexText';
 
 const TestPortal = ({ testData, onExit }) => {
@@ -8,7 +8,6 @@ const TestPortal = ({ testData, onExit }) => {
   const hasSections = !!data.sections;
   const isSectionalTimed = data.hasSectionalTiming || false;
 
-  // Flatten questions from sections or fallback to global list / dummy generator
   const questions = React.useMemo(() => {
     if (hasSections) {
       let flatList = [];
@@ -44,6 +43,7 @@ const TestPortal = ({ testData, onExit }) => {
   const [answers, setAnswers] = useState({}); 
   const [uploads, setUploads] = useState({}); 
   const [isPaused, setIsPaused] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // ⚡ Fullscreen Loading Tracker
   const [markedForReview, setMarkedForReview] = useState([]);
   const [showSummary, setShowSummary] = useState(false);
   const [selectedPreview, setSelectedPreview] = useState(null); 
@@ -66,22 +66,25 @@ const TestPortal = ({ testData, onExit }) => {
 
   // --- 3. PERSISTENCE: RESUME LAYER ---
   useEffect(() => {
-    const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
-    const currentDraft = savedDrafts.find(d => d.id === data.id);
-    if (currentDraft) {
-      setAnswers(currentDraft.answers || {});
-      setUploads(currentDraft.uploads || {});
-      setGlobalTimeLeft(currentDraft.rawSeconds || globalTimeLeft);
-      setSectionTimeLeft(currentDraft.sectionTimeLeft || sectionTimeLeft);
-      setCurrentSectionIdx(currentDraft.currentSectionIdx || 0);
-      setCurrentQ(currentDraft.lastIndex || 0);
-      setTimeTracker(currentDraft.timeTracker || {});
-      setMarkedForReview(currentDraft.markedForReview || []);
-      console.log("Test Resumed: Structural Data Payload Synced Successfully.");
+    try {
+      const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
+      const currentDraft = savedDrafts.find(d => d.id === data.id);
+      if (currentDraft) {
+        setAnswers(currentDraft.answers || {});
+        setUploads(currentDraft.uploads || {});
+        setGlobalTimeLeft(currentDraft.rawSeconds || globalTimeLeft);
+        setSectionTimeLeft(currentDraft.sectionTimeLeft || sectionTimeLeft);
+        setCurrentSectionIdx(currentDraft.currentSectionIdx || 0);
+        setCurrentQ(currentDraft.lastIndex || 0);
+        setTimeTracker(currentDraft.timeTracker || {});
+        setMarkedForReview(currentDraft.markedForReview || []);
+        console.log("Test Resumed: Structural Data Payload Synced Successfully.");
+      }
+    } catch (e) {
+      console.error("Failed to parse local draft snapshot:", e);
     }
   }, []);
 
-  // Update current section index based on current active question
   useEffect(() => {
     if (questions[currentQ]) {
       setCurrentSectionIdx(questions[currentQ].sectionIndex);
@@ -91,7 +94,7 @@ const TestPortal = ({ testData, onExit }) => {
   // --- 4. TIMERS ACTION CONTEXT ---
   useEffect(() => {
     if (globalTimeLeft <= 0) { handleFinalSubmit(); return; }
-    if (isPaused) return;
+    if (isPaused || isSubmitting) return; // ⚡ Submit hote hi timer freeze!
      
     const timer = setInterval(() => {
       setGlobalTimeLeft(prev => prev - 1);
@@ -107,23 +110,22 @@ const TestPortal = ({ testData, onExit }) => {
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [globalTimeLeft, isPaused, isSectionalTimed, currentSectionIdx]);
+  }, [globalTimeLeft, isPaused, isSectionalTimed, currentSectionIdx, isSubmitting]);
 
-  // --- LIVE QUESTION STOPWATCH ---
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || isSubmitting) return;
     setQStopwatch(timeTracker[currentQ] || 0);
     const qTimer = setInterval(() => {
       setQStopwatch(prev => prev + 1);
     }, 1000);
     return () => clearInterval(qTimer);
-  }, [currentQ, isPaused]);
+  }, [currentQ, isPaused, isSubmitting]);
 
   useEffect(() => {
+    if (isSubmitting) return;
     setTimeTracker(prev => ({ ...prev, [currentQ]: qStopwatch }));
-  }, [qStopwatch]);
+  }, [qStopwatch, isSubmitting]);
 
-  // --- TIMEOUT & NAVIGATION HANDLERS ---
   const handleSectionTimeout = () => {
     if (!hasSections) return;
      
@@ -155,16 +157,14 @@ const TestPortal = ({ testData, onExit }) => {
     return (ans !== undefined && ans !== null && ans !== "") || (up && up.length > 0);
   };
 
-  // --- DRAFT SAVE FOR LATER ---
   const handleSaveForLater = async () => {
-    const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
     const draftData = {
       id: data.id,
       title: data.title,
       lastIndex: currentQ,
       currentSectionIdx: currentSectionIdx,
       answers: answers,
-      uploads: uploads,
+      uploads: uploads, 
       timeTracker: timeTracker,
       markedForReview: markedForReview,
       timeLeft: Math.floor(globalTimeLeft / 60),
@@ -179,10 +179,15 @@ const TestPortal = ({ testData, onExit }) => {
       mode: data.mode
     };
 
-    const index = savedDrafts.findIndex(d => d.id === draftData.id);
-    if (index > -1) savedDrafts[index] = draftData;
-    else savedDrafts.push(draftData);
-    localStorage.setItem('infinity_saved_for_later', JSON.stringify(savedDrafts));
+    try {
+      const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
+      const index = savedDrafts.findIndex(d => d.id === draftData.id);
+      if (index > -1) savedDrafts[index] = draftData;
+      else savedDrafts.push(draftData);
+      localStorage.setItem('infinity_saved_for_later', JSON.stringify(savedDrafts));
+    } catch (e) {
+      console.warn("LocalStorage Quota warning during draft save.", e);
+    }
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -222,39 +227,94 @@ const TestPortal = ({ testData, onExit }) => {
     onExit(null);
   };
 
-  // --- FINAL SUBMIT (🎯 AUTO-SCORE WITH KEY INTEGRITY FOR BOTH FIELD VARIATIONS) ---
+  // --- ⚡ STRICT SUBMISSION PIPELINE (With Error Blockers) ---
   const handleFinalSubmit = async () => {
-    const attemptedCount = questions.filter((_, i) => isAttempted(i)).length;
-    
-    let calculatedScore = 0;
+    setShowSummary(false);
+    setIsSubmitting(true); // Screen blur and loader card instantly visible!
+
+    const evaluatedQuestions = [...questions];
+    let objectiveCalculatedScore = 0;
     let correctCount = 0;
     let incorrectCount = 0;
 
-    questions.forEach((q, i) => {
+    // Phase 1: Contact Gemini Engine for Subjective Evaluation
+    for (let i = 0; i < evaluatedQuestions.length; i++) {
+      const q = evaluatedQuestions[i];
+      if (q.type === 'Subjective' && (answers[i] || (uploads[i] && uploads[i].length > 0))) {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/evaluate-subjective`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              question: q.question,
+              userAnswer: answers[i] || "",
+              uploadedFiles: uploads[i] || [],
+              testTitle: data.title,
+              maxMarks: parseFloat(String(q.marks || '10').replace('+', '')) || 10
+            })
+          });
+
+          const resData = await res.json();
+          if (resData.success && resData.evaluation) {
+            evaluatedQuestions[i] = {
+              ...q,
+              score_given: parseFloat(resData.evaluation.score_given) || 0,
+              ai_evaluation: resData.evaluation.ai_evaluation
+            };
+          } else {
+            throw new Error(resData.error || "Evaluation node layer breakdown.");
+          }
+        } catch (err) {
+          setIsSubmitting(false);
+          const { data: { user } } = await supabase.auth.getUser();
+          const isAdmin = user && (user.email === 'aduhan776@gmail.com' || user.role === 'admin' || user.role === 'superuser');
+          
+          if (isAdmin) {
+            alert(`Admin Halt Exception (AI Evaluation Route Failed):\nMessage: ${err.message}`);
+          } else {
+            alert("Busy server, failed to submit.");
+          }
+          return; // ⚡ STOP IT right here, don't let it open the Analysis Portal!
+        }
+      }
+    }
+
+    // Phase 2: Compute Standard MCQ Marks
+    evaluatedQuestions.forEach((q, i) => {
       if (q.type === 'Objective') {
         const userAnswer = answers[i];
         if (userAnswer !== undefined && userAnswer !== null && userAnswer !== "") {
-          // 🎯 Handles both local table format ('correct') and raw gemini format ('correctOptionIndex')
           const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
           if (parseInt(userAnswer) === parseInt(correctAns)) {
-            const posMarks = parseFloat(String(q.marks || '2.0').replace('+', '')) || 0;
-            calculatedScore += posMarks;
+            objectiveCalculatedScore += parseFloat(String(q.marks || '2.0').replace('+', '')) || 0;
             correctCount++;
           } else {
-            const negPenalty = parseFloat(String(q.neg || '0.66').replace('-', '')) || 0;
-            calculatedScore -= negPenalty;
+            objectiveCalculatedScore -= parseFloat(String(q.neg || '0.66').replace('-', '')) || 0;
             incorrectCount++;
           }
         }
       }
     });
 
-    const totalObjectiveAttempted = correctCount + incorrectCount;
-    const finalAccuracyRate = totalObjectiveAttempted > 0 
-      ? Math.round((correctCount / totalObjectiveAttempted) * 100) 
-      : 0;
+    let finalAggregateScore = objectiveCalculatedScore;
+    evaluatedQuestions.forEach(q => {
+      if (q.type === 'Subjective' && q.score_given !== undefined) {
+        finalAggregateScore += q.score_given;
+      }
+    });
 
-    const finalScoreString = calculatedScore.toFixed(2);
+    const totalObjectiveAttempted = correctCount + incorrectCount;
+    const finalAccuracyRate = totalObjectiveAttempted > 0 ? Math.round((correctCount / totalObjectiveAttempted) * 100) : 0;
+    const finalScoreString = finalAggregateScore.toFixed(2);
+
+    const optimizedLocalUploads = {};
+    Object.keys(uploads).forEach(qKey => {
+      optimizedLocalUploads[qKey] = (uploads[qKey] || []).map(file => ({
+        name: file.name,
+        type: file.type,
+        url: "[Attached & Uploaded via Cloud Engine Pipeline]" 
+      }));
+    });
 
     const finalReport = {
       id: data.id,
@@ -266,20 +326,13 @@ const TestPortal = ({ testData, onExit }) => {
       timeLeft: globalTimeLeft,
       timeTracker: timeTracker,
       answers: answers,
-      uploads: uploads,
-      questions: questions,
+      uploads: optimizedLocalUploads, 
+      questions: evaluatedQuestions,
       status: 'submitted',
       time: data.time || 180 
     };
 
-    const history = JSON.parse(localStorage.getItem('infinity_test_history')) || [];
-    history.unshift(finalReport);
-    localStorage.setItem('infinity_test_history', JSON.stringify(history));
-    
-    const drafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
-    const updatedDrafts = drafts.filter(d => d.id !== data.id);
-    localStorage.setItem('infinity_saved_for_later', JSON.stringify(updatedDrafts));
-
+    // Phase 3: Synchronize Secure Database Records
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -296,25 +349,43 @@ const TestPortal = ({ testData, onExit }) => {
             time_left: Math.floor(globalTimeLeft / 60),
             raw_seconds: globalTimeLeft,
             answers: answers,
-            uploads: uploads,
+            uploads: uploads, 
             time_tracker: timeTracker
           }
         ]);
 
-        if (insertError) {
-          alert(`Supabase Insertion Denied:\nMessage: ${insertError.message}\nDetails: ${insertError.details || 'Check column types.'}`);
-          console.error("Supabase technical failure log:", insertError);
-        }
+        if (insertError) throw insertError;
       }
     } catch (err) {
-      console.error("Cloud compilation history submission failed:", err);
-      alert("System Crash Exception: " + err.message);
+      setIsSubmitting(false);
+      const { data: { user } } = await supabase.auth.getUser();
+      const isAdmin = user && (user.email === 'aduhan776@gmail.com' || user.role === 'admin' || user.role === 'superuser');
+      
+      if (isAdmin) {
+        alert(`Admin Halt Exception (Supabase Gateway Sync Failure):\nReasoning: ${err.message}`);
+      } else {
+        alert("Busy server, failed to submit.");
+      }
+      return; // ⚡ STOP IT right here, do not route if cloud save fails!
     }
 
-    onExit(finalReport);
+    // Phase 4: Save locally and transition ONLY if all cloud pipelines succeeded!
+    try {
+      const history = JSON.parse(localStorage.getItem('infinity_test_history')) || [];
+      history.unshift(finalReport);
+      localStorage.setItem('infinity_test_history', JSON.stringify(history));
+      
+      const drafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
+      const updatedDrafts = drafts.filter(d => d.id !== data.id);
+      localStorage.setItem('infinity_saved_for_later', JSON.stringify(updatedDrafts));
+    } catch (e) {
+      console.error("Local storage allocation exception safely logs skipped.", e);
+    }
+
+    setIsSubmitting(false);
+    onExit(finalReport); // 🎯 Safe Transition!
   };
 
-  // --- MULTI-FILE ASYNC BASE64 CONVERTER PIPELINE ---
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     files.forEach(file => {
@@ -347,7 +418,7 @@ const TestPortal = ({ testData, onExit }) => {
   const handlePrevNavigation = () => {
     if (currentQ > 0) {
       if (isSectionalTimed && questions[currentQ - 1] && questions[currentQ - 1].sectionIndex !== currentSectionIdx) {
-        alert("Navigation Locked: Sectional timing constraints prevent returning to previously locked assessment configurations.");
+        alert("Navigation Locked: Sectional timing constraints prevent returning to locked segments.");
         return;
       }
       setCurrentQ(prev => prev - 1);
@@ -357,7 +428,7 @@ const TestPortal = ({ testData, onExit }) => {
   const handleNextNavigation = () => {
     if (currentQ < questions.length - 1) {
       if (isSectionalTimed && questions[currentQ + 1] && questions[currentQ + 1].sectionIndex !== currentSectionIdx) {
-        alert("Navigation Locked: Please wait for the current section countdown to expire or finalize your submission to proceed.");
+        alert("Navigation Locked: Sectional rules restrict jumping ahead.");
         return;
       }
       setCurrentQ(prev => prev + 1);
@@ -372,10 +443,29 @@ const TestPortal = ({ testData, onExit }) => {
 
   return (
     <div className="portalContainer" style={styles.portalContainer}>
-      {/* TOP BAR HEADER */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      {/* ⚡ THE FULLSCREEN BLURRING LOADER CIRCLE CARD */}
+      {isSubmitting && (
+        <div style={styles.submittingOverlay}>
+          <div style={styles.spinnerCard}>
+            <div style={styles.spinner}></div>
+            <h3 style={{ color: '#000000', fontWeight: '900', marginTop: '22px', marginBottom: '8px', fontSize: '1.25rem' }}>Please wait, AI is analyzing your responses...</h3>
+            <p style={{ color: '#64748b', fontSize: '0.86rem', fontWeight: '500', margin: 0, lineHeight: '1.5' }}>
+              Project Infinity engine is evaluating your handwritten answer sheets and structural metrics compilation patterns.
+            </p>
+          </div>
+        </div>
+      )}
+
       <header style={styles.topBarStyle}>
         <div style={styles.headerLeft}>
-          <button onClick={() => { if(window.confirm("Warning: Exit test module? Unsaved operational changes will be discarded.")) onExit(null); }} style={styles.exitBtn}>🚪 Exit</button>
+          <button onClick={() => { if(window.confirm("Warning: Exit test module? operational changes will be discarded.")) onExit(null); }} style={styles.exitBtn}>🚪 Exit</button>
           <div style={styles.testTitle}>
             {data.title} {hasSections && questions[currentQ] && <span style={{fontSize:'0.85rem', background:'#e0e7ff', color:'#4338ca', padding:'3px 8px', borderRadius:'6px', marginLeft:'10px'}}>{questions[currentQ].sectionName}</span>}
           </div>
@@ -398,7 +488,6 @@ const TestPortal = ({ testData, onExit }) => {
        
       <div style={styles.mainLayout}>
         <div style={styles.questionSection}>
-          {/* CONTROL CENTER */}
           <div style={styles.controlCenterFrame}>
             <div style={styles.qInfoLine}>
               <div style={styles.qBadge}>Question {currentQ + 1} of {questions.length}</div>
@@ -429,7 +518,6 @@ const TestPortal = ({ testData, onExit }) => {
           </div>
            
           <div style={styles.qContentScroll}>
-            {/* 🚨 SAFETY LOAD GUARD: Prevents the engine from crashing if questions are temporarily unmapped */}
             {questions[currentQ] ? (
               <div style={styles.qInnerFrame}>
                 <p style={styles.qText}><LatexText text={questions[currentQ].question} /></p>
@@ -474,7 +562,6 @@ const TestPortal = ({ testData, onExit }) => {
           </div>
         </div>
 
-        {/* SIDEBAR QUESTION PALETTE */}
         <aside style={styles.paletteSection}>
           <div style={styles.palHeader}>Question Matrix Palette</div>
           <div style={styles.pGridScroll}>
@@ -484,7 +571,7 @@ const TestPortal = ({ testData, onExit }) => {
                 <div key={i} 
                    onClick={() => {
                      if (isLocked) {
-                       alert("Security Restriction: Sectional timing configurations restrict navigation to the active segment matrix only.");
+                       alert("Security Restriction: Sectional configurations restrict navigation.");
                        return;
                      }
                      setCurrentQ(i);
@@ -506,7 +593,6 @@ const TestPortal = ({ testData, onExit }) => {
         </aside>
       </div>
 
-      {/* SUMMARY MODAL */}
       {showSummary && (
         <div style={styles.overlay}>
           <div style={styles.modalSummary}>
@@ -526,7 +612,6 @@ const TestPortal = ({ testData, onExit }) => {
         </div>
       )}
 
-      {/* PAUSE MODAL */}
       {isPaused && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
@@ -540,7 +625,6 @@ const TestPortal = ({ testData, onExit }) => {
         </div>
       )}
 
-      {/* FILE PREVIEW */}
       {selectedPreview && (
         <div style={styles.fullPreview} onClick={() => setSelectedPreview(null)}>
            <div style={styles.prevContent} onClick={e=>e.stopPropagation()}>
@@ -553,7 +637,68 @@ const TestPortal = ({ testData, onExit }) => {
   );
 };
 
-// --- STYLES MATRIX ---
-const styles = { portalContainer: { height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff', overflow: 'hidden' }, topBarStyle: { height:'65px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 25px', flexShrink:0 }, headerLeft: { display:'flex', alignItems:'center', gap:'20px' }, testTitle: { fontWeight:'800', fontSize:'1.1rem', display:'flex', alignItems:'center' }, exitBtn: { background:'none', border:'none', color:'#64748b', fontWeight:'700', cursor:'pointer' }, headerRight: { display:'flex', alignItems:'center', gap:'15px' }, timerBox: { background:'#f8fafc', border:'1px solid #e2e8f0', padding:'5px 15px', borderRadius:'8px', textAlign:'center', minWidth: '120px' }, timerLabel: { fontSize:'0.55rem', color:'#94a3b8', display:'block', fontWeight:'800' }, pauseBtn: { padding:'8px 15px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'#fff', cursor:'pointer', fontWeight:'600' }, submitBtn: { padding:'10px 20px', borderRadius:'8px', background:'#22c55e', color:'#fff', border:'none', cursor: 'pointer', fontWeight:'800' }, controlCenterFrame: { background: '#fcfdfe', borderBottom: '1px solid #e2e8f0', padding: '15px 40px', flexShrink: 0 }, qInfoLine: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }, qBadge: { fontWeight:'800', color:'#6366f1', fontSize:'0.9rem' }, marksGroup: { display:'flex', gap:'15px', fontWeight:'800', fontSize:'0.75rem' }, buttonActionLine: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }, leftActions: { display: 'flex', gap: '10px', alignItems: 'center' }, stopwatchBadge: { background: '#f0f9ff', color: '#0369a1', padding: '6px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '0.85rem', border: '1px solid #bae6fd' }, rightActions: { display: 'flex', gap: '10px' }, secBtnSmall: { background: '#fff', border: '1px solid #e2e8f0', padding: '8px 15px', borderRadius: '8px', color: '#64748b', fontWeight: '700', cursor: 'pointer', fontSize: '0.8rem' }, navBtn: { background: '#fff', border: '1px solid #6366f1', padding: '8px 20px', borderRadius: '8px', color: '#6366f1', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }, priBtn: { background: '#6366f1', color: '#fff', border: 'none', padding: '10px 25px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer' }, mainLayout: { display:'flex', flex:1, overflow:'hidden' }, questionSection: { flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }, qContentScroll: { flex: 1, overflowY: 'auto' }, qInnerFrame: { padding:'40px 60px', maxWidth:'900px', margin:'0 auto', width:'100%' }, qText: { fontSize:'1.4rem', lineHeight:'1.6', color:'#1e293b', marginBottom:'35px', fontWeight:'500' }, optionsGrid: { display:'grid', gap:'12px' }, optCard: { padding:'18px', borderRadius:'12px', cursor:'pointer', display:'flex', alignItems:'center', gap:'15px', transition:'0.2s' }, optLabel: { width:'32px', height:'32px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'800', fontSize:'0.85rem' }, subjectiveFrame: { background:'#f8fafc', padding:'25px', borderRadius:'15px', border:'1px solid #e2e8f0', display:'flex', flexDirection:'column', gap:'20px' }, uploadSectionTop: { paddingBottom:'20px', borderBottom:'1px solid #e2e8f0' }, textArea: { width:'100%', height:'250px', border:'none', background:'transparent', outline:'none', fontSize:'1.1rem', resize:'none', padding:'10px' }, uploadActions: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px' }, sectionTitle: { margin:'0 0 10px 0', fontWeight:'700', color:'#475569', fontSize:'0.9rem' }, uploadBtn: { background:'#1e293b', color:'#fff', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'700', fontSize:'0.8rem' }, qrContainer: { display:'flex', alignItems:'center', gap:'10px', borderLeft:'2px solid #e2e8f0', paddingLeft:'15px' }, qrBox: { width:'40px', height:'40px', background:'#fff', border:'1px solid #ccc', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'0.7rem' }, qrText: { fontSize:'0.6rem', color:'#64748b', fontWeight:'700' }, previewStrip: { display:'flex', gap:'10px', overflowX:'auto', padding:'5px 0' }, thumbWindow: { width:'80px', height:'100px', background:'#fff', border:'1px solid #ddd', borderRadius:'6px', position:'relative', overflow:'hidden', flexShrink:0 }, thumbImg: { width:'100%', height:'100%', objectFit:'cover' }, pdfIcon: { height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'0.7rem', color:'#64748b' }, delBtn: { position:'absolute', top:0, right:0, background:'red', color:'#fff', border:'none', width:'20px', height:'20px', cursor:'pointer', fontSize:'10px' }, paletteSection: { width:'280px', background:'#f8fafc', borderLeft:'1px solid #e2e8f0', display:'flex', flexDirection:'column' }, palHeader: { padding:'20px', fontWeight:'800', borderBottom:'1px solid #e2e8f0' }, pGridScroll: { flex:1, padding:'20px', display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'8px', overflowY:'auto' }, pNum: { height:'40px', borderRadius:'8px', border:'1px solid', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'800', fontSize:'0.8rem', transition: 'all 0.2s' }, overlay: { position:'fixed', inset:0, background:'rgba(15, 23, 42, 0.9)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center' }, modal: { background:'#fff', padding:'40px', borderRadius:'24px', textAlign:'center', width:'380px' }, modalSummary: { background:'#fff', padding:'35px', borderRadius:'24px', width:'520px', textAlign:'center' }, summaryTimerHeader: { background:'#fef2f2', padding:'10px', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'800', marginBottom:'10px', border:'1px solid #fee2e2' }, summaryGrid: { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginTop:'20px', textAlign:'left' }, sumCard: { padding:'15px', background:'#f8fafc', borderRadius:'12px', display:'flex', flexDirection:'column', gap:'5px', border:'1px solid #e2e8f0' }, fullPreview: { position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center' }, prevContent: { position:'relative', maxWidth:'90vw', maxHeight:'90vh' }, fullImg: { maxWidth:'100%', maxHeight:'85vh', borderRadius:'12px', border:'4px solid #fff' }, pdfFrame: { width:'80vw', height:'80vh', background:'#fff' }, closeBtn: { position:'absolute', top:'-50px', right:0, background:'#fff', padding:'8px 20px', borderRadius:'8px', fontWeight:'800', cursor:'pointer', border:'none' } };
+const styles = { 
+  portalContainer: { height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff', overflow: 'hidden' }, 
+  topBarStyle: { height:'65px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 25px', flexShrink:0 }, 
+  headerLeft: { display:'flex', alignItems:'center', gap:'20px' }, 
+  testTitle: { fontWeight:'800', fontSize:'1.1rem', display:'flex', alignItems:'center' }, 
+  exitBtn: { background:'none', border:'none', color:'#64748b', fontWeight:'700', cursor:'pointer' }, 
+  headerRight: { display:'flex', alignItems:'center', gap:'15px' }, 
+  timerBox: { background:'#f8fafc', border:'1px solid #e2e8f0', padding:'5px 15px', borderRadius:'8px', textAlign:'center', minWidth: '120px' }, 
+  timerLabel: { fontSize:'0.55rem', color:'#94a3b8', display:'block', fontWeight:'800' }, 
+  pauseBtn: { padding:'8px 15px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'#fff', cursor:'pointer', fontWeight:'600' }, 
+  submitBtn: { padding:'10px 20px', borderRadius:'8px', background:'#22c55e', color:'#fff', border:'none', cursor: 'pointer', fontWeight:'800' }, 
+  controlCenterFrame: { background: '#fcfdfe', borderBottom: '1px solid #e2e8f0', padding: '15px 40px', flexShrink: 0 }, 
+  qInfoLine: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }, 
+  qBadge: { fontWeight:'800', color:'#6366f1', fontSize:'0.9rem' }, 
+  marksGroup: { display:'flex', gap:'15px', fontWeight:'800', fontSize:'0.75rem' }, 
+  buttonActionLine: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }, 
+  leftActions: { display: 'flex', gap: '10px', alignItems: 'center' }, 
+  stopwatchBadge: { background: '#f0f9ff', color: '#0369a1', padding: '6px 12px', borderRadius: '8px', fontWeight: '800', fontSize: '0.85rem', border: '1px solid #bae6fd' }, 
+  rightActions: { display: 'flex', gap: '10px' }, 
+  secBtnSmall: { background: '#fff', border: '1px solid #e2e8f0', padding: '8px 15px', borderRadius: '8px', color: '#64748b', fontWeight: '700', cursor: 'pointer', fontSize: '0.8rem' }, 
+  navBtn: { background: '#fff', border: '1px solid #6366f1', padding: '8px 20px', borderRadius: '8px', color: '#6366f1', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }, 
+  priBtn: { background: '#6366f1', color: '#fff', border: 'none', padding: '10px 25px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer' }, 
+  mainLayout: { display:'flex', flex:1, overflow:'hidden' }, 
+  questionSection: { flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }, 
+  qContentScroll: { flex: 1, overflowY: 'auto' }, 
+  qInnerFrame: { padding:'40px 60px', maxWidth:'900px', margin:'0 auto', width:'100%' }, 
+  qText: { fontSize:'1.4rem', lineHeight:'1.6', color:'#1e293b', marginBottom:'35px', fontWeight:'500' }, 
+  optionsGrid: { display:'grid', gap:'12px' }, 
+  optCard: { padding:'18px', borderRadius:'12px', cursor:'pointer', display:'flex', alignItems:'center', gap:'15px', transition:'0.2s' }, 
+  optLabel: { width:'32px', height:'32px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'800', fontSize:'0.85rem' }, 
+  subjectiveFrame: { background:'#f8fafc', padding:'25px', borderRadius:'15px', border:'1px solid #e2e8f0', display:'flex', flexDirection:'column', gap:'20px' }, 
+  uploadSectionTop: { paddingBottom:'20px', borderBottom:'1px solid #e2e8f0' }, 
+  textArea: { width:'100%', height:'250px', border:'none', background:'transparent', outline:'none', fontSize:'1.1rem', resize:'none', padding:'10px' }, 
+  uploadActions: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px' }, 
+  sectionTitle: { margin:'0 0 10px 0', fontWeight:'700', color:'#475569', fontSize:'0.9rem' }, 
+  uploadBtn: { background:'#1e293b', color:'#fff', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'700', fontSize:'0.8rem' }, 
+  qrContainer: { display:'flex', alignItems:'center', gap:'10px', borderLeft:'2px solid #e2e8f0', paddingLeft:'15px' }, 
+  qrBox: { width:'40px', height:'40px', background:'#fff', border:'1px solid #ccc', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'0.7rem' }, 
+  qrText: { fontSize:'0.6rem', color:'#64748b', fontWeight:'700' }, 
+  previewStrip: { display:'flex', gap:'10px', overflowX:'auto', padding:'5px 0' }, 
+  thumbWindow: { width:'80px', height:'100px', background:'#fff', border:'1px solid #ddd', borderRadius:'6px', position:'relative', overflow:'hidden', flexShrink:0 }, 
+  thumbImg: { width:'100%', height:'100%', objectFit:'cover' }, 
+  pdfIcon: { height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'0.7rem', color:'#64748b' }, 
+  delBtn: { position:'absolute', top:0, right:0, background:'red', color:'#fff', border:'none', width:'20px', height:'20px', cursor:'pointer', fontSize:'10px' }, 
+  paletteSection: { width:'280px', background:'#f8fafc', borderLeft:'1px solid #e2e8f0', display:'flex', flexDirection:'column' }, 
+  palHeader: { padding:'20px', fontWeight:'800', borderBottom:'1px solid #e2e8f0' }, 
+  pGridScroll: { flex:1, padding:'20px', display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'8px', overflowY:'auto' }, 
+  pNum: { height:'40px', borderRadius:'8px', border:'1px solid', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'800', fontSize:'0.8rem', transition: 'all 0.2s' }, 
+  overlay: { position:'fixed', inset:0, background:'rgba(15, 23, 42, 0.9)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center' }, 
+  modal: { background:'#fff', padding:'40px', borderRadius:'24px', textAlign:'center', width:'380px' }, 
+  modalSummary: { background:'#fff', padding:'35px', borderRadius:'24px', width:'520px', textAlign:'center' }, 
+  summaryTimerHeader: { background:'#fef2f2', padding:'10px', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'800', marginBottom:'10px', border:'1px solid #fee2e2' }, 
+  summaryGrid: { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginTop:'20px', textAlign:'left' }, 
+  sumCard: { padding:'15px', background:'#f8fafc', borderRadius:'12px', display:'flex', flexDirection:'column', gap:'5px', border:'1px solid #e2e8f0' }, 
+  fullPreview: { position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center' }, 
+  prevContent: { position:'relative', maxWidth:'90vw', maxHeight:'90vh' }, 
+  fullImg: { maxWidth:'100%', maxHeight:'85vh', borderRadius:'12px', border:'4px solid #fff' }, 
+  pdfFrame: { width:'80vw', height:'80vh', background:'#fff' }, 
+  closeBtn: { position:'absolute', top:'-50px', right:0, background:'#fff', padding:'8px 20px', borderRadius:'8px', fontWeight:'800', cursor:'pointer', border:'none' },
+  submittingOverlay: { position: 'fixed', inset: 0, background: 'rgba(255, 255, 255, 0.75)', backdropFilter: 'blur(10px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  spinnerCard: { background: '#ffffff', padding: '40px', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 20px 40px rgba(0,0,0,0.06)', width: '90%', maxWidth: '460px', textAlign: 'center' },
+  spinner: { width: '50px', height: '50px', border: '5px solid #f1f5f9', borderTop: '5px solid #6366f1', borderRadius: '50%', margin: '0 auto', animation: 'spin 1s linear infinite' }
+};
 
 export default TestPortal;
