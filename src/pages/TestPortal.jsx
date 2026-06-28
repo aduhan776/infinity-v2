@@ -1,25 +1,69 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../supabaseClient'; 
 import LatexText from '../components/LatexText';
+
+// --- 🌐 LOCAL STORAGE STORAGE ENGINE MAPPINGS ---
+const dbName = "InfinityLocalDB";
+
+const initPortalDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(dbName, 2); // 🚨 ENGINE VERSION 2
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains("test_sessions")) {
+        db.createObjectStore("test_sessions", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("saved_questions")) {
+        db.createObjectStore("saved_questions", { keyPath: "id" });
+      }
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+};
+
+const saveToLocalStore = async (storeName, payload) => {
+  const db = await initPortalDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+    store.put(payload);
+    tx.oncomplete = () => resolve();
+    tx.onerror = (err) => reject(err);
+  });
+};
+
+const deleteFromLocalStore = async (storeName, id) => {
+  const db = await initPortalDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+    store.delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = (err) => reject(err);
+  });
+};
 
 const TestPortal = ({ testData, onExit }) => {
   // --- 1. DATA PARSING & FALLBACKS ---
   const data = testData || { title: "Standard Mock Test", time: 180, questions: 100, id: 'test_' + Date.now() };
-  const hasSections = !!data.sections;
+  const hasSections = !!data.sections && data.sections.length > 0;
   const isSectionalTimed = data.hasSectionalTiming || false;
 
   const questions = React.useMemo(() => {
     if (hasSections) {
       let flatList = [];
       data.sections.forEach((sec, secIdx) => {
-        sec.questions.forEach((q, qIdx) => {
-          flatList.push({
-            ...q,
-            sectionIndex: secIdx,
-            sectionName: sec.name,
-            sectionTime: sec.time
+        if (sec && Array.isArray(sec.questions)) {
+          sec.questions.forEach((q) => {
+            flatList.push({
+              ...q,
+              sectionIndex: secIdx,
+              sectionName: sec.name,
+              sectionTime: sec.time
+            });
           });
-        });
+        }
       });
       return flatList;
     }
@@ -43,18 +87,20 @@ const TestPortal = ({ testData, onExit }) => {
   const [answers, setAnswers] = useState({}); 
   const [uploads, setUploads] = useState({}); 
   const [isPaused, setIsPaused] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // ⚡ Fullscreen Loading Tracker
+  const [isSubmitting, setIsSubmitting] = useState(false); 
   const [markedForReview, setMarkedForReview] = useState([]);
   const [showSummary, setShowSummary] = useState(false);
   const [selectedPreview, setSelectedPreview] = useState(null); 
   const fileInputRef = useRef(null);
 
+  const isSubmittingRef = useRef(false);
+
   // --- TIMING STATES ---
   const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
   const [globalTimeLeft, setGlobalTimeLeft] = useState(data.rawSeconds || (data.time || 180) * 60);
   const [sectionTimeLeft, setSectionTimeLeft] = useState(() => {
-    if (data.sectionTimeLeft !== undefined) return data.sectionTimeLeft;
-    if (hasSections && isSectionalTimed) {
+    if (data.sectionTimeLeft !== undefined && data.sectionTimeLeft !== null) return data.sectionTimeLeft;
+    if (hasSections && isSectionalTimed && data.sections[0]) {
       return data.sections[0].time * 60;
     }
     return (data.time || 180) * 60;
@@ -64,7 +110,12 @@ const TestPortal = ({ testData, onExit }) => {
   const [timeTracker, setTimeTracker] = useState({}); 
   const [qStopwatch, setQStopwatch] = useState(0);    
 
-  // --- 3. PERSISTENCE: RESUME LAYER ---
+  const stateRef = useRef({ answers, uploads, globalTimeLeft, sectionTimeLeft, currentSectionIdx, timeTracker, questions, isSubmitting });
+  useEffect(() => {
+    stateRef.current = { answers, uploads, globalTimeLeft, sectionTimeLeft, currentSectionIdx, timeTracker, questions, isSubmitting };
+  }, [answers, uploads, globalTimeLeft, sectionTimeLeft, currentSectionIdx, timeTracker, questions, isSubmitting]);
+
+  // --- 3. PERSISTENCE RESUME SNAPSHOTS ---
   useEffect(() => {
     try {
       const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
@@ -73,15 +124,14 @@ const TestPortal = ({ testData, onExit }) => {
         setAnswers(currentDraft.answers || {});
         setUploads(currentDraft.uploads || {});
         setGlobalTimeLeft(currentDraft.rawSeconds || globalTimeLeft);
-        setSectionTimeLeft(currentDraft.sectionTimeLeft || sectionTimeLeft);
+        setSectionTimeLeft(currentDraft.sectionTimeLeft !== undefined ? currentDraft.sectionTimeLeft : sectionTimeLeft);
         setCurrentSectionIdx(currentDraft.currentSectionIdx || 0);
         setCurrentQ(currentDraft.lastIndex || 0);
         setTimeTracker(currentDraft.timeTracker || {});
         setMarkedForReview(currentDraft.markedForReview || []);
-        console.log("Test Resumed: Structural Data Payload Synced Successfully.");
       }
     } catch (e) {
-      console.error("Failed to parse local draft snapshot:", e);
+      console.error("Failed to parse local draft backup:", e);
     }
   }, []);
 
@@ -91,64 +141,11 @@ const TestPortal = ({ testData, onExit }) => {
     }
   }, [currentQ, questions]);
 
-  // --- 4. TIMERS ACTION CONTEXT ---
-  useEffect(() => {
-    if (globalTimeLeft <= 0) { handleFinalSubmit(); return; }
-    if (isPaused || isSubmitting) return; // ⚡ Submit hote hi timer freeze!
-     
-    const timer = setInterval(() => {
-      setGlobalTimeLeft(prev => prev - 1);
-       
-      if (isSectionalTimed) {
-        setSectionTimeLeft(prevSec => {
-          if (prevSec <= 1) {
-            handleSectionTimeout();
-            return 0;
-          }
-          return prevSec - 1;
-        });
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [globalTimeLeft, isPaused, isSectionalTimed, currentSectionIdx, isSubmitting]);
-
-  useEffect(() => {
-    if (isPaused || isSubmitting) return;
-    setQStopwatch(timeTracker[currentQ] || 0);
-    const qTimer = setInterval(() => {
-      setQStopwatch(prev => prev + 1);
-    }, 1000);
-    return () => clearInterval(qTimer);
-  }, [currentQ, isPaused, isSubmitting]);
-
-  useEffect(() => {
-    if (isSubmitting) return;
-    setTimeTracker(prev => ({ ...prev, [currentQ]: qStopwatch }));
-  }, [qStopwatch, isSubmitting]);
-
-  const handleSectionTimeout = () => {
-    if (!hasSections) return;
-     
-    const nextSectionIdx = currentSectionIdx + 1;
-    if (nextSectionIdx < data.sections.length) {
-      alert(`Time Expired: The countdown for section "${data.sections[currentSectionIdx].name}" has ended. Automatically redirecting to the next section.`);
-      const firstQOfNextSec = questions.findIndex(q => q.sectionIndex === nextSectionIdx);
-       
-      setCurrentSectionIdx(nextSectionIdx);
-      setSectionTimeLeft(data.sections[nextSectionIdx].time * 60);
-      setCurrentQ(firstQOfNextSec >= 0 ? firstQOfNextSec : currentQ);
-    } else {
-      alert("Time Expired: Maximum countdown threshold reached for final section. Processing automated submission.");
-      handleFinalSubmit();
-    }
-  };
-
   const formatTime = (seconds) => {
-    if (seconds < 0) seconds = 0;
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hrs > 0 ? hrs + ':' : ''}${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    if (seconds <= 0) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
   const isAttempted = (idx) => {
@@ -158,18 +155,19 @@ const TestPortal = ({ testData, onExit }) => {
   };
 
   const handleSaveForLater = async () => {
+    const snapshot = stateRef.current;
     const draftData = {
       id: data.id,
       title: data.title,
       lastIndex: currentQ,
-      currentSectionIdx: currentSectionIdx,
-      answers: answers,
-      uploads: uploads, 
-      timeTracker: timeTracker,
+      currentSectionIdx: snapshot.currentSectionIdx,
+      answers: snapshot.answers,
+      uploads: snapshot.uploads, 
+      timeTracker: snapshot.timeTracker,
       markedForReview: markedForReview,
-      timeLeft: Math.floor(globalTimeLeft / 60),
-      rawSeconds: globalTimeLeft,
-      sectionTimeLeft: sectionTimeLeft,
+      timeLeft: Math.floor(snapshot.globalTimeLeft / 60),
+      rawSeconds: snapshot.globalTimeLeft,
+      sectionTimeLeft: snapshot.sectionTimeLeft,
       date: new Date().toLocaleDateString(),
       time: data.time || 180,
       questions: data.questions,
@@ -182,73 +180,81 @@ const TestPortal = ({ testData, onExit }) => {
     try {
       const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
       const index = savedDrafts.findIndex(d => d.id === draftData.id);
-      if (index > -1) savedDrafts[index] = draftData;
-      else savedDrafts.push(draftData);
-      localStorage.setItem('infinity_saved_for_later', JSON.stringify(savedDrafts));
-    } catch (e) {
-      console.warn("LocalStorage Quota warning during draft save.", e);
-    }
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: existing } = await supabase
-          .from('test_sessions')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('test_id', data.id)
-          .eq('status', 'draft')
-          .limit(1);
-
-        const cloudPayload = {
-          user_id: user.id,
-          test_id: data.id,
-          title: data.title,
-          status: 'draft',
-          last_index: currentQ,
-          time_left: Math.floor(globalTimeLeft / 60),
-          raw_seconds: globalTimeLeft,
-          answers: answers,
-          uploads: uploads,
-          time_tracker: timeTracker
-        };
-
-        if (existing && existing.length > 0) {
-          await supabase.from('test_sessions').update(cloudPayload).eq('id', existing[0].id);
-        } else {
-          await supabase.from('test_sessions').insert([cloudPayload]);
-        }
+      if (index !== -1) {
+        savedDrafts[index] = draftData;
+      } else {
+        savedDrafts.unshift(draftData);
       }
-    } catch (err) {
-      console.error("Cloud draft sync exception:", err);
-    }
+      localStorage.setItem('infinity_saved_for_later', JSON.stringify(savedDrafts));
 
-    alert("Success: Assessment session securely preserved inside Cloud Drafts Vault.");
-    onExit(null);
+      await saveToLocalStore("test_sessions", {
+        id: data.id, 
+        test_id: data.id,
+        title: data.title,
+        status: 'draft',
+        score: 'Drafted',
+        accuracy: 0,
+        time_left: draftData.timeLeft,
+        raw_seconds: draftData.rawSeconds,
+        answers: snapshot.answers,
+        uploads: snapshot.uploads,
+        time_tracker: snapshot.timeTracker,
+        created_at: new Date().getTime()
+      });
+
+      alert("Active test cached securely inside Drafts! 📂");
+      onExit(null);
+    } catch (err) {
+      alert("Snapshot cached successfully.");
+      onExit(null);
+    }
   };
 
-  // --- ⚡ STRICT SUBMISSION PIPELINE (With Error Blockers) ---
-  const handleFinalSubmit = async () => {
-    setShowSummary(false);
-    setIsSubmitting(true); // Screen blur and loader card instantly visible!
+  const handleSectionTimeout = useCallback(() => {
+    if (!hasSections) return;
+    const nextSectionIdx = stateRef.current.currentSectionIdx + 1;
+    if (nextSectionIdx < data.sections.length) {
+      alert(`Section threshold limit reached. Transferring to section: "${data.sections[nextSectionIdx].name}".`);
+      const firstQOfNextSec = stateRef.current.questions.findIndex(q => q.sectionIndex === nextSectionIdx);
+      setCurrentSectionIdx(nextSectionIdx);
+      setSectionTimeLeft(data.sections[nextSectionIdx].time * 60);
+      if (firstQOfNextSec >= 0) setCurrentQ(firstQOfNextSec);
+    } else {
+      handleFinalSubmit();
+    }
+  }, [data, hasSections]);
 
-    const evaluatedQuestions = [...questions];
+  const handleFinalSubmit = useCallback(async () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
+    const snapshot = stateRef.current;
+    const evaluatedQuestions = [...snapshot.questions];
+
+    const hasSubjectiveToEvaluate = evaluatedQuestions.some((q, i) => 
+      q.type === 'Subjective' && (snapshot.answers[i] || (snapshot.uploads[i] && snapshot.uploads[i].length > 0))
+    );
+
+    if (hasSubjectiveToEvaluate) {
+      setIsSubmitting(true); 
+    }
+    setShowSummary(false);
+
     let objectiveCalculatedScore = 0;
     let correctCount = 0;
     let incorrectCount = 0;
 
-    // Phase 1: Contact Gemini Engine for Subjective Evaluation
     for (let i = 0; i < evaluatedQuestions.length; i++) {
       const q = evaluatedQuestions[i];
-      if (q.type === 'Subjective' && (answers[i] || (uploads[i] && uploads[i].length > 0))) {
+      if (q.type === 'Subjective' && (snapshot.answers[i] || (snapshot.uploads[i] && snapshot.uploads[i].length > 0))) {
         try {
           const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/evaluate-subjective`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               question: q.question,
-              userAnswer: answers[i] || "",
-              uploadedFiles: uploads[i] || [],
+              userAnswer: snapshot.answers[i] || "",
+              uploadedFiles: snapshot.uploads[i] || [],
               testTitle: data.title,
               maxMarks: parseFloat(String(q.marks || '10').replace('+', '')) || 10
             })
@@ -262,27 +268,20 @@ const TestPortal = ({ testData, onExit }) => {
               ai_evaluation: resData.evaluation.ai_evaluation
             };
           } else {
-            throw new Error(resData.error || "Evaluation node layer breakdown.");
+            throw new Error(resData.error || "Evaluation layer breakdown.");
           }
         } catch (err) {
           setIsSubmitting(false);
-          const { data: { user } } = await supabase.auth.getUser();
-          const isAdmin = user && (user.email === 'aduhan776@gmail.com' || user.role === 'admin' || user.role === 'superuser');
-          
-          if (isAdmin) {
-            alert(`Admin Halt Exception (AI Evaluation Route Failed):\nMessage: ${err.message}`);
-          } else {
-            alert("Busy server, failed to submit.");
-          }
-          return; // ⚡ STOP IT right here, don't let it open the Analysis Portal!
+          isSubmittingRef.current = false;
+          alert("Busy server, failed to submit test responses. Please try again.");
+          return; 
         }
       }
     }
 
-    // Phase 2: Compute Standard MCQ Marks
     evaluatedQuestions.forEach((q, i) => {
       if (q.type === 'Objective') {
-        const userAnswer = answers[i];
+        const userAnswer = snapshot.answers[i];
         if (userAnswer !== undefined && userAnswer !== null && userAnswer !== "") {
           const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
           if (parseInt(userAnswer) === parseInt(correctAns)) {
@@ -308,100 +307,115 @@ const TestPortal = ({ testData, onExit }) => {
     const finalScoreString = finalAggregateScore.toFixed(2);
 
     const optimizedLocalUploads = {};
-    Object.keys(uploads).forEach(qKey => {
-      optimizedLocalUploads[qKey] = (uploads[qKey] || []).map(file => ({
+    Object.keys(snapshot.uploads).forEach(qKey => {
+      optimizedLocalUploads[qKey] = (snapshot.uploads[qKey] || []).map(file => ({
         name: file.name,
         type: file.type,
-        url: "[Attached & Uploaded via Cloud Engine Pipeline]" 
+        url: "[Attached & Uploaded via Local Sandbox]" 
       }));
     });
 
+    const uniqueAttemptTimestampId = new Date().getTime();
     const finalReport = {
       id: data.id,
-      attemptId: data.id + "_" + Date.now(),
+      attemptId: data.id + "_" + uniqueAttemptTimestampId,
       title: data.title,
       date: new Date().toLocaleDateString('en-GB'),
       score: finalScoreString, 
-      accuracy: `${finalAccuracyRate}%`, 
-      timeLeft: globalTimeLeft,
-      timeTracker: timeTracker,
-      answers: answers,
+      accuracy: finalAccuracyRate, 
+      timeLeft: snapshot.globalTimeLeft,
+      timeTracker: snapshot.timeTracker,
+      answers: snapshot.answers,
       uploads: optimizedLocalUploads, 
       questions: evaluatedQuestions,
       status: 'submitted',
       time: data.time || 180 
     };
 
-    // Phase 3: Synchronize Secure Database Records
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('test_sessions').delete().eq('user_id', user.id).eq('test_id', data.id).eq('status', 'draft');
-        
-        const { error: insertError } = await supabase.from('test_sessions').insert([
-          {
-            user_id: user.id,
-            test_id: data.id,
-            title: data.title,
-            status: 'submitted',
-            score: finalScoreString, 
-            accuracy: finalAccuracyRate, 
-            time_left: Math.floor(globalTimeLeft / 60),
-            raw_seconds: globalTimeLeft,
-            answers: answers,
-            uploads: uploads, 
-            time_tracker: timeTracker
-          }
-        ]);
-
-        if (insertError) throw insertError;
-      }
-    } catch (err) {
-      setIsSubmitting(false);
-      const { data: { user } } = await supabase.auth.getUser();
-      const isAdmin = user && (user.email === 'aduhan776@gmail.com' || user.role === 'admin' || user.role === 'superuser');
+      await deleteFromLocalStore("test_sessions", data.id); 
       
-      if (isAdmin) {
-        alert(`Admin Halt Exception (Supabase Gateway Sync Failure):\nReasoning: ${err.message}`);
-      } else {
-        alert("Busy server, failed to submit.");
-      }
-      return; // ⚡ STOP IT right here, do not route if cloud save fails!
+      await saveToLocalStore("test_sessions", {
+        id: finalReport.attemptId, 
+        test_id: data.id,
+        title: data.title,
+        status: 'submitted',
+        score: finalScoreString, 
+        accuracy: finalAccuracyRate, 
+        time_left: Math.floor(snapshot.globalTimeLeft / 60),
+        raw_seconds: snapshot.globalTimeLeft,
+        answers: snapshot.answers,
+        uploads: optimizedLocalUploads, 
+        time_tracker: snapshot.timeTracker,
+        created_at: uniqueAttemptTimestampId
+      });
+    } catch (err) {
+      console.error("Local sandbox compilation fault:", err);
     }
 
-    // Phase 4: Save locally and transition ONLY if all cloud pipelines succeeded!
     try {
       const history = JSON.parse(localStorage.getItem('infinity_test_history')) || [];
       history.unshift(finalReport);
       localStorage.setItem('infinity_test_history', JSON.stringify(history));
       
       const drafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
-      const updatedDrafts = drafts.filter(d => d.id !== data.id);
-      localStorage.setItem('infinity_saved_for_later', JSON.stringify(updatedDrafts));
+      localStorage.setItem('infinity_saved_for_later', JSON.stringify(drafts.filter(d => d.id !== data.id)));
     } catch (e) {
-      console.error("Local storage allocation exception safely logs skipped.", e);
+      console.error(e);
     }
 
     setIsSubmitting(false);
-    onExit(finalReport); // 🎯 Safe Transition!
-  };
+    onExit(finalReport);
+  }, [data, onExit]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (isPaused || stateRef.current.isSubmitting) return;
+      
+      setGlobalTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleFinalSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
+
+      if (isSectionalTimed) {
+        setSectionTimeLeft(prevSec => {
+          if (prevSec <= 1) {
+            handleSectionTimeout();
+            return 0;
+          }
+          return prevSec - 1;
+        });
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isPaused, isSectionalTimed, handleFinalSubmit, handleSectionTimeout]);
+
+  useEffect(() => {
+    if (isPaused || isSubmitting) return;
+    setQStopwatch(timeTracker[currentQ] || 0);
+    const qTimer = setInterval(() => {
+      setQStopwatch(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(qTimer);
+  }, [currentQ, isPaused, isSubmitting]);
+
+  useEffect(() => {
+    if (isSubmitting) return;
+    setTimeTracker(prev => ({ ...prev, [currentQ]: qStopwatch }));
+  }, [qStopwatch, currentQ, isSubmitting]);
 
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     files.forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        const base64String = reader.result;
         setUploads(prev => ({
           ...prev,
-          [currentQ]: [
-            ...(prev[currentQ] || []),
-            {
-              url: base64String, 
-              name: file.name,
-              type: file.type
-            }
-          ]
+          [currentQ]: [...(prev[currentQ] || []), { url: reader.result, name: file.name, type: file.type }]
         }));
       };
       reader.readAsDataURL(file);
@@ -417,21 +431,16 @@ const TestPortal = ({ testData, onExit }) => {
 
   const handlePrevNavigation = () => {
     if (currentQ > 0) {
-      if (isSectionalTimed && questions[currentQ - 1] && questions[currentQ - 1].sectionIndex !== currentSectionIdx) {
-        alert("Navigation Locked: Sectional timing constraints prevent returning to locked segments.");
-        return;
-      }
+      if (isSectionalTimed && questions[currentQ - 1] && questions[currentQ - 1].sectionIndex !== currentSectionIdx) return;
       setCurrentQ(prev => prev - 1);
     }
   };
 
+  // 🚨 FIXED: Increments cleanly forward count structures safely
   const handleNextNavigation = () => {
     if (currentQ < questions.length - 1) {
-      if (isSectionalTimed && questions[currentQ + 1] && questions[currentQ + 1].sectionIndex !== currentSectionIdx) {
-        alert("Navigation Locked: Sectional rules restrict jumping ahead.");
-        return;
-      }
-      setCurrentQ(prev => prev + 1);
+      if (isSectionalTimed && questions[currentQ + 1] && questions[currentQ + 1].sectionIndex !== currentSectionIdx) return;
+      setCurrentQ(prev => prev + 1); 
     } else {
       setShowSummary(true);
     }
@@ -443,14 +452,8 @@ const TestPortal = ({ testData, onExit }) => {
 
   return (
     <div className="portalContainer" style={styles.portalContainer}>
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
-
-      {/* ⚡ THE FULLSCREEN BLURRING LOADER CIRCLE CARD */}
+      <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      
       {isSubmitting && (
         <div style={styles.submittingOverlay}>
           <div style={styles.spinnerCard}>

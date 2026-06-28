@@ -1,17 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
+import LatexText from '../components/LatexText'; 
 
 // --- 🌐 LIGHTWEIGHT INLINE INDEXEDDB ENGINE FOR DEVICE STORAGE ---
-const dbName = "NeuxentLibraryDB";
-const storeName = "pdf_files";
+const dbName = "InfinityLocalDB";
 
 const initLibraryDB = () => {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, 1);
+    const request = indexedDB.open(dbName, 2); // 🚨 BUMPED TO VERSION 2 FOR FORCED CACHE RESET
     request.onupgradeneeded = (e) => {
       const db = e.target.result;
-      if (!db.objectStoreNames.contains(storeName)) {
-        db.createObjectStore(storeName, { keyPath: "id" });
+      if (!db.objectStoreNames.contains("test_sessions")) {
+        db.createObjectStore("test_sessions", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("saved_questions")) {
+        db.createObjectStore("saved_questions", { keyPath: "id" });
       }
     };
     request.onsuccess = (e) => resolve(e.target.result);
@@ -19,29 +22,18 @@ const initLibraryDB = () => {
   });
 };
 
-const saveFileToIndexedDB = async (id, fileData) => {
-  const db = await initLibraryDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, "readwrite");
-    const store = transaction.objectStore(storeName);
-    const request = store.put({ id, data: fileData });
-    request.onsuccess = () => resolve();
-    request.onerror = (e) => reject(e.target.error);
-  });
-};
-
-const getFileFromIndexedDB = async (id) => {
+const getAllFromLocalStore = async (storeName) => {
   const db = await initLibraryDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, "readonly");
     const store = transaction.objectStore(storeName);
-    const request = store.get(id);
-    request.onsuccess = (e) => resolve(e.target.result?.data || null);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result || []);
     request.onerror = (e) => reject(e.target.error);
   });
 };
 
-const deleteFileFromIndexedDB = async (id) => {
+const deleteFromLocalStore = async (storeName, id) => {
   const db = await initLibraryDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, "readwrite");
@@ -53,120 +45,96 @@ const deleteFileFromIndexedDB = async (id) => {
 };
 
 const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
-  const [activeSubTab, setActiveSubTab] = useState('documents');
+  const [activeSubTab, setActiveSubTab] = useState('tests'); 
   const [testFilter, setTestFilter] = useState('attempted'); 
   const [selectedItem, setSelectedItem] = useState(null); 
-  const fileInputRef = useRef(null); 
-
-  // --- CORE LIBRARY DATA STATES ---
-  const [documents, setDocuments] = useState([]);
-  const [savedQuestions, setSavedQuestions] = useState([]);
-  const [savedTests, setSavedTests] = useState([]); 
-  const [attemptedHistory, setAttemptedHistory] = useState([]); 
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedGroups, setExpandedGroups] = useState({});
 
-  // --- 📂 NEW ACTIVE FOLDERING STATES ---
-  const [folders, setFolders] = useState([]);
-  const [currentFolderId, setCurrentFolderId] = useState(null);
-  const [showFolderModal, setShowFolderModal] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
+  // --- CORE LIBRARY DATA STATES ---
+  const [savedQuestions, setSavedQuestions] = useState([]);
+  const [savedTests, setSavedTests] = useState([]); 
+  const [attemptedHistory, setAttemptedHistory] = useState([]); 
 
-  // --- LOAD DATA ENGINE ---
+  // --- LOAD DATA ENGINE FROM OFFLINE STORAGE NODES ---
   const loadLibraryData = async () => {
-    const savedDocs = JSON.parse(localStorage.getItem('infinity_docs')) || [
-      { id: 1, title: "Laxmikanth Polity Notes", type: "PDF", date: "12 April", folderId: null },
-      { id: 2, title: "My Ancient History Notes", type: "Note", date: "15 April", folderId: null }
-    ];
-    setDocuments(savedDocs);
-
-    // Load local workspace folders configuration
-    const savedFolders = JSON.parse(localStorage.getItem('infinity_folders')) || [];
-    setFolders(savedFolders);
-
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Fetch Saved Questions Cloud Vault array
-        const { data: qData, error: qError } = await supabase
-          .from('saved_questions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('saved_at', { ascending: false });
-        if (!qError && qData) setSavedQuestions(qData);
+      // 1. Fetch Saved Questions direct from IndexedDB Offline Store
+      const localQuestions = await getAllFromLocalStore("saved_questions");
+      const sortedQuestions = localQuestions.sort((a, b) => new Date(b.saved_at) - new Date(a.saved_at));
+      setSavedQuestions(sortedQuestions);
 
-        // Fetch Centralized Test Sessions
-        const { data: sData, error: sError } = await supabase
-          .from('test_sessions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
+      // 2. Fetch Centralized Test Sessions from IndexedDB Offline Store
+      const localSessions = await getAllFromLocalStore("test_sessions");
+      const { data: masterTests } = await supabase.from('mock_tests').select('*');
 
-        const { data: masterTests } = await supabase.from('mock_tests').select('*');
-
-        if (!sError && sData) {
-          const cloudTestsMap = {};
-          if (masterTests) {
-            masterTests.forEach(m => { cloudTestsMap[m.id] = m; });
-          }
-
-          // Parse and map Submitted Tests
-          const historyRows = sData
-            .filter(row => row.status === 'submitted')
-            .map(row => {
-              const cloudMatch = cloudTestsMap[row.test_id] || {};
-              return {
-                id: row.test_id,
-                attemptId: row.id,
-                title: row.title,
-                score: row.score || "Analyzing...",
-                accuracy: row.accuracy || "0%",
-                date: new Date(row.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
-                timeLeft: row.time_left,
-                rawSeconds: row.raw_seconds,
-                answers: row.answers || {},
-                uploads: row.uploads || {},
-                timeTracker: row.time_tracker || {},
-                questions: cloudMatch.questions_list || [],
-                questions_list: cloudMatch.questions_list || [],
-                sections: cloudMatch.sections || null,
-                hasSectionalTiming: cloudMatch.has_sectional_timing || false,
-                mode: cloudMatch.category_name || "Standard",
-                time: cloudMatch.time || 180
-              };
-            });
-
-          // Parse and map Paused Tests
-          const draftRows = sData
-            .filter(row => row.status === 'draft')
-            .map(row => {
-              const cloudMatch = cloudTestsMap[row.test_id] || {};
-              return {
-                id: row.test_id, 
-                title: row.title,
-                lastIndex: row.last_index || 0,
-                timeLeft: row.time_left || 0,
-                rawSeconds: row.raw_seconds,
-                date: new Date(row.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
-                answers: row.answers || {},
-                uploads: row.uploads || {},
-                timeTracker: row.time_tracker || {},
-                markedForReview: [],
-                questions: cloudMatch.questions_list || [],
-                questions_list: cloudMatch.questions_list || [],
-                sections: cloudMatch.sections || null,
-                hasSectionalTiming: cloudMatch.has_sectional_timing || false,
-                mode: cloudMatch.category_name || "Standard",
-                time: cloudMatch.time || 180
-              };
-            });
-
-          setAttemptedHistory(historyRows);
-          setSavedTests(draftRows);
-        }
+      const cloudTestsMap = {};
+      if (masterTests) {
+        masterTests.forEach(m => { cloudTestsMap[m.id] = m; });
       }
+
+      // Parse and map Submitted Tests History
+      const historyRows = localSessions
+        .filter(row => row.status === 'submitted')
+        .map(row => {
+          const cloudMatch = cloudTestsMap[row.test_id] || {};
+          const rawAccuracy = row.accuracy;
+          const formattedAccuracy = rawAccuracy 
+            ? (String(rawAccuracy).includes('%') ? rawAccuracy : `${rawAccuracy}%`)
+            : "0%";
+
+          return {
+            id: row.test_id,
+            attemptId: row.id,
+            title: row.title,
+            score: row.score || "Analyzing...",
+            accuracy: formattedAccuracy,
+            date: row.created_at ? new Date(row.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : "Recent",
+            timeLeft: row.time_left,
+            rawSeconds: row.raw_seconds,
+            answers: row.answers || {},
+            uploads: row.uploads || {},
+            timeTracker: row.time_tracker || {},
+            questions: cloudMatch.questions_list || [],
+            questions_list: cloudMatch.questions_list || [],
+            sections: cloudMatch.sections || null,
+            hasSectionalTiming: cloudMatch.has_sectional_timing || false,
+            mode: cloudMatch.category_name || "Standard",
+            time: cloudMatch.time || 180,
+            createdAt: row.created_at || 0 
+          };
+        });
+
+      // Parse and map Paused Draft Snapshots
+      const draftRows = localSessions
+        .filter(row => row.status === 'draft')
+        .map(row => {
+          const cloudMatch = cloudTestsMap[row.test_id] || {};
+          return {
+            id: row.test_id, 
+            title: row.title,
+            lastIndex: row.last_index || 0,
+            timeLeft: row.time_left || 0,
+            rawSeconds: row.raw_seconds,
+            date: row.created_at ? new Date(row.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : "Recent",
+            answers: row.answers || {},
+            uploads: row.uploads || {},
+            timeTracker: row.time_tracker || {},
+            markedForReview: [],
+            questions: cloudMatch.questions_list || [],
+            questions_list: cloudMatch.questions_list || [],
+            sections: cloudMatch.sections || null,
+            hasSectionalTiming: cloudMatch.has_sectional_timing || false,
+            mode: cloudMatch.category_name || "Standard",
+            time: cloudMatch.time || 180,
+            createdAt: row.created_at || 0
+          };
+        });
+
+      setAttemptedHistory(historyRows.sort((a, b) => b.createdAt - a.createdAt));
+      setSavedTests(draftRows.sort((a, b) => b.createdAt - a.createdAt));
     } catch (err) {
-      console.error("Library background sync error:", err);
+      console.error("Local database retrieval system failure:", err);
     }
   };
 
@@ -194,93 +162,6 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
     return Object.values(groups);
   }, [attemptedHistory]);
 
-  // --- CREATE NEW SUBJECT WORKSPACE FOLDER ---
-  const handleCreateFolder = () => {
-    if (!newFolderName.trim()) return;
-    const newFolderObj = {
-      id: 'folder_' + Date.now(),
-      name: newFolderName.trim()
-    };
-    const updatedFolders = [...folders, newFolderObj];
-    setFolders(updatedFolders);
-    localStorage.setItem('infinity_folders', JSON.stringify(updatedFolders));
-    setNewFolderName('');
-    setShowFolderModal(false);
-  };
-
-  // --- DELETE FOLDER & CASCADES REMOVAL FOR ALL ITS NESTED STORAGE ITEMS ---
-  const handleDeleteFolder = async (e, folderId) => {
-    e.stopPropagation();
-    if (window.confirm("Bhai, kya tu sach mein is subject folder ko iske saare files ke sath delete karna chahta hai?")) {
-      const updatedFolders = folders.filter(f => f.id !== folderId);
-      setFolders(updatedFolders);
-      localStorage.setItem('infinity_folders', JSON.stringify(updatedFolders));
-
-      // Reclaim memory space from IndexedDB for all targeted documents
-      const targetedDocs = documents.filter(d => d.folderId === folderId);
-      for (const doc of targetedDocs) {
-        await deleteFileFromIndexedDB(doc.id).catch(console.error);
-      }
-
-      const updatedDocs = documents.filter(d => d.folderId !== folderId);
-      setDocuments(updatedDocs);
-      localStorage.setItem('infinity_docs', JSON.stringify(updatedDocs));
-
-      if (currentFolderId === folderId) setCurrentFolderId(null);
-    }
-  };
-
-  // --- DEVICE MEMORY SAVING HOOK (INDEXEDDB SE WIRE KIYA) ---
-  const handleAddDocument = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type === "application/pdf") {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const docId = Date.now();
-          
-          // Save file contents into IndexedDB to manage 500 MB constraints safely
-          await saveFileToIndexedDB(docId, reader.result);
-
-          const newDoc = {
-            id: docId,
-            title: file.name.replace(".pdf", ""),
-            type: "PDF",
-            date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
-            folderId: currentFolderId // Pushes file directly inside the active subject segment
-          };
-          
-          const updatedDocs = [...documents, newDoc];
-          setDocuments(updatedDocs);
-          localStorage.setItem('infinity_docs', JSON.stringify(updatedDocs));
-        } catch (err) {
-          console.error(err);
-          alert("Storage Fault: Unable to write file payload onto browser storage nodes.");
-        }
-      };
-      reader.readAsDataURL(file);
-    } else {
-      alert("Validation Error: Only PDF documents are permitted for upload.");
-    }
-    e.target.value = null; 
-  };
-
-  // --- FETCH FILE FROM BROWSERS HARD MEMORY NODES ---
-  const openDocument = async (doc) => {
-    try {
-      const binaryDataStream = await getFileFromIndexedDB(doc.id);
-      if (binaryDataStream) {
-        const newTab = window.open();
-        newTab.document.write(`<iframe src="${binaryDataStream}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
-      } else {
-        alert("Content Unavailable: File reference link is blank or missing binary fragments.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Execution Error: Failed to fetch binary node streams from local sandbox memory.");
-    }
-  };
-
   const handleShareTest = (test) => {
     try {
       if (!test?.id) return alert("Execution Error: Test Identifier could not be resolved.");
@@ -288,74 +169,54 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
       navigator.clipboard.writeText(shareUrl).then(() => {
         alert("Success: Assessment invitation link copied to clipboard successfully.");
       }).catch(() => {
-        prompt("Copy Notification: Automatic clipboard copy failed. Please manually copy the URL string:", shareUrl);
+        prompt("Copy Notification: Clipboard fallback generated string:", shareUrl);
       });
     } catch (err) {
-      alert("System Error: Something went wrong while generating the secure link layout.");
+      alert("System error mapping invitation string tokens.");
     }
   };
 
-  const handleRemove = async (id, category, attemptId = null, title = null) => {
+  const handleRemove = async (id, category, attemptId = null) => {
     if (category === 'questions') {
-      if (window.confirm("Bhai, kya tu sach mein is question ko cloud vault se vaporize karna chahta hai?")) {
+      if (window.confirm("Bhai, kya tu sach mein is question ko offline library se delete karna chahta hai?")) {
         try {
-          const { error } = await supabase.from('saved_questions').delete().eq('id', id);
-          if (error) throw error;
+          await deleteFromLocalStore("saved_questions", id);
           setSavedQuestions(savedQuestions.filter(item => item.id !== id));
           if (selectedItem && selectedItem.id === id) setSelectedItem(null);
-          alert("Success: Question record removed from cloud storage successfully!");
+          alert("Success: Question record removed from device storage successfully!");
         } catch (err) {
-          console.error(err);
-          alert("Delete Failure: Database node error.");
+          alert("Delete Failure: Hardware IO error.");
         }
       }
       return;
     }
 
     if (category === 'history') {
-      if (window.confirm("Bhai, test history record delete karna hai cloud aur local memory se?")) {
+      if (window.confirm("Bhai, kya tu sach mein is test history record ko device memory se permanently mitaana chahta hai?")) {
         try {
-          const { error } = await supabase.from('test_sessions').delete().eq('id', attemptId);
-          if (error) throw error;
+          await deleteFromLocalStore("test_sessions", attemptId);
           setAttemptedHistory(attemptedHistory.filter(item => item.attemptId !== attemptId));
           if (selectedItem && selectedItem.attemptId === attemptId) setSelectedItem(null);
           alert("Success: Evaluation record permanently erased.");
         } catch (err) {
-          console.error(err);
-          alert("Delete Failure: Cloud gateway response error.");
+          alert("Delete Failure: Storage node link breakdown.");
         }
       }
       return;
     }
 
     if (category === 'drafts') {
-      if (window.confirm("Bhai, is paused draft snapshot ko discard karna hai cloud aur local memory se?")) {
+      if (window.confirm("Bhai, is paused draft snapshot ko device memory se discard karna hai?")) {
         try {
-          const { error } = await supabase.from('test_sessions').delete().eq('test_id', id).eq('status', 'draft');
-          if (error) throw error;
+          await deleteFromLocalStore("test_sessions", id);
           setSavedTests(savedTests.filter(item => item.id !== id));
           if (selectedItem && selectedItem.id === id) setSelectedItem(null);
           alert("Success: Draft snapshot discarded safely.");
         } catch (err) {
-          console.error(err);
-          alert("Delete Failure: Cloud connection fault.");
+          alert("Delete Failure: Storage configuration error.");
         }
       }
       return;
-    }
-
-    if (category === 'documents') {
-      const updated = documents.filter(item => {
-        const matchId = id && item.id && String(item.id).trim() === String(id).trim();
-        const matchTitle = title && item.title && String(item.title).trim() === String(title).trim();
-        if (matchId) {
-          deleteFileFromIndexedDB(item.id).catch(console.error);
-        }
-        return !(matchId || matchTitle);
-      });
-      localStorage.setItem('infinity_docs', JSON.stringify(updated));
-      setDocuments(updated);
-      if (selectedItem && (selectedItem.id === id || selectedItem.title === title)) setSelectedItem(null);
     }
   };
 
@@ -363,15 +224,18 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
     setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
-  // Filters out localized lists matching current configurations
-  const filteredDocuments = documents.filter(d => {
-    const matchesSearch = d.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFolder = d.folderId === currentFolderId;
-    return matchesSearch && matchesFolder;
-  });
-
   return (
     <div style={libContainer}>
+      <div style={privacyNoticeBanner}>
+        <div style={privacyIconFrame}>🛡️</div>
+        <div style={{ textAlign: 'left' }}>
+          <strong style={{ color: '#0f172a', display: 'block', fontSize: '0.92rem', fontWeight: '800' }}>Local Device Privacy Protection Active</strong>
+          <span style={{ color: '#475569', fontSize: '0.84rem', fontWeight: '600', lineHeight: '1.4' }}>
+            Aapke saare test sessions aur saved questions direct aapke browser local storage (IndexedDB) mein saved hain, hamare central database mein nahi. Your data stays 100% offline.
+          </span>
+        </div>
+      </div>
+
       {selectedItem && selectedItem.question && (
         <div style={modalOverlay} onClick={() => setSelectedItem(null)}>
           <div style={modalContent} onClick={e => e.stopPropagation()}>
@@ -380,15 +244,15 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
               <button style={closeBtn} onClick={() => setSelectedItem(null)}>✕</button>
             </div>
             <div style={modalBody}>
-              <h2 style={modalQText}>{selectedItem.question}</h2>
+              <h2 style={modalQText}><LatexText text={selectedItem.question} /></h2>
               <div style={correctAnswerBox}>Verified Correct Response: {selectedItem.answer}</div>
               <div style={explanationBoxModal}>
                 <strong style={{display: 'block', marginBottom: '8px', color: '#000000'}}>Conceptual Solution Framework:</strong>
-                <p style={{fontSize: '0.95rem', color: '#334155', lineHeight: '1.6', margin: 0}}>{selectedItem.explanation || "No explanation provided."}</p>
+                <p style={{fontSize: '0.95rem', color: '#334155', lineHeight: '1.6', margin: 0}}><LatexText text={selectedItem.explanation || "No explanation provided."} /></p>
               </div>
             </div>
             <div style={modalFooter}>
-              <p style={{fontSize: '0.75rem', color: '#94a3b8', margin: 0}}>Vault Resource ID: {selectedItem.id}</p>
+              <p style={{fontSize: '0.75rem', color: '#94a3b8', margin: 0}}>Device Storage Vault Ref: {selectedItem.id}</p>
             </div>
           </div>
         </div>
@@ -407,82 +271,18 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
       </header>
 
       <div style={tabRow}>
-        {['documents', 'questions', 'tests'].map(tab => (
-           <button key={tab} onClick={() => { setActiveSubTab(tab); setSearchQuery(''); setCurrentFolderId(null); }} style={{...tabStyle, color: activeSubTab === tab ? '#000000' : '#94a3b8', borderBottom: activeSubTab === tab ? '3px solid #000000' : 'none'}}>{tab.toUpperCase()}</button>
+        {['tests', 'questions'].map(tab => (
+           <button key={tab} onClick={() => { setActiveSubTab(tab); setSearchQuery(''); }} style={{...tabStyle, color: activeSubTab === tab ? '#000000' : '#94a3b8', borderBottom: activeSubTab === tab ? '3px solid #000000' : 'none'}}>{tab === 'tests' ? "TEST SESSIONS" : tab.toUpperCase()}</button>
         ))}
       </div>
 
       <div style={contentArea}>
-        {activeSubTab === 'documents' && (
-          <div style={verticalList}>
-            
-            {/* NAVIGATION HEADER FOR INTERNAL VIEWING LEVELS */}
-            {currentFolderId !== null ? (
-              <div style={folderBreadcrumbContainerRow}>
-                <button type="button" onClick={() => setCurrentFolderId(null)} style={monochromeBackDirectoryBtn}>
-                  ← Back to Folders List
-                </button>
-                <span style={activeFolderTitleBadge}>
-                  Active Folder: {folders.find(f => f.id === currentFolderId)?.name || 'Subject Stream'}
-                </span>
-              </div>
-            ) : (
-              <div style={folderActionsHeaderMenuBar}>
-                <button type="button" onClick={() => setShowFolderModal(true)} style={monochromeSolidDarkActionBtn}>
-                  ➕ Create Subject Folder
-                </button>
-              </div>
-            )}
-
-            {/* RENDER LIST OF MAIN SYSTEM SUBJECT FOLDERS AT ROOT LEVEL VIEW */}
-            {currentFolderId === null && (
-              <div style={foldersFlexGridLayout}>
-                {folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map(folder => {
-                  const itemsCount = documents.filter(d => d.folderId === folder.id).length;
-                  return (
-                    <div key={folder.id} onClick={() => setCurrentFolderId(folder.id)} style={folderDirectoryCardWidget}>
-                      <button type="button" onClick={(e) => handleDeleteFolder(e, folder.id)} style={deleteFolderXWidget} title="Delete Subject Folder">✕</button>
-                      <div style={folderIconGraphicCapsule}>📁</div>
-                      <h4 style={folderTitleTextText}>{folder.name}</h4>
-                      <p style={folderMetaCounterSummaryText}>{itemsCount} files compiled inside</p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* SEGMENT TRACK RENDERER FOR MATCHING DOCUMENTS LIST */}
-            {filteredDocuments.map(doc => (
-              <div key={doc.id} style={itemCard}>
-                <div style={iconBox}>📄</div>
-                <div style={{flex: 1}}><h4 style={itemTitle}>{doc.title}</h4><p style={itemSubText}>PDF Module • Saved inside device offline memory storage</p></div>
-                <div style={{display: 'flex', gap: '10px'}}>
-                   <button style={actionBtn} onClick={() => openDocument(doc)}>View File</button>
-                   <button onClick={() => handleRemove(doc.id, 'documents', null, doc.title)} style={{...actionBtn, color: '#ef4444', borderColor: '#fee2e2'}}>Delete</button>
-                </div>
-              </div>
-            ))}
-
-            {/* ACTION BLOCK FOR LOADING NEW ASSETS */}
-            {currentFolderId !== null ? (
-              <div style={{...itemCard, border: '1px dashed #000000', background: 'none', justifyContent: 'center', cursor: 'pointer'}} onClick={() => fileInputRef.current.click()}>
-                <span style={{color: '#000000', fontWeight: 'bold'}}>+ Upload PDF to this Folder</span>
-                <input type="file" ref={fileInputRef} style={{display: 'none'}} accept=".pdf" onChange={handleAddDocument} />
-              </div>
-            ) : (
-              folders.length === 0 && (
-                <p style={{...emptyStateText, textAlign: 'center', margin: '20px 0'}}>No subject folder indexes compiled. Create a folder above to organize your reference sheets!</p>
-              )
-            )}
-          </div>
-        )}
-
         {activeSubTab === 'questions' && (
           <div style={verticalList}>
             {savedQuestions.filter(q => q.question.toLowerCase().includes(searchQuery.toLowerCase())).map(q => (
               <div key={q.id} style={{...itemCard, borderLeft: '5px solid #000000', cursor: 'pointer'}} onClick={() => setSelectedItem(q)}>
-                <div style={{flex: 1}}><h4 style={{...itemTitle, fontSize: '0.95rem'}}>{q.question}</h4></div>
-                <button onClick={(e) => { e.stopPropagation(); handleRemove(q.id, 'questions', null, q.question); }} style={{...actionBtn, color: '#ef4444', borderColor: '#fee2e2'}}>Remove</button>
+                <div style={{flex: 1}}><h4 style={{...itemTitle, fontSize: '0.95rem'}}><LatexText text={q.question} /></h4></div>
+                <button onClick={(e) => { e.stopPropagation(); handleRemove(q.id, 'questions', null); }} style={{...actionBtn, color: '#ef4444', borderColor: '#fee2e2'}}>Remove</button>
               </div>
             ))}
             {savedQuestions.length === 0 && <p style={emptyStateText}>No questions saved in library vault yet.</p>}
@@ -555,7 +355,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
                                   </span>
                                   <button onClick={() => onViewAnalysis?.(attempt)} style={{ ...actionBtn, background: '#000000', color: '#fff', border: 'none' }}>Detailed Review</button>
                                   <button onClick={() => handleShareTest(attempt)} style={actionBtn}>Share</button>
-                                  <button onClick={() => handleRemove(null, 'history', attempt.attemptId, attempt.title)} style={{ ...actionBtn, color: '#ef4444', borderColor: '#fee2e2' }}>Wipe Record</button>
+                                  <button onClick={() => handleRemove(null, 'history', attempt.attemptId)} style={{ ...actionBtn, color: '#ef4444', borderColor: '#fee2e2' }}>Wipe Record</button>
                                 </div>
                               </div>
                             ))}
@@ -566,13 +366,13 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
                   );
                 })
               ) : (
-                savedTests.map(draft => (
+                savedTests.filter(draft => draft.title.toLowerCase().includes(searchQuery.toLowerCase())).map(draft => (
                   <div key={draft.id} style={{...itemCard, borderLeft: '5px solid #000000'}}>
                     <div style={{...iconBox, background: '#f1f5f9'}}>⏳</div>
-                    <div style={{flex: 1}}><h4 style={itemTitle}>{draft.title}</h4><p style={itemSubText}>Suspended at assessment index parameter position: Q{draft.lastIndex + 1} ({draft.timeLeft} mins left)</p></div>
+                    <div style={{flex: 1}}><h4 style={itemTitle}>{draft.title}</h4><p style={itemSubText}>Suspended at assessment position: Q{draft.lastIndex + 1} ({draft.timeLeft} mins left)</p></div>
                     <div style={{display: 'flex', gap: '10px'}}>
                        <button onClick={() => onResumeTest?.(draft)} style={{...actionBtn, background: '#000000', color: '#fff', border: 'none'}}>Resume Session</button>
-                       <button onClick={() => handleRemove(draft.id, 'drafts', null, draft.title)} style={{...actionBtn, color: '#ef4444', borderColor: '#fee2e2'}}>Discard Draft</button>
+                       <button onClick={() => handleRemove(draft.id, 'drafts', null)} style={{...actionBtn, color: '#ef4444', borderColor: '#fee2e2'}}>Discard Draft</button>
                     </div>
                   </div>
                 ))
@@ -583,51 +383,12 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
           </div>
         )}
       </div>
-
-      {/* --- IN-APP WORKSPACE FOLDER MODAL OVERLAY --- */}
-      {showFolderModal && (
-        <div style={modalOverlay} onClick={() => setShowFolderModal(false)}>
-          <div style={{...modalContent, maxWidth: '400px', borderRadius: '20px'}} onClick={e => e.stopPropagation()}>
-            <div style={{...modalHeader, paddingBottom: '10px'}}>
-              <h3 style={{margin: 0, fontWeight: '900', color: '#0f172a'}}>Create New Subject Folder</h3>
-              <button onClick={() => setShowFolderModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: '#94a3b8', fontWeight: 'bold'}}>✕</button>
-            </div>
-            <div style={{padding: '20px 0'}}>
-              <label style={{display:'block', fontSize:'0.72rem', fontWeight:'bold', color:'#475569', marginBottom:'6px', textTransform:'uppercase'}}>Folder Name</label>
-              <input 
-                type="text" 
-                style={{width:'100%', padding:'12px', borderRadius:'10px', border:'1px solid #cbd5e1', fontSize:'0.95rem', outline:'none', fontWeight:'600'}}
-                placeholder="e.g. History, Mathematics, Science" 
-                value={newFolderName}
-                onChange={e => setNewFolderName(e.target.value)}
-              />
-            </div>
-            <div style={{display: 'flex', gap: '12px'}}>
-              <button onClick={() => setShowFolderModal(false)} style={{...actionBtn, flex: 1, background: '#f1f5f9', color: '#475569', border: 'none'}}>Cancel</button>
-              <button onClick={handleCreateFolder} style={{...actionBtn, flex: 1.3, background: '#000000', color: '#ffffff', border: 'none'}}>Create Now</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-// --- HIGH-FIDELITY MONOCHROME UI SPECIFICATIONS ---
-const libContainer = { padding: '40px', maxWidth: '950px', margin: '0 auto' }; const libHeader = { marginBottom: '40px' }; const searchWrapper = { width: '300px' }; const searchField = { width: '100%', padding: '12px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#fff', fontSize: '0.9rem', fontWeight: '600' }; const tabRow = { display: 'flex', gap: '30px', borderBottom: '1px solid #e2e8f0', marginBottom: '30px' }; const tabStyle = { background: 'none', border: 'none', padding: '15px 10px', fontWeight: '800', cursor: 'pointer', fontSize: '0.95rem', textTransform: 'uppercase' }; const testToggleRow = { display: 'flex', gap: '15px', marginBottom: '20px' }; const testToggleBtn = { padding: '10px 20px', borderRadius: '10px', border: 'none', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' }; const contentArea = { minHeight: '400px' }; const verticalList = { display: 'flex', flexDirection: 'column', gap: '15px' }; const itemCard = { background: 'white', padding: '20px 25px', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.01)' }; const iconBox = { width: '50px', height: '50px', background: '#f8fafc', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem' }; const itemTitle = { margin: 0, fontSize: '1.05rem', color: '#1e293b', fontWeight: '800' }; const itemSubText = { margin: '6px 0 0 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }; const actionBtn = { padding: '9px 18px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontWeight: '800', fontSize: '0.8rem' }; const subjectTagSmall = { background: '#f1f5f9', color: '#000000', padding: '4px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '900', border: '1px solid #e2e8f0' }; const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }; const modalContent = { background: 'white', width: '90%', maxWidth: '650px', padding: '35px', borderRadius: '30px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }; const closeBtn = { background: '#f1f5f9', border: 'none', width: '35px', height: '35px', borderRadius: '50%', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }; const modalQText = { fontSize: '1.4rem', color: '#1e293b', padding: '15px 0 25px 0', fontWeight: '800', lineHeight: '1.4' }; const correctAnswerBox = { background: '#f8fafc', padding: '18px', borderRadius: '15px', color: '#000000', fontWeight: '900', marginBottom: '20px', border: '1px solid #e2e8f0' }; const explanationBoxModal = { padding: '22px', background: '#f8fafc', borderRadius: '20px', borderLeft: '5px solid #000000', border: '1px solid #e2e8f0' }; const modalHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' }; const modalBody = { padding: '10px 0' }; const modalFooter = { borderTop: '1px solid #f1f5f9', paddingTop: '15px', marginTop: '15px' }; const emptyStateText = { textAlign: 'center', color: '#94a3b8', padding: '40px 0', fontSize: '0.9rem', fontWeight: '600', fontStyle: 'italic' }; const aiBadge = { fontSize: '0.72rem', background: '#f1f5f9', color: '#000000', padding: '3px 10px', borderRadius: '6px', fontWeight: '800', border: '1px solid #cbd5e1' }; const secBadge = { fontSize: '0.72rem', background: '#000000', color: '#ffffff', padding: '3px 10px', borderRadius: '6px', fontWeight: '800' };
-
-// Foldering Architecture Dynamic Styles Layout Nodes
-const folderActionsHeaderMenuBar = { display: 'flex', justifyContent: 'flex-start', width: '100%', marginBottom: '10px' };
-const monochromeSolidDarkActionBtn = { background: '#000000', color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' };
-const foldersFlexGridLayout = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px', width: '100%', marginBottom: '15px' };
-const folderDirectoryCardWidget = { background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '20px', textAlign: 'center', position: 'relative', cursor: 'pointer', transition: 'all 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.01)' };
-const deleteFolderXWidget = { position: 'absolute', top: '10px', right: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: '#94a3b8', fontWeight: 'bold' };
-const folderIconGraphicCapsule = { fontSize: '2.5rem', marginBottom: '8px' };
-const folderTitleTextText = { margin: '0 0 4px 0', fontWeight: '800', color: '#0f172a', fontSize: '1rem' };
-const folderMetaCounterSummaryText = { margin: 0, fontSize: '0.78rem', color: '#64748b', fontWeight: '600' };
-
-const folderBreadcrumbContainerRow = { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '10px', borderBottom: '1px solid #f1f5f9', paddingBottom: '14px' };
-const monochromeBackDirectoryBtn = { background: '#ffffff', border: '1px solid #000000', color: '#000000', padding: '8px 16px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: '700', cursor: 'pointer' };
-const activeFolderTitleBadge = { fontSize: '1.05rem', fontWeight: '800', color: '#0f172a' };
+const libContainer = { padding: '40px', maxWidth: '950px', margin: '0 auto' }; const libHeader = { marginBottom: '40px' }; const searchWrapper = { width: '300px' }; const searchField = { width: '100%', padding: '12px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#fff', fontSize: '0.9rem', fontWeight: '600' }; const tabRow = { display: 'flex', gap: '30px', borderBottom: '1px solid #e2e8f0', marginBottom: '30px' }; const tabStyle = { background: 'none', border: 'none', padding: '15px 10px', fontWeight: '800', cursor: 'pointer', fontSize: '0.95rem', textTransform: 'uppercase' }; const testToggleRow = { display: 'flex', gap: '15px', marginBottom: '20px' }; const testToggleBtn = { padding: '10px 20px', borderRadius: '10px', border: 'none', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' }; const contentArea = { minHeight: '400px' }; const verticalList = { display: 'flex', flexDirection: 'column', gap: '15px' }; const itemCard = { background: 'white', padding: '20px 25px', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.01)' }; const iconBox = { width: '50px', height: '50px', background: '#f1f5f9', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem' }; const itemTitle = { margin: 0, fontSize: '1.05rem', color: '#1e293b', fontWeight: '800' }; const itemSubText = { margin: '6px 0 0 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }; const actionBtn = { padding: '9px 18px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontWeight: '800', fontSize: '0.8rem' }; const subjectTagSmall = { background: '#f1f5f9', color: '#000000', padding: '4px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '900', border: '1px solid #e2e8f0' }; const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }; const modalContent = { background: 'white', width: '90%', maxWidth: '650px', padding: '35px', borderRadius: '30px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }; const closeBtn = { background: '#f1f5f9', border: 'none', width: '35px', height: '35px', borderRadius: '50%', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }; const modalQText = { fontSize: '1.4rem', color: '#1e293b', padding: '15px 0 25px 0', fontWeight: '800', lineHeight: '1.4' }; const correctAnswerBox = { background: '#f8fafc', padding: '18px', borderRadius: '15px', color: '#000000', fontWeight: '900', marginBottom: '20px', border: '1px solid #e2e8f0' }; const explanationBoxModal = { padding: '22px', background: '#f8fafc', borderRadius: '20px', borderLeft: '5px solid #000000', border: '1px solid #e2e8f0' }; const modalHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' }; const modalBody = { padding: '10px 0' }; const modalFooter = { borderTop: '1px solid #f1f5f9', paddingTop: '15px', marginTop: '15px' }; const emptyStateText = { textAlign: 'center', color: '#94a3b8', padding: '40px 0', fontSize: '0.9rem', fontWeight: '600', fontStyle: 'italic' }; const aiBadge = { fontSize: '0.72rem', background: '#f1f5f9', color: '#000000', padding: '3px 10px', borderRadius: '6px', fontWeight: '800', border: '1px solid #cbd5e1' }; const secBadge = { fontSize: '0.72rem', background: '#000000', color: '#ffffff', padding: '3px 10px', borderRadius: '6px', fontWeight: '800' };
+const privacyNoticeBanner = { display: 'flex', gap: '15px', background: '#fafafb', border: '1px solid #e2e8f0', padding: '16px 20px', borderRadius: '16px', marginBottom: '30px', alignItems: 'center' };
+const privacyIconFrame = { width: '40px', height: '40px', background: '#f1f5f9', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '1.2rem' };
 
 export default Library;

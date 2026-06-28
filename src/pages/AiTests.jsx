@@ -6,6 +6,7 @@ const AiTests = ({ onStartTest }) => {
   const [view, setView] = useState('selection'); // selection, config-full, config-topic, ai-summary, admin-preview, admin-push-cloud
   const [aiTestDetails, setAiTestDetails] = useState(null);
   const [loading, setLoading] = useState(false); 
+  const [loadingMessage, setLoadingMessage] = useState(''); // ⚡ Real-time processing feedback bar indicator state tracker
   const [cooldown, setCooldown] = useState(0); 
   
   // --- INTERNAL ADMIN CONTROLS STATE (ZERO APP.JSX DEPENDENCY) ---
@@ -112,11 +113,75 @@ const AiTests = ({ onStartTest }) => {
     }
   };
 
+  // ======================================================================
+  // ⚡ ULTIMATE FRONTEND SEQUENTIAL BATCHING CONSTRAINTS ENGINE
+  // ======================================================================
+  const fetchInBatches = async (exam, topic, targetCount, type, difficulty, language, marks, neg) => {
+    let remaining = targetCount;
+    let masterQuestionsArray = [];
+    
+    while (remaining > 0) {
+      const currentBatchSize = Math.min(50, remaining); // Splits requests cleanly into max 50 chunks boundaries
+      const startIndex = masterQuestionsArray.length + 1;
+      const endIndex = startIndex + currentBatchSize - 1;
+      
+      // Dynamic real-time loading state updates
+      setLoadingMessage(`Generating Questions ${startIndex} to ${endIndex}... Please wait ⏳`);
+      
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          exam,
+          topic,
+          count: currentBatchSize,
+          type, 
+          difficulty,
+          language
+        })
+      });
+
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || `Batch stream failed at query slot index: ${startIndex}`);
+
+      const processedBatch = data.questions.map((q, i) => {
+        const structuralIndex = masterQuestionsArray.length + i;
+        if (type === 'Objective') {
+          return {
+            id: structuralIndex,
+            type: 'Objective',
+            question: q.question,
+            options: q.options || ["Option A", "Option B", "Option C", "Option D"],
+            correct: q.correctOptionIndex !== undefined ? q.correctOptionIndex : 0,
+            marks: `+${parseFloat(marks || 2.0).toFixed(1)}`,
+            neg: `-${parseFloat(neg || 0.66).toFixed(2)}`,
+            explanation: q.explanation || "Resolution matrix computed."
+          };
+        } else {
+          return {
+            id: structuralIndex,
+            type: 'Subjective',
+            question: q.question,
+            marks: `+${parseFloat(marks || 10.0).toFixed(1)}`,
+            neg: "0",
+            explanation: q.explanation || "Model marking structure synced."
+          };
+        }
+      });
+
+      masterQuestionsArray = [...masterQuestionsArray, ...processedBatch];
+      remaining -= currentBatchSize;
+    }
+    
+    return masterQuestionsArray;
+  };
+
   const handleGenerateFullTest = async () => {
     if (!testTitle.trim()) { alert("Please enter a test title to continue."); return; }
     if (cooldown > 0) { alert(`Server cooldown active. Please wait ${cooldown} seconds.`); return; }
     
     setLoading(true);
+    setLoadingMessage("Initializing Project Infinity Mock Pipeline... 🚀");
     await ensureAiLabCategory(); 
 
     try {
@@ -134,51 +199,23 @@ const AiTests = ({ onStartTest }) => {
         const compiledSections = [];
 
         for (const sec of aiSections) {
-          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-test`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              exam: testTitle,
-              topic: sec.name,
-              count: parseInt(sec.qCount),
-              type: sec.type, 
-              difficulty: sec.difficulty,
-              language: sec.language
-            })
-          });
-
-          const data = await response.json();
-          if (!data.success) throw new Error(data.error || `Failed on section: ${sec.name}`);
-
-          const processedSectionQuestions = data.questions.map((q, i) => {
-            if (sec.type === 'Objective') {
-              return {
-                id: i,
-                type: 'Objective',
-                question: q.question,
-                options: q.options || ["Option A", "Option B", "Option C", "Option D"],
-                correct: q.correctOptionIndex !== undefined ? q.correctOptionIndex : 0,
-                marks: `+${parseFloat(sec.marks || 2.0).toFixed(1)}`,
-                neg: `-${parseFloat(sec.neg || 0.66).toFixed(2)}`,
-                explanation: q.explanation || "Resolution matrix computed."
-              };
-            } else {
-              return {
-                id: i,
-                type: 'Subjective',
-                question: q.question,
-                marks: `+${parseFloat(sec.marks || 10.0).toFixed(1)}`,
-                neg: "0",
-                explanation: q.explanation || "Model marking structure synced."
-              };
-            }
-          });
+          // Utilizes the hardened batch engine sequentially for sectional chunks up to 50
+          const sectionalQuestions = await fetchInBatches(
+            testTitle, 
+            sec.name, 
+            parseInt(sec.qCount), 
+            sec.type, 
+            sec.difficulty, 
+            sec.language, 
+            sec.marks, 
+            sec.neg
+          );
 
           compiledSections.push({
             name: sec.name,
             time: parseInt(sec.time),
             language: sec.language,
-            questions: processedSectionQuestions
+            questions: sectionalQuestions
           });
         }
 
@@ -200,61 +237,35 @@ const AiTests = ({ onStartTest }) => {
 
       } else {
         if (!fullQCount || !fullDuration) { alert("Please enter the question count and duration."); setLoading(false); return; }
-        if (parseInt(fullQCount) > 75) { alert("Maximum limit is 75 questions for a single paper."); setLoading(false); return; }
+        
+        // 🚨 RAISED FLUX WINDOW: Upper bound limits scaled to 100 items cleanly for CPO Tier-2 papers
+        const targetQCount = parseInt(fullQCount);
+        if (targetQCount > 100) { alert("Maximum limit is 100 questions for a single paper flat configuration."); setLoading(false); return; }
               
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-test`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            exam: testTitle,
-            topic: testTitle, 
-            count: parseInt(fullQCount),
-            type: fullType, 
-            difficulty: fullDifficulty,
-            language: fullLanguage
-          })
-        });
-
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error);
-
-        const generatedQuestions = data.questions.map((q, i) => {
-          if (fullType === 'Objective') {
-            return {
-              id: i,
-              type: 'Objective',
-              question: q.question,
-              options: q.options || ["Option A", "Option B", "Option C", "Option D"],
-              correct: q.correctOptionIndex !== undefined ? q.correctOptionIndex : 0,
-              marks: `+${parseFloat(fullMarks || 2.0).toFixed(1)}`,
-              neg: `-${parseFloat(fullNeg || 0.66).toFixed(2)}`,
-              explanation: q.explanation || "Resolution matrix computed."
-            };
-          } else {
-            return {
-              id: i,
-              type: 'Subjective',
-              question: q.question,
-              marks: `+${parseFloat(fullMarks || 10.0).toFixed(1)}`,
-              neg: "0",
-              explanation: q.explanation || "Model marking structure synced."
-            };
-          }
-        });
+        const flatPaperQuestionsList = await fetchInBatches(
+          testTitle,
+          testTitle,
+          targetQCount,
+          fullType,
+          fullDifficulty,
+          fullLanguage,
+          fullMarks,
+          fullNeg
+        );
 
         finalStructure.time = parseInt(fullDuration);
-        finalStructure.questions = generatedQuestions.length;
+        finalStructure.questions = flatPaperQuestionsList.length;
         finalStructure.hasSectionalTiming = false;
-        finalStructure.questions_list = generatedQuestions;
+        finalStructure.questions_list = flatPaperQuestionsList;
         finalStructure.mode = `${fullType} (${fullDifficulty}) - ${fullLanguage}`;
 
         await supabase.from('mock_tests').insert([{
           id: generatedTestId,
           category_name: 'AI Lab Generated',
           title: finalStructure.title,
-          questions: generatedQuestions.length,
+          questions: flatPaperQuestionsList.length,
           time: parseInt(fullDuration),
-          questions_list: generatedQuestions,
+          questions_list: flatPaperQuestionsList,
           has_sectional_timing: false
         }]);
       }
@@ -264,10 +275,11 @@ const AiTests = ({ onStartTest }) => {
 
     } catch (error) {
       console.error("Full Test Compilation Error:", error);
-      alert("A backend error occurred. A 60-second cooldown has been applied for safety.");
+      alert("A backend parsing error occurred. A 60-second cooldown has been applied for security metrics.");
       setCooldown(60); 
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -277,88 +289,58 @@ const AiTests = ({ onStartTest }) => {
     if (!topicQCount || !globalTime) { alert("Please enter the question count and duration."); return; }
     if (cooldown > 0) { alert(`Server cooldown active. Please wait ${cooldown} seconds.`); return; }
     
-    if (parseInt(topicQCount) > 50) {
-      alert("Maximum limit is 50 questions for topic drill mode.");
+    const targetQCount = parseInt(topicQCount);
+    if (targetQCount > 100) {
+      alert("Maximum limit is 100 questions for topic drill modes execution.");
       return;
     }
 
     setLoading(true);
+    setLoadingMessage("Assembling Drill Tracks Layout... 🎯");
     await ensureAiLabCategory();
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-test`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          exam: targetExam,
-          topic: topicName,
-          count: parseInt(topicQCount),
-          type: topicType, 
-          difficulty: topicDifficulty,
-          language: topicLanguage
-        })
-      });
+      const topicQuestionsList = await fetchInBatches(
+        targetExam,
+        topicName,
+        targetQCount,
+        topicType,
+        topicDifficulty,
+        topicLanguage,
+        topicMarks,
+        topicNeg
+      );
 
-      const data = await response.json();
+      const generatedTestId = "AI-TOPIC-" + Date.now();
+      const topicStructure = {
+        id: generatedTestId,
+        title: `AI Drill: ${topicName} (${targetExam})`,
+        time: parseInt(globalTime),
+        questions: topicQuestionsList.length,
+        hasSectionalTiming: false,
+        questions_list: topicQuestionsList,
+        mode: `${topicType} - ${topicDifficulty} (${topicLanguage})`
+      };
 
-      if (data.success) {
-        const generatedQuestions = data.questions.map((q, i) => {
-          if (topicType === 'Objective') {
-            return {
-              id: i,
-              type: 'Objective',
-              question: q.question,
-              options: q.options || ["Option A", "Option B", "Option C", "Option D"],
-              correct: q.correctOptionIndex !== undefined ? q.correctOptionIndex : 0,
-              marks: `+${parseFloat(topicMarks || 2.0).toFixed(1)}`,
-              neg: `-${parseFloat(topicNeg || 0.66).toFixed(2)}`,
-              explanation: q.explanation || "Resolution matrix computed."
-            };
-          } else {
-            return {
-              id: i,
-              type: 'Subjective',
-              question: q.question,
-              marks: `+${parseFloat(topicMarks || 10.0).toFixed(1)}`,
-              neg: "0",
-              explanation: q.explanation || "Model marking structure synced."
-            };
-          }
-        });
+      await supabase.from('mock_tests').insert([{
+        id: generatedTestId,
+        category_name: 'AI Lab Generated',
+        title: topicStructure.title,
+        questions: topicQuestionsList.length,
+        time: parseInt(globalTime),
+        questions_list: topicQuestionsList,
+        has_sectional_timing: false
+      }]);
 
-        const generatedTestId = "AI-TOPIC-" + Date.now();
-        const topicStructure = {
-          id: generatedTestId,
-          title: `AI Drill: ${topicName} (${targetExam})`,
-          time: parseInt(globalTime),
-          questions: generatedQuestions.length,
-          hasSectionalTiming: false,
-          questions_list: generatedQuestions,
-          mode: `${topicType} - ${topicDifficulty} (${topicLanguage})`
-        };
-
-        await supabase.from('mock_tests').insert([{
-          id: generatedTestId,
-          category_name: 'AI Lab Generated',
-          title: topicStructure.title,
-          questions: generatedQuestions.length,
-          time: parseInt(globalTime),
-          questions_list: generatedQuestions,
-          has_sectional_timing: false
-        }]);
-
-        setAiTestDetails(topicStructure);
-        setView('ai-summary');
-      } else {
-        alert("Backend Engine Layer Alert: " + data.error);
-        setCooldown(60); 
-      }
+      setAiTestDetails(topicStructure);
+      setView('ai-summary');
     } catch (error) {
       console.error("AI Generation Error:", error);
-      alert("Connection error occurred. Please try again after 60 seconds.");
+      alert("Connection interruption occurred inside batching pipelines. Please retry after 60 seconds.");
       setCooldown(60); 
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -372,8 +354,10 @@ const AiTests = ({ onStartTest }) => {
       alert("Maximum limit is 5 sections per test blueprint.");
       return;
     }
-    if (parseInt(secQCount) > 15) {
-      alert("Maximum limit is 15 questions per section.");
+    
+    // 🚨 RAISED UPPER BOUNDS: Individual section limit unlocked up to 50 items
+    if (parseInt(secQCount) > 50) {
+      alert("Maximum limit is 50 questions per individual section bundle.");
       return;
     }
 
@@ -397,9 +381,11 @@ const AiTests = ({ onStartTest }) => {
     return (
       <div style={formWrapper}>
         <div style={{ ...formCard, maxWidth: '450px', textAlign: 'center', padding: '50px 30px' }}>
-          <h3 style={{ color: '#000000', fontWeight: '900', fontSize: '1.4rem', margin: 0 }}>Generating AI Test Paper...</h3>
-          <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '12px', lineHeight: '1.6', fontWeight: '500' }}>
-            The AI engine is compiling custom questions and evaluation matrices. Please wait a moment.
+          {/* Active spinning loader layout ring matrix */}
+          <div style={{ width: '40px', height: '40px', border: '4px solid #f1f5f9', borderTop: '4px solid #000000', borderRadius: '50%', margin: '0 auto 20px auto', animation: 'spin 1s linear infinite' }}></div>
+          <h3 style={{ color: '#000000', fontWeight: '900', fontSize: '1.4rem', margin: 0 }}>Project Infinity AI Lab</h3>
+          <p style={{ color: '#64748b', fontSize: '0.92rem', marginTop: '12px', lineHeight: '1.6', fontWeight: '600' }}>
+            {loadingMessage || "Assembling questions datasets layers..."}
           </p>
         </div>
       </div>
@@ -548,7 +534,7 @@ const AiTests = ({ onStartTest }) => {
             <div style={nestedBox}>
               <h4 style={{ margin: '0 0 15px 0', color: '#000000', fontWeight: '800' }}>Configure Full Paper Metrics</h4>
               <div style={flexRow}>
-                <div style={{ flex: 1 }}><label style={miniLabel}>Total Questions (Max 75)</label><input style={inputStyle} type="number" placeholder="e.g. 50" value={fullQCount} onChange={e => setFullQCount(e.target.value)} /></div>
+                <div style={{ flex: 1 }}><label style={miniLabel}>Total Questions (Max 100)</label><input style={inputStyle} type="number" placeholder="e.g. 100" value={fullQCount} onChange={e => setFullQCount(e.target.value)} /></div>
                 <div style={{ flex: 1 }}><label style={miniLabel}>Total Duration (Mins)</label><input style={inputStyle} type="number" placeholder="e.g. 120" value={fullDuration} onChange={e => setFullDuration(e.target.value)} /></div>
               </div>
               <div style={flexRow}>
@@ -568,7 +554,7 @@ const AiTests = ({ onStartTest }) => {
               <div style={flexRow}>
                 <div style={{ flex: 1.2 }}><label style={miniLabel}>Section Name</label><input style={inputStyle} placeholder="e.g. History & Culture" value={secName} onChange={e => setSecName(e.target.value)} /></div>
                 <div style={{ flex: 0.6 }}><label style={miniLabel}>Duration (Mins)</label><input style={inputStyle} type="number" placeholder="20" value={secTime} onChange={e => setSecTime(e.target.value)} /></div>
-                <div style={{ flex: 0.6 }}><label style={miniLabel}>Questions (Max 15)</label><input style={inputStyle} type="number" placeholder="15" value={secQCount} onChange={e => setSecQCount(e.target.value)} /></div>
+                <div style={{ flex: 0.6 }}><label style={miniLabel}>Questions (Max 50)</label><input style={inputStyle} type="number" placeholder="50" value={secQCount} onChange={e => setSecQCount(e.target.value)} /></div>
               </div>
               <div style={flexRow}>
                 <div style={{ flex: 1 }}><label style={miniLabel}>Question Type</label>
@@ -656,7 +642,7 @@ const AiTests = ({ onStartTest }) => {
           </div>
           
           <div style={flexRow}>
-            <div style={{ flex: 1 }}><label style={labelStyle}>Question Count (Max 50)</label><input style={inputStyle} type="number" placeholder="e.g. 15" value={topicQCount} onChange={e => setTopicQCount(e.target.value)} /></div>
+            <div style={{ flex: 1 }}><label style={labelStyle}>Question Count (Max 100)</label><input style={inputStyle} type="number" placeholder="e.g. 15" value={topicQCount} onChange={e => setTopicQCount(e.target.value)} /></div>
             <div style={{ flex: 1 }}><label style={labelStyle}>Total Duration (Mins)</label><input style={inputStyle} type="number" placeholder="e.g. 15" value={globalTime} onChange={e => setGlobalTime(e.target.value)} /></div>
           </div>
           

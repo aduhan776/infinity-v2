@@ -2,6 +2,48 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 import LatexText from '../components/LatexText'; 
 
+// --- 🌐 LOCAL STORAGE STORAGE ENGINE MAPPINGS ---
+const dbName = "InfinityLocalDB";
+
+const initAnalysisDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(dbName, 2); // 🚨 ENGINE VERSION 2 MATCHES PERFECTLY
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains("test_sessions")) {
+        db.createObjectStore("test_sessions", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("saved_questions")) {
+        db.createObjectStore("saved_questions", { keyPath: "id" });
+      }
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+};
+
+const getFromLocalStore = async (storeName, id) => {
+  const db = await initAnalysisDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const store = tx.objectStore(storeName);
+    const req = store.get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = (err) => reject(err);
+  });
+};
+
+const saveToLocalStore = async (storeName, payload) => {
+  const db = await initAnalysisDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+    store.put(payload);
+    tx.oncomplete = () => resolve();
+    tx.onerror = (err) => reject(err);
+  });
+};
+
 const AnalysisPortal = ({ results, onBackToDashboard }) => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedQIdx, setSelectedQIdx] = useState(null);
@@ -20,10 +62,9 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
     attemptId 
   } = results || {};
 
-  // --- 1. PRECISE UNIFIED SCORE CALCULATION LOGIC ---
   const totalQ = questions ? questions.length : 0;
   
-  // ⚡ COMPUTE COMPREHENSIVE COMBINED MARKS (Objective + Subjective Evaluation Mapping)
+  // ⚡ COMPUTE MARKS MAPPING ON GENUINE FIELDS
   const totalScore = questions.reduce((sum, q, idx) => {
     if (!q) return sum;
     if (q.type === 'Objective') {
@@ -31,10 +72,10 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
       if (answers[idx] !== undefined && answers[idx] !== null && parseInt(answers[idx]) === parseInt(correctAns)) {
         return sum + (parseFloat(String(q.marks || '2.0').replace('+', '')) || 2);
       } else if (answers[idx] !== undefined && answers[idx] !== null && answers[idx] !== "") {
-        return sum - (parseFloat(String(q?.neg || '0.66').replace('-', '')) || 0.66);
+        const parsedNeg = parseFloat(String(q?.neg || '-0.66').replace('+', ''));
+        return sum + (parsedNeg < 0 ? parsedNeg : -parsedNeg); 
       }
     } else if (q.type === 'Subjective') {
-      // 🎯 Directly fetch verified actual score calculated from async cloud submission loop
       return sum + (parseFloat(q.score_given) || 0);
     }
     return sum;
@@ -63,12 +104,24 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
   }).length : 0;
   const unattemptedCount = totalQ - attemptedCount;
 
-  const accuracy = attemptedCount > 0 ? Math.round((correctCount / (correctCount + incorrectCount || 1)) * 100) : 0;
+  const totalObjectiveAttempted = correctCount + incorrectCount;
+  const accuracy = totalObjectiveAttempted > 0 ? Math.round((correctCount / totalObjectiveAttempted) * 100) : 0;
 
-  // --- 2. BACKGROUND LIBRARY & CLOUD SYNC ---
+  const totalNegativePenalty = objectiveIndices.reduce((sum, idx) => {
+    const q = questions[idx];
+    if (!q) return sum;
+    const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
+    if (answers[idx] !== undefined && answers[idx] !== null && answers[idx] !== "" && parseInt(answers[idx]) !== parseInt(correctAns)) {
+      const penalty = parseFloat(String(q.neg || '-0.66').replace('+', ''));
+      return sum + (penalty < 0 ? Math.abs(penalty) : penalty);
+    }
+    return sum;
+  }, 0);
+
+  // --- BACKGROUND SCORE SYNC ---
   useEffect(() => {
-    if (!id) return;
-    const syncScoreWithLibrary = async () => {
+    if (!id || !attemptId) return;
+    const syncScoreWithLocalLibrary = async () => {
       const history = JSON.parse(localStorage.getItem('infinity_test_history')) || [];
       const updatedHistory = history.map(test => {
         if (test.attemptId === attemptId || (test.id === id && test.score === "Analyzing...")) {
@@ -83,23 +136,21 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
       localStorage.setItem('infinity_test_history', JSON.stringify(updatedHistory));
 
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await supabase
-            .from('test_sessions')
-            .update({
-              score: totalScore.toFixed(2),
-              accuracy: accuracy + "%"
-            })
-            .eq('user_id', user.id)
-            .eq('test_id', id)
-            .eq('status', 'submitted');
+        const existingSession = await getFromLocalStore("test_sessions", attemptId);
+        if (existingSession) {
+          await saveToLocalStore("test_sessions", {
+            ...existingSession,
+            score: totalScore.toFixed(2),
+            accuracy: accuracy 
+          });
         }
       } catch (err) {
-        console.error("Cloud parameters synchronization loop failure:", err);
+        console.error("Local sandbox score alignment loop failure:", err);
       }
     };
-    syncScoreWithLibrary();
+    
+    // 🎯 FIXED SYNTAX ENGINE CALLING GATEWAY
+    syncScoreWithLocalLibrary(); 
   }, [totalScore, accuracy, id, attemptId]);
 
   const handleSaveQuestion = async (e, q) => {
@@ -107,41 +158,33 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
     if (!q) return;
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return alert("Bhai login session issue rha. Dubara check karo!");
-
-      const { data: existing } = await supabase
-        .from('saved_questions')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('question', q.question)
-        .limit(1);
-
-      if (existing && existing.length > 0) {
-        setSavedStatus(prev => ({ ...prev, [q.question]: true }));
-        return alert("Bhai, ye question pehle se tere library vault mein safe hai! 🔖");
+      const questionUniqueId = "SAVED_Q_" + Date.now();
+      const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
+      
+      let derivedAnswerText = "Subjective Evaluation Verified";
+      if (q.type === 'Objective' && Array.isArray(q.options)) {
+        const parsedIdx = parseInt(correctAns);
+        if (!isNaN(parsedIdx) && parsedIdx >= 0 && parsedIdx < q.options.length) {
+          derivedAnswerText = q.options[parsedIdx];
+        } else {
+          derivedAnswerText = "Malformed response options value.";
+        }
       }
 
-      const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
-      const { error } = await supabase
-        .from('saved_questions')
-        .insert([
-          {
-            user_id: user.id,
-            topic: "Exam Analysis",
-            question: q.question,
-            answer: q.type === 'Objective' && q.options ? q.options[correctAns] : "Subjective Verification Required",
-            explanation: q.explanation || "Saved directly via platform test evaluation metrics portal window."
-          }
-        ]);
+      const localQuestionPayload = {
+        id: questionUniqueId,
+        topic: "Exam Analysis",
+        question: q.question,
+        answer: derivedAnswerText,
+        explanation: q.explanation || "Saved directly via platform test evaluation metrics portal window.",
+        saved_at: new Date().toISOString()
+      };
 
-      if (error) throw error;
-
+      await saveToLocalStore("saved_questions", localQuestionPayload);
       setSavedStatus(prev => ({ ...prev, [q.question]: true }));
-      alert("Success: Question stored directly in academic cloud vault! 🔖");
+      alert("Question stored directly in your local device vault library! 🔖");
     } catch (err) {
-      console.error(err);
-      alert("Database error while committing current question block.");
+      alert("Storage engine error while writing question packet.");
     }
   };
 
@@ -174,7 +217,6 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
   return (
     <div style={styles.container}>
-      {/* --- OVERALL SUMMARY DASHBOARD --- */}
       <div style={styles.summaryHeader}>
         <div style={styles.summaryHeaderMain}>
            <div>
@@ -209,7 +251,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
       <div style={styles.topicSection}>
         <div style={styles.topicBadge}>Total Questions: {totalQ}</div>
-        <div style={styles.topicBadge}>Negative Marks Penalty: {(incorrectCount * 0.66).toFixed(2)}</div>
+        <div style={styles.topicBadge}>Negative Marks Penalty: {totalNegativePenalty.toFixed(2)}</div>
         <div style={styles.topicBadge}>Time Remaining: {formatTime(timeLeft)}</div>
       </div>
 
@@ -242,12 +284,13 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                   <button 
                     onClick={(e) => handleSaveQuestion(e, questions[idx])}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.05rem', padding: '2px', opacity: isQuestionSaved ? 1 : 0.35, transition: '0.15s ease' }}
-                    title={isQuestionSaved ? "Question Saved in Vault" : "Bookmark Question to Cloud Vault"}
+                    title="Bookmark Question"
                   >
                     🔖
                   </button>
                   <span style={{ fontWeight: '800', color: isIncorrect ? '#ef4444' : '#22c55e' }}>
-                     {questions[idx].type === 'Subjective' 
+                     {/* 🚨 FIXED TARGET MAPPING KEY FROM selectedQIdx TO NATIVE LOOP INDEX */}
+                     {questions[idx]?.type === 'Subjective' 
                        ? `${(questions[idx].score_given || 0).toFixed(1)} / ${parseFloat(String(questions[idx].marks || '10')).toFixed(1)}`
                        : (isIncorrect ? questions[idx].neg : (status === 'unattempted' ? '0.0' : questions[idx].marks))}
                   </span>
@@ -260,7 +303,6 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
         })}
       </div>
 
-      {/* --- DETAILED QUESTION REVIEW OVERLAY WINDOW --- */}
       {selectedQIdx !== null && questions[selectedQIdx] && (
         <div style={styles.overlay}>
           <div style={styles.detailContainer}>
@@ -321,7 +363,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                               {uploads[selectedQIdx].map((file, fi) => (
                                 <div key={fi} style={{textAlign:'center', background:'#f8fafc', padding:'5px', borderRadius:'6px', border:'1px solid #e2e8f0'}}>
                                   <span style={{fontSize:'0.7rem', fontWeight:'bold', display:'block', color:'#64748b', marginBottom:'4px'}}>{file.name || "Handwritten Sheet"}</span>
-                                  <span style={{fontSize:'0.72rem', background:'#e0e7ff', color:'#4338ca', padding:'4px 8px', borderRadius:'4px', fontWeight:'bold'}}>Cloud Vault Synced ✓</span>
+                                  <span style={{fontSize:'0.72rem', background:'#e0e7ff', color:'#4338ca', padding:'4px 8px', borderRadius:'4px', fontWeight:'bold'}}>Local Vault Synced ✓</span>
                                 </div>
                               ))}
                             </div>
@@ -330,7 +372,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                       </div>
 
                       <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                        <strong style={{ color: '#4f46e5', fontSize: '0.9rem', display: 'block', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                        <strong style={{ color: '#4f46e5', fontSize: '0.9rem', display: 'block', marginBottom: '12px' }}>
                           📝 What You Covered (AI Point Summary):
                         </strong>
                         <ul style={{ paddingLeft: '20px', margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', listStyleType: 'square' }}>
@@ -341,7 +383,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                               </li>
                             ))
                           ) : (
-                            <li style={{ fontSize: '0.92rem', color: '#64748b', fontWeight: '500', fontStyle: 'italic' }}>
+                            <li style={{ fontSize: '0.92rem', color: '#64748b', fontStyle: 'italic' }}>
                               Bhai, is subjective question ko attempt nahi kiya gaya tha.
                             </li>
                           )}
@@ -355,10 +397,10 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                       <strong style={{ color: '#6366f1', display: 'block', marginBottom: '6px', fontSize: '0.95rem' }}>
                          {questions[selectedQIdx].type === 'Subjective' ? '🎯 Scope of Improvement Summary:' : '💡 AI Quick Resolution:'}
                       </strong>
-                      <p style={{ margin: 0, fontSize: '0.92rem', color: '#334155', lineHeight: '1.5', fontWeight: '500' }}>
+                      <p style={{ margin: 0, fontSize: '0.92rem', color: '#334155', lineHeight: '1.5' }}>
                         {questions[selectedQIdx].type === 'Subjective'
                           ? <LatexText text={questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "No recommendations generated."} />
-                          : <LatexText text={questions[selectedQIdx].explanation || "Bhai, is question ke liye koi short explanation available nahi hai."} />
+                          : <LatexText text={questions[selectedQIdx].explanation || "No explanation available."} />
                         }
                       </p>
                     </div>
@@ -367,29 +409,23 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
                 <div style={styles.detailFixedNavRow}>
                   <button onClick={() => { setSelectedQIdx(prev => Math.max(0, prev - 1)); setShowExplanation(false); }} disabled={selectedQIdx === 0} style={styles.navBtn}>Previous</button>
-                   
-                  <button 
-                     onClick={() => setShowExplanation(!showExplanation)} 
-                     style={{ ...styles.doubtBtn, background: showExplanation ? '#ef4444' : '#1e293b' }}
-                  >
+                  <button onClick={() => setShowExplanation(!showExplanation)} style={{ ...styles.doubtBtn, background: showExplanation ? '#ef4444' : '#1e293b' }}>
                     {showExplanation ? "📖 Hide Explanation" : "💡 Show Explanation"}
                   </button>
-
                   <button 
                     onClick={(e) => handleSaveQuestion(e, questions[selectedQIdx])}
                     disabled={!!savedStatus[questions[selectedQIdx].question]}
                     style={{ ...styles.doubtBtn, background: savedStatus[questions[selectedQIdx].question] ? '#10b981' : '#6366f1', color: '#fff', border: 'none' }}
                   >
-                    {savedStatus[questions[selectedQIdx].question] ? "📁 Question Saved" : "🔖 Save to Library"}
+                    {savedStatus[questions[selectedQIdx].question] ? "📁 Question Saved" : "🔖 Save to Offline Vault"}
                   </button>
-                   
                   <button onClick={() => { setSelectedQIdx(prev => Math.min(questions.length - 1, prev + 1)); setShowExplanation(false); }} disabled={selectedQIdx === questions.length - 1} style={styles.navBtn}>Next</button>
                 </div>
               </div>
 
               <div style={styles.detailRight}>
                 <h4 style={styles.explanationTitle}>
-                  {questions[selectedQIdx].type === 'Subjective' ? '🎯 What Could Have Been Better (AI Feedback):' : '🧠 AI Explanation & Analytical Working:'}
+                  {questions[selectedQIdx].type === 'Subjective' ? '🎯 AI Feedback Matrix:' : '🧠 AI Explanation & Analytical Working:'}
                 </h4>
                 <div style={styles.explanationText}>
                  {questions[selectedQIdx].type === 'Subjective'
