@@ -2,6 +2,45 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 import LatexText from '../components/LatexText'; // 👈 YEH IMPORT GAYAB THA BHAI, AB FIXED HAI!
 
+// --- 🌐 LOCAL STORAGE STORAGE ENGINE MAPPINGS (matches Library.jsx / AnalysisPortal.jsx) ---
+const dbName = "InfinityLocalDB";
+
+const initBrainFeedDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(dbName, 2);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains("saved_questions")) {
+        db.createObjectStore("saved_questions", { keyPath: "id" });
+      }
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+};
+
+const getAllFromLocalStore = async (storeName) => {
+  const db = await initBrainFeedDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const store = tx.objectStore(storeName);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = (err) => reject(err);
+  });
+};
+
+const saveToLocalStore = async (storeName, payload) => {
+  const db = await initBrainFeedDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+    store.put(payload);
+    tx.oncomplete = () => resolve();
+    tx.onerror = (err) => reject(err);
+  });
+};
+
 const BrainFeed = () => {
   // --- CONFIGURATION FORM STATES ---
   const [exam, setExam] = useState('');
@@ -216,39 +255,27 @@ const BrainFeed = () => {
   const handleSaveToLibrary = async () => {
     const currentQ = questions[currentIdx];
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        return setCustomAlert({ show: true, title: 'Authentication Error', message: 'No active login session found. Please log in again.' });
-      }
+      const existingQuestions = await getAllFromLocalStore("saved_questions");
+      const alreadySaved = existingQuestions.some(q => q.question === currentQ.question);
 
-      const { data: existing } = await supabase
-        .from('saved_questions')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('question', currentQ.question)
-        .limit(1);
-
-      if (existing && existing.length > 0) {
+      if (alreadySaved) {
         return setCustomAlert({ show: true, title: 'Already Saved', message: 'This question framework is already saved in your library.' });
       }
 
-      const { error } = await supabase
-        .from('saved_questions')
-        .insert([
-          {
-            user_id: user.id,
-            topic: subject || "BrainFeed Session",
-            question: currentQ.question,
-            answer: currentQ.options[currentQ.correct],
-            explanation: currentQ.explanation
-          }
-        ]);
+      const localQuestionPayload = {
+        id: "SAVED_Q_" + Date.now(),
+        topic: subject || "BrainFeed Session",
+        question: currentQ.question,
+        answer: currentQ.options[currentQ.correct],
+        explanation: currentQ.explanation,
+        saved_at: new Date().toISOString()
+      };
 
-      if (error) throw error;
+      await saveToLocalStore("saved_questions", localQuestionPayload);
       setSavedStatus({ ...savedStatus, [currentIdx]: true });
     } catch (err) {
-      console.error("Cloud Insertion Failed:", err);
-      setCustomAlert({ show: true, title: 'Database Error', message: 'Could not save the question to your cloud library.' });
+      console.error("Local Storage Save Failed:", err);
+      setCustomAlert({ show: true, title: 'Storage Error', message: 'Could not save the question to your local device library.' });
     }
   };
 
