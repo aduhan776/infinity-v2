@@ -163,7 +163,7 @@ const BrainFeed = () => {
     });
   };
 
-  // 🎯 REALIGNED DATABASE PIPELINE: Ab profiles table ke exact columns (total_attempted, total_correct) use honge!
+  // 🎯 REALIGNED DATABASE PIPELINE: profiles table ke exact columns (brainfeed_count, brainfeed_accuracy) use honge!
   const saveSessionMetricsToProfile = async () => {
     const attempted = Object.keys(selectedAnswers).length;
     if (attempted === 0) return;
@@ -174,29 +174,28 @@ const BrainFeed = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // 1. Database ke asli columns select karo
+        // 1. Read the real column names that exist in the profiles table
         const { data: profile } = await supabase
           .from('profiles')
-          .select('total_attempted, total_correct')
+          .select('brainfeed_count, brainfeed_accuracy')
           .eq('id', user.id)
           .single();
 
-        const oldAttempted = profile?.total_attempted || 0;
-        const oldCorrect = profile?.total_correct || 0;
+        const oldAttempted = profile?.brainfeed_count || 0;
+        const oldAccuracy = profile?.brainfeed_accuracy || 0;
+        const oldCorrect = Math.round((oldAccuracy / 100) * oldAttempted);
 
         // 2. Perform cumulative aggregations
         const newTotalQuestions = oldAttempted + attempted;
         const newTotalCorrect = oldCorrect + correct;
-        
-        const oldAccuracy = oldAttempted > 0 ? Math.round((oldCorrect / oldAttempted) * 100) : 0;
         const newOverallAccuracy = newTotalQuestions > 0 ? Math.round((newTotalCorrect / newTotalQuestions) * 100) : 0;
 
-        // 3. Directly update correct columns inside the database profile table
+        // 3. Write to the real column names
         await supabase
           .from('profiles')
           .update({
-            total_attempted: newTotalQuestions,
-            total_correct: newTotalCorrect
+            brainfeed_count: newTotalQuestions,
+            brainfeed_accuracy: newOverallAccuracy
           })
           .eq('id', user.id);
 
