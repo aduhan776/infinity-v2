@@ -1,6 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 
+// --- 🌐 LOCAL STORAGE READ HELPER (matches Library.jsx / BrainFeed.jsx) ---
+const dbName = "InfinityLocalDB";
+
+const initStatsDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(dbName, 2);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains("saved_questions")) {
+        db.createObjectStore("saved_questions", { keyPath: "id" });
+      }
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+};
+
+const getAllFromLocalStore = async (storeName) => {
+  const db = await initStatsDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readonly");
+    const store = transaction.objectStore(storeName);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = (e) => reject(e.target.error);
+  });
+};
+
 const Statistics = () => {
   const [stats, setStats] = useState({
     totalAttempts: 0,
@@ -30,11 +58,9 @@ const Statistics = () => {
           .eq('status', 'submitted')
           .order('created_at', { ascending: false });
 
-        // 2. Fetch total count of live bookmarked questions
-        const { count: qCount, error: qError } = await supabase
-          .from('saved_questions')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id);
+        // 2. Fetch total count of bookmarked questions from local device storage
+        const localSavedQuestions = await getAllFromLocalStore("saved_questions");
+        const qCount = localSavedQuestions.length;
 
         // 3. FETCH BOTH METRICS BOXES DIRECTLY FROM THE PROFILES TABLE ROW
         const { data: profile } = await supabase
