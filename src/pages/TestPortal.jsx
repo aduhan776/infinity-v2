@@ -408,9 +408,68 @@ const TestPortal = ({ testData, onExit }) => {
     setTimeTracker(prev => ({ ...prev, [currentQ]: qStopwatch }));
   }, [qStopwatch, currentQ, isSubmitting]);
 
+  // 🚨 SAFETY CEILING: absolute max file size accepted before we even try to process it
+  const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
+  const IMAGE_MAX_DIMENSION = 1600; // longest side, in px, after compression
+  const IMAGE_JPEG_QUALITY = 0.7;
+
+  // Resizes + re-encodes an image on an invisible canvas so heavy phone-camera
+  // photos don't bloat local storage or the evaluation payload.
+  const compressImageFile = (file) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > IMAGE_MAX_DIMENSION) {
+          height = Math.round(height * (IMAGE_MAX_DIMENSION / width));
+          width = IMAGE_MAX_DIMENSION;
+        } else if (height >= width && height > IMAGE_MAX_DIMENSION) {
+          width = Math.round(width * (IMAGE_MAX_DIMENSION / height));
+          height = IMAGE_MAX_DIMENSION;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(objectUrl);
+        resolve(canvas.toDataURL('image/jpeg', IMAGE_JPEG_QUALITY));
+      };
+      img.onerror = (err) => {
+        URL.revokeObjectURL(objectUrl);
+        reject(err);
+      };
+      img.src = objectUrl;
+    });
+  };
+
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
-    files.forEach(file => {
+
+    files.forEach(async (file) => {
+      // Hard ceiling: block anything absurdly large before we even try to process it
+      if (file.size > MAX_UPLOAD_BYTES) {
+        alert(`"${file.name}" is over 10MB and can't be uploaded. Please choose a smaller file.`);
+        return;
+      }
+
+      // Images: auto-compress silently in the background, no size complaint shown
+      if (file.type.startsWith('image/')) {
+        try {
+          const compressedDataUrl = await compressImageFile(file);
+          setUploads(prev => ({
+            ...prev,
+            [currentQ]: [...(prev[currentQ] || []), { url: compressedDataUrl, name: file.name, type: 'image/jpeg' }]
+          }));
+        } catch (err) {
+          console.error("Image compression failed:", err);
+          alert(`Could not process "${file.name}". Please try a different image.`);
+        }
+        return;
+      }
+
+      // PDFs (or anything else): no client-side compression possible, store as-is
       const reader = new FileReader();
       reader.onloadend = () => {
         setUploads(prev => ({
@@ -420,6 +479,7 @@ const TestPortal = ({ testData, onExit }) => {
       };
       reader.readAsDataURL(file);
     });
+
     e.target.value = null; 
   };
 
@@ -443,6 +503,38 @@ const TestPortal = ({ testData, onExit }) => {
       setCurrentQ(prev => prev + 1); 
     } else {
       setShowSummary(true);
+    }
+  };
+
+  // Which section to visually highlight in the tab row — derived from the
+  // actual current question rather than currentSectionIdx, since in
+  // free-switching (non-strict) mode the user can move across sections via
+  // Previous/Next without going through handleSectionSwitch.
+  const activeSectionForDisplay = questions[currentQ] ? questions[currentQ].sectionIndex : currentSectionIdx;
+
+  // Jump directly to a section's first question. Only allowed when the test
+  // does NOT have strict sectional timing — strict-timed tests lock this.
+  const handleSectionSwitch = (secIdx) => {
+    if (isSectionalTimed) return;
+    if (secIdx === activeSectionForDisplay) return;
+    const firstQOfSec = questions.findIndex(q => q.sectionIndex === secIdx);
+    if (firstQOfSec >= 0) {
+      setCurrentSectionIdx(secIdx);
+      setCurrentQ(firstQOfSec);
+    }
+  };
+
+  // Lets a user finish a strict-timed section early instead of sitting idle
+  // until the section clock runs out. Reuses the exact same transition logic
+  // handleSectionTimeout already uses on auto-timeout.
+  const handleSubmitSection = () => {
+    if (!isSectionalTimed || !hasSections) return;
+    const isLastSection = currentSectionIdx >= data.sections.length - 1;
+    const confirmMsg = isLastSection
+      ? "This is the final section. Submitting now will finish and submit your entire test. Continue?"
+      : `Submit "${data.sections[currentSectionIdx].name}" now? You won't be able to return to this section afterwards.`;
+    if (window.confirm(confirmMsg)) {
+      handleSectionTimeout();
     }
   };
 
@@ -488,6 +580,38 @@ const TestPortal = ({ testData, onExit }) => {
           <button onClick={() => setShowSummary(true)} style={styles.submitBtn}>Submit Test</button>
         </div>
       </header>
+
+      {hasSections && (
+        <div style={styles.sectionTabsBar}>
+          <div style={styles.sectionTabsScroll}>
+            {data.sections.map((sec, secIdx) => {
+              const isActive = secIdx === activeSectionForDisplay;
+              const isLockedTab = isSectionalTimed && secIdx !== currentSectionIdx;
+              return (
+                <button
+                  key={secIdx}
+                  onClick={() => handleSectionSwitch(secIdx)}
+                  disabled={isSectionalTimed}
+                  title={isSectionalTimed ? "Section switching is locked for this timed test" : `Go to ${sec.name}`}
+                  style={{
+                    ...styles.sectionTab,
+                    ...(isActive ? styles.sectionTabActive : {}),
+                    ...(isLockedTab ? styles.sectionTabDisabled : {}),
+                    cursor: isSectionalTimed ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {sec.name}
+                </button>
+              );
+            })}
+          </div>
+          {isSectionalTimed && (
+            <button onClick={handleSubmitSection} style={styles.submitSectionBtn}>
+              {currentSectionIdx >= data.sections.length - 1 ? "Finish Test 🏁" : "Submit Section ✅"}
+            </button>
+          )}
+        </div>
+      )}
        
       <div style={styles.mainLayout}>
         <div style={styles.questionSection}>
@@ -663,6 +787,12 @@ const styles = {
   navBtn: { background: '#fff', border: '1px solid #6366f1', padding: '8px 20px', borderRadius: '8px', color: '#6366f1', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }, 
   priBtn: { background: '#6366f1', color: '#fff', border: 'none', padding: '10px 25px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer' }, 
   mainLayout: { display:'flex', flex:1, overflow:'hidden' }, 
+  sectionTabsBar: { display:'flex', alignItems:'center', justifyContent:'space-between', gap:'15px', padding:'10px 25px', borderBottom:'1px solid #e2e8f0', background:'#f8fafc', flexShrink:0 }, 
+  sectionTabsScroll: { display:'flex', alignItems:'center', gap:'8px', overflowX:'auto' }, 
+  sectionTab: { padding:'7px 16px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'#fff', color:'#475569', fontWeight:'700', fontSize:'0.82rem', whiteSpace:'nowrap', flexShrink:0 }, 
+  sectionTabActive: { background:'#000000', color:'#ffffff', border:'1px solid #000000' }, 
+  sectionTabDisabled: { opacity:0.45 }, 
+  submitSectionBtn: { padding:'8px 16px', borderRadius:'8px', border:'none', background:'#16a34a', color:'#fff', fontWeight:'800', fontSize:'0.82rem', whiteSpace:'nowrap', flexShrink:0, cursor:'pointer' }, 
   questionSection: { flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }, 
   qContentScroll: { flex: 1, overflowY: 'auto' }, 
   qInnerFrame: { padding:'40px 60px', maxWidth:'900px', margin:'0 auto', width:'100%' }, 
