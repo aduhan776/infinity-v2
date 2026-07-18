@@ -120,15 +120,21 @@ const TestPortal = ({ testData, onExit }) => {
     try {
       const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
       const currentDraft = savedDrafts.find(d => d.id === data.id);
-      if (currentDraft) {
-        setAnswers(currentDraft.answers || {});
-        setUploads(currentDraft.uploads || {});
-        setGlobalTimeLeft(currentDraft.rawSeconds || globalTimeLeft);
-        setSectionTimeLeft(currentDraft.sectionTimeLeft !== undefined ? currentDraft.sectionTimeLeft : sectionTimeLeft);
-        setCurrentSectionIdx(currentDraft.currentSectionIdx || 0);
-        setCurrentQ(currentDraft.lastIndex || 0);
-        setTimeTracker(currentDraft.timeTracker || {});
-        setMarkedForReview(currentDraft.markedForReview || []);
+      // Fallback: if this device's localStorage doesn't have a matching cached
+      // draft (e.g. it was auto-cleaned, evicted by the browser, or the
+      // original save hit a storage quota limit), fall back to whatever was
+      // passed in directly via testData — this is what Library's "Resume
+      // Session" button now provides straight from IndexedDB.
+      const sourceDraft = currentDraft || (data.status === 'draft' ? data : null);
+      if (sourceDraft) {
+        setAnswers(sourceDraft.answers || {});
+        setUploads(sourceDraft.uploads || {});
+        setGlobalTimeLeft(sourceDraft.rawSeconds || globalTimeLeft);
+        setSectionTimeLeft(sourceDraft.sectionTimeLeft !== undefined ? sourceDraft.sectionTimeLeft : sectionTimeLeft);
+        setCurrentSectionIdx(sourceDraft.currentSectionIdx || 0);
+        setCurrentQ(sourceDraft.lastIndex || 0);
+        setTimeTracker(sourceDraft.timeTracker || {});
+        setMarkedForReview(sourceDraft.markedForReview || []);
       }
     } catch (e) {
       console.error("Failed to parse local draft backup:", e);
@@ -156,9 +162,11 @@ const TestPortal = ({ testData, onExit }) => {
 
   const handleSaveForLater = async () => {
     const snapshot = stateRef.current;
+    const nowTimestamp = new Date().getTime();
     const draftData = {
       id: data.id,
       title: data.title,
+      status: 'draft',
       lastIndex: currentQ,
       currentSectionIdx: snapshot.currentSectionIdx,
       answers: snapshot.answers,
@@ -169,6 +177,7 @@ const TestPortal = ({ testData, onExit }) => {
       rawSeconds: snapshot.globalTimeLeft,
       sectionTimeLeft: snapshot.sectionTimeLeft,
       date: new Date().toLocaleDateString(),
+      created_at: nowTimestamp, // 🕒 raw timestamp used for 7-day auto-cleanup
       time: data.time || 180,
       questions: data.questions,
       questions_list: data.questions_list,
@@ -177,6 +186,11 @@ const TestPortal = ({ testData, onExit }) => {
       mode: data.mode
     };
 
+    let localStorageSaveFailed = false;
+
+    // Saved in its own try/catch so a localStorage quota overflow (a real risk
+    // once several photo uploads are involved — localStorage's limit is far
+    // smaller than IndexedDB's) can never silently block the IndexedDB save below.
     try {
       const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
       const index = savedDrafts.findIndex(d => d.id === draftData.id);
@@ -186,27 +200,35 @@ const TestPortal = ({ testData, onExit }) => {
         savedDrafts.unshift(draftData);
       }
       localStorage.setItem('infinity_saved_for_later', JSON.stringify(savedDrafts));
+    } catch (lsErr) {
+      console.error("Local resume-cache save failed (likely storage quota):", lsErr);
+      localStorageSaveFailed = true;
+    }
 
+    try {
+      // Save the SAME complete draftData used above — not a stripped-down
+      // duplicate — so "Resume Session" from the Library page has everything
+      // it needs (sections/questions_list included) instead of falling back
+      // to placeholder dummy questions.
       await saveToLocalStore("test_sessions", {
-        id: data.id, 
+        ...draftData,
         test_id: data.id,
-        title: data.title,
-        status: 'draft',
         score: 'Drafted',
         accuracy: 0,
         time_left: draftData.timeLeft,
         raw_seconds: draftData.rawSeconds,
-        answers: snapshot.answers,
-        uploads: snapshot.uploads,
-        time_tracker: snapshot.timeTracker,
-        created_at: new Date().getTime()
+        time_tracker: snapshot.timeTracker
       });
 
-      alert("Active test cached securely inside Drafts! 📂");
+      if (localStorageSaveFailed) {
+        alert("Your progress was saved, but there wasn't enough free browser storage to also cache a fast-resume copy. You can still resume it from your Library.");
+      } else {
+        alert("Active test cached securely inside Drafts! 📂");
+      }
       onExit(null);
     } catch (err) {
-      alert("Snapshot cached successfully.");
-      onExit(null);
+      console.error("Draft save failed entirely:", err);
+      alert("Could not save your progress. Please try again before exiting.");
     }
   };
 

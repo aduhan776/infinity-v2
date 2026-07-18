@@ -39,6 +39,69 @@ function App() {
     name: "Student"
   });
 
+  // --- 🧹 SILENT AUTO-CLEANUP: remove abandoned paused-test drafts older than 7 days ---
+  // Runs once whenever the app loads, regardless of which page the user is on.
+  // Only ever touches drafts (status === 'draft') — submitted/evaluated results
+  // are never affected, since it's a separate status.
+  useEffect(() => {
+    const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+    const cleanupOldDrafts = () => {
+      try {
+        const dbName = "InfinityLocalDB";
+        const request = indexedDB.open(dbName, 3);
+
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains("test_sessions")) {
+            db.createObjectStore("test_sessions", { keyPath: "id" });
+          }
+        };
+
+        request.onsuccess = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains("test_sessions")) return;
+
+          const tx = db.transaction("test_sessions", "readwrite");
+          const store = tx.objectStore("test_sessions");
+          const getAllReq = store.getAll();
+
+          getAllReq.onsuccess = () => {
+            const allRecords = getAllReq.result || [];
+            const cutoff = Date.now() - DRAFT_MAX_AGE_MS;
+
+            allRecords.forEach((record) => {
+              if (record.status === 'draft' && (record.created_at || 0) < cutoff) {
+                store.delete(record.id); // 🧹 abandoned draft, past its 7-day window
+              }
+            });
+          };
+        };
+
+        request.onerror = (e) => console.error("Draft cleanup: could not open local storage", e.target.error);
+      } catch (err) {
+        console.error("Draft cleanup skipped:", err);
+      }
+
+      // Keep the lightweight localStorage resume-cache in sync with the same rule.
+      // Entries saved before this update won't have a created_at timestamp yet —
+      // those are left alone rather than guessed at, so nothing recent gets
+      // wiped out just because it predates this field being added.
+      try {
+        const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
+        const cutoff = Date.now() - DRAFT_MAX_AGE_MS;
+        const stillValidDrafts = savedDrafts.filter(d => !d.created_at || d.created_at >= cutoff);
+        if (stillValidDrafts.length !== savedDrafts.length) {
+          localStorage.setItem('infinity_saved_for_later', JSON.stringify(stillValidDrafts));
+        }
+      } catch (lsErr) {
+        console.error("Local resume-cache cleanup skipped:", lsErr);
+      }
+    };
+
+    cleanupOldDrafts();
+  }, []);
+
   // --- 🔄 SUPABASE AUTH LIFECYCLE LISTENER ---
   useEffect(() => {
     const validateActiveSession = async () => {
