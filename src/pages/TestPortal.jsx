@@ -170,7 +170,10 @@ const TestPortal = ({ testData, onExit }) => {
       lastIndex: currentQ,
       currentSectionIdx: snapshot.currentSectionIdx,
       answers: snapshot.answers,
-      uploads: snapshot.uploads, 
+      // 📎 Uploaded photos are deliberately NOT saved into paused drafts —
+      // they're the one heavy thing here, and text answers are what actually
+      // matter for resuming. If a subjective upload was pending, the user
+      // just re-uploads it on resume (they'll still have the same paper).
       timeTracker: snapshot.timeTracker,
       markedForReview: markedForReview,
       timeLeft: Math.floor(snapshot.globalTimeLeft / 60),
@@ -188,9 +191,8 @@ const TestPortal = ({ testData, onExit }) => {
 
     let localStorageSaveFailed = false;
 
-    // Saved in its own try/catch so a localStorage quota overflow (a real risk
-    // once several photo uploads are involved — localStorage's limit is far
-    // smaller than IndexedDB's) can never silently block the IndexedDB save below.
+    // Text-only now, so this is tiny and essentially never hits a quota —
+    // kept as its own try/catch anyway so it can never block the IndexedDB save.
     try {
       const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
       const index = savedDrafts.findIndex(d => d.id === draftData.id);
@@ -201,15 +203,11 @@ const TestPortal = ({ testData, onExit }) => {
       }
       localStorage.setItem('infinity_saved_for_later', JSON.stringify(savedDrafts));
     } catch (lsErr) {
-      console.error("Local resume-cache save failed (likely storage quota):", lsErr);
+      console.error("Local resume-cache save failed:", lsErr);
       localStorageSaveFailed = true;
     }
 
     try {
-      // Save the SAME complete draftData used above — not a stripped-down
-      // duplicate — so "Resume Session" from the Library page has everything
-      // it needs (sections/questions_list included) instead of falling back
-      // to placeholder dummy questions.
       await saveToLocalStore("test_sessions", {
         ...draftData,
         test_id: data.id,
@@ -765,7 +763,11 @@ const TestPortal = ({ testData, onExit }) => {
         <div style={styles.overlay}>
           <div style={styles.modal}>
             <h2>Assessment Suspended</h2>
-            <p style={{marginBottom:'25px', fontWeight:'600'}}>Would you like to cache this execution session inside Drafts for later retrieval?</p>
+            <p style={{marginBottom:'15px', fontWeight:'600'}}>Would you like to cache this execution session inside Drafts for later retrieval?</p>
+            <div style={styles.pauseWarningBox}>
+              <p style={styles.pauseWarningLine}>📎 Any uploaded photos won't be saved — you'll need to re-upload them for subjective questions when you resume.</p>
+              <p style={styles.pauseWarningLine}>🕒 Paused drafts are automatically deleted after 7 days if not resumed.</p>
+            </div>
             <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
               <button onClick={handleSaveForLater} style={styles.priBtn}>Yes, Save Snapshot Draft</button>
               <button onClick={() => setIsPaused(false)} style={styles.secBtnSmall}>No, Resume Active Session</button>
@@ -815,6 +817,8 @@ const styles = {
   sectionTabActive: { background:'#000000', color:'#ffffff', border:'1px solid #000000' }, 
   sectionTabDisabled: { opacity:0.45 }, 
   submitSectionBtn: { padding:'8px 16px', borderRadius:'8px', border:'none', background:'#16a34a', color:'#fff', fontWeight:'800', fontSize:'0.82rem', whiteSpace:'nowrap', flexShrink:0, cursor:'pointer' }, 
+  pauseWarningBox: { background:'#fffbeb', border:'1px solid #fde68a', borderRadius:'10px', padding:'12px 14px', marginBottom:'22px', textAlign:'left' }, 
+  pauseWarningLine: { fontSize:'0.82rem', color:'#92400e', fontWeight:'600', margin:'4px 0', lineHeight:'1.4' }, 
   questionSection: { flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }, 
   qContentScroll: { flex: 1, overflowY: 'auto' }, 
   qInnerFrame: { padding:'40px 60px', maxWidth:'900px', margin:'0 auto', width:'100%' }, 
