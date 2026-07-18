@@ -438,7 +438,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                             {expandedTestAttempts[test.id] ? "Hide Attempts" : `View Attempts (${matchingAttempts.length})`}
                           </button>
                         )}
-                        <button onClick={() => onStartTest(test)} style={monochromeLaunchTestBtn}>
+                        <button onClick={() => onStartTest({ ...test, hasSectionalTiming: test.has_sectional_timing || false })} style={monochromeLaunchTestBtn}>
                           {isAttempted ? "Reattempt Test" : "Start Test"}
                         </button>
                       </div>
