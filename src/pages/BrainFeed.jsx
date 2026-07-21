@@ -78,6 +78,14 @@ const BrainFeed = () => {
     correct: 0
   });
 
+  // --- 📱 MOBILE SCREEN DETECTION (so the card layout can adapt) ---
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const difficultyLevels = [
     { label: 'Easy', value: 'Easy' },
     { label: 'Medium', value: 'Medium' },
@@ -322,87 +330,87 @@ const BrainFeed = () => {
           <div style={counterBadgeStyle}>Card {currentIdx + 1} / {questions.length}</div>
         </div>
 
-        <div style={mainControlRowStyle}>
-          <button 
-            type="button"
-            onClick={handlePrevCard} 
-            disabled={currentIdx === 0}
-            style={{ ...sideNavBtnStyle, opacity: currentIdx === 0 ? 0.3 : 1, cursor: currentIdx === 0 ? 'not-allowed' : 'pointer' }}
-          >
-            ←
-          </button>
-
-          <div style={viewportContainerStyle}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '84vh', marginTop: '65px', boxSizing: 'border-box', padding: isMobile ? '0 8px' : '0 40px', gap: '14px' }}>
+          <div style={{ ...viewportContainerStyle, maxWidth: isMobile ? '100%' : '650px', flex: 1 }}>
             <div style={{ ...sliderTrackStyle, transform: `translateY(-${currentIdx * 100}%)` }}>
               {questions.map((q, idx) => {
                 const itemChoice = selectedAnswers[idx];
                 
                 return (
                   <div key={idx} style={cardSlideInstanceStyle}>
-                    <div style={splitFlexContainerLayout}>
-                      
-                      <div style={fixedQuestionCardStyle}>
-                        <div style={qHeaderRow}>
-                          <span style={qTypeLabel}>Concept Drill</span>
-                          
-                          <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                            {itemChoice !== undefined && (
-                              <span style={{ ...statusIndicator, color: itemChoice === q.correct ? '#10b981' : '#f43f5e' }}>
-                                {itemChoice === q.correct ? 'CORRECT' : 'INCORRECT'}
-                              </span>
-                            )}
-                            
-                            <button
-                              onClick={handleSaveToLibrary}
-                              disabled={itemChoice === undefined || savedStatus[idx]}
-                              style={{
-                                ...saveBtnStyle,
-                                opacity: itemChoice === undefined ? 0.5 : 1,
-                                background: savedStatus[idx] ? '#f8fafc' : '#000000',
-                                color: savedStatus[idx] ? '#10b981' : '#ffffff',
-                                borderColor: savedStatus[idx] ? '#10b981' : '#000000',
-                                cursor: (itemChoice === undefined || savedStatus[idx]) ? 'not-allowed' : 'pointer'
-                              }}
-                            >
-                              {savedStatus[idx] ? 'Saved' : 'Save to Library'}
-                            </button>
-                          </div>
-                        </div>
+                    <div style={{ ...fixedQuestionCardStyle, width: '100%', maxWidth: isMobile ? '100%' : '610px' }}>
+                      <div style={qHeaderRow}>
+                        <span style={qTypeLabel}>Concept Drill</span>
                         
-                        <div style={scrollableCardContentBody}>
-                          <h2 style={questionTextStyle}><LatexText text={q.question} /></h2>
-
-                          {showWarning && idx === currentIdx && (
-                            <div style={inlineCardWarningStyle}>
-                              Action Required: Question navigation locked. Please select an option from the matrix list below before proceeding.
-                            </div>
+                        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                          {itemChoice !== undefined && (
+                            <span style={{ ...statusIndicator, color: itemChoice === q.correct ? '#10b981' : '#f43f5e' }}>
+                              {itemChoice === q.correct ? 'CORRECT' : 'INCORRECT'}
+                            </span>
                           )}
+                          
+                          <button
+                            onClick={handleSaveToLibrary}
+                            disabled={itemChoice === undefined || savedStatus[idx]}
+                            style={{
+                              ...saveBtnStyle,
+                              opacity: itemChoice === undefined ? 0.5 : 1,
+                              background: savedStatus[idx] ? '#f8fafc' : '#000000',
+                              color: savedStatus[idx] ? '#10b981' : '#ffffff',
+                              borderColor: savedStatus[idx] ? '#10b981' : '#000000',
+                              cursor: (itemChoice === undefined || savedStatus[idx]) ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            {savedStatus[idx] ? 'Saved' : 'Save to Library'}
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div style={scrollableCardContentBody}>
+                        <h2 style={questionTextStyle}><LatexText text={q.question} /></h2>
 
-                          <div style={optionsContainerStyle}>
-                            {q.options.map((opt, oIdx) => {
-                              let dynamicBg = '#ffffff';
-                              let dynamicBorder = '#e2e8f0';
-                              let dynamicColor = '#334155';
+                        {showWarning && idx === currentIdx && (
+                          <div style={inlineCardWarningStyle}>
+                            Action Required: Question navigation locked. Please select an option from the matrix list below before proceeding.
+                          </div>
+                        )}
 
-                              if (itemChoice !== undefined) {
-                                if (oIdx === q.correct) {
-                                  dynamicBg = '#f0fdf4';
-                                  dynamicBorder = '#10b981';
-                                  dynamicColor = '#166534';
-                                } else if (itemChoice === oIdx && itemChoice !== q.correct) {
-                                  dynamicBg = '#fff1f2';
-                                  dynamicBorder = '#ef4444';
-                                  dynamicColor = '#991b1b';
-                                } else {
-                                  dynamicBg = '#f8fafc';
-                                  dynamicBorder = '#e2e8f0';
-                                  dynamicColor = '#94a3b8';
-                                }
+                        <div style={optionsContainerStyle}>
+                          {q.options.map((opt, oIdx) => {
+                            let dynamicBg = '#ffffff';
+                            let dynamicBorder = '#e2e8f0';
+                            let dynamicColor = '#334155';
+
+                            if (itemChoice !== undefined) {
+                              if (oIdx === q.correct) {
+                                dynamicBg = '#f0fdf4';
+                                dynamicBorder = '#10b981';
+                                dynamicColor = '#166534';
+                              } else if (itemChoice === oIdx && itemChoice !== q.correct) {
+                                dynamicBg = '#fff1f2';
+                                dynamicBorder = '#ef4444';
+                                dynamicColor = '#991b1b';
+                              } else {
+                                dynamicBg = '#f8fafc';
+                                dynamicBorder = '#e2e8f0';
+                                dynamicColor = '#94a3b8';
                               }
+                            }
 
-                              return (
+                            const isCorrectOption = oIdx === q.correct;
+
+                            return (
+                              <React.Fragment key={oIdx}>
+                                {/* 💡 Explanation pops up directly above the correct option, right after attempting */}
+                                {itemChoice !== undefined && isCorrectOption && (
+                                  <div style={explanationPopupStyle}>
+                                    <div style={explanationPopupHeader}>CORE RESOLUTION STATEMENT</div>
+                                    <p style={explanationPopupText}>
+                                      <LatexText text={q.explanation} />
+                                    </p>
+                                  </div>
+                                )}
                                 <button
-                                  key={oIdx}
                                   onClick={() => handleOptionSelect(oIdx)}
                                   disabled={itemChoice !== undefined}
                                   style={{
@@ -415,36 +423,11 @@ const BrainFeed = () => {
                                 >
                                   <span style={optLabelMarker}>{String.fromCharCode(64 + oIdx + 1)}.</span> <LatexText text={opt} />
                                 </button>
-                              );
-                            })}
-                          </div>
+                              </React.Fragment>
+                            );
+                          })}
                         </div>
                       </div>
-
-                      <div style={separateExplanationCardStyle}>
-                        <h4 style={{ margin: '0 0 12px 0', color: '#0f172a', fontSize: '0.8rem', fontWeight: '900', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px', flexShrink: 0 }}>
-                          CORE RESOLUTION STATEMENT
-                        </h4>
-                        <div style={{
-                          flex: 1, 
-                          overflowY: 'auto', 
-                          paddingRight: '4px', 
-                          display: 'flex', 
-                          alignItems: itemChoice !== undefined ? 'flex-start' : 'center', 
-                          justifyContent: itemChoice !== undefined ? 'flex-start' : 'center'
-                        }}>
-                          {itemChoice !== undefined ? (
-                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569', lineHeight: '1.55', fontWeight: '500' }}>
-                              <LatexText text={q.explanation} />
-                            </p>
-                          ) : (
-                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#94a3b8', lineHeight: '1.55', fontWeight: '500', textAlign: 'center' }}>
-                              Select an option to view the explanation.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
                     </div>
                   </div>
                 );
@@ -452,13 +435,25 @@ const BrainFeed = () => {
             </div>
           </div>
 
-          <button 
-            type="button" 
-            onClick={handleNextCard}
-            style={sideNavBtnStyle}
-          >
-            →
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: '14px', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <button 
+              type="button"
+              onClick={handlePrevCard} 
+              disabled={currentIdx === 0}
+              style={{ ...sideNavBtnStyle, width: isMobile ? '40px' : '48px', height: isMobile ? '40px' : '48px', flexShrink: 0, opacity: currentIdx === 0 ? 0.3 : 1, cursor: currentIdx === 0 ? 'not-allowed' : 'pointer' }}
+              title="Previous question"
+            >
+              ↑
+            </button>
+            <button 
+              type="button" 
+              onClick={handleNextCard}
+              style={{ ...sideNavBtnStyle, width: isMobile ? '40px' : '48px', height: isMobile ? '40px' : '48px', flexShrink: 0 }}
+              title="Next question"
+            >
+              ↓
+            </button>
+          </div>
 
         </div>
 
@@ -613,6 +608,6 @@ const BrainFeed = () => {
 };
 
 // Styles Objects Matrix
-const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '35px', borderRadius: '20px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '620px' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.95rem', outline: 'none', marginBottom: '15px', background: '#f8fafc', color: '#0f172a', fontWeight: '500' }; const flexRow = { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '5px' }; const actionBtn = { border: 'none', color: '#fff', width: '100%', fontWeight: '700', transition: '0.2s', fontSize: '0.92rem' }; const horizontalDifficultyContainer = { display: 'flex', gap: '8px', width: '100%', marginBottom: '15px' }; const difficultyTabOption = { flex: 1, padding: '11px 12px', borderRadius: '10px', border: '1px solid', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s ease', textAlign: 'center' }; const feedWrapperStyle = { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: 'Inter, sans-serif' }; const topBarFeedStyle = { position: 'absolute', top: 0, left: 0, width: '100%', padding: '16px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box', borderBottom: '1px solid #e2e8f0', background: '#ffffff', zIndex: 12 }; const exitBtnStyle = { background: '#fff', color: '#ef4444', border: '1px solid #fee2e2', padding: '10px 20px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.82rem' }; const counterBadgeStyle = { background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '8px 18px', borderRadius: '30px', fontSize: '0.82rem', fontWeight: '700' }; const mainControlRowStyle = { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '24px', width: '100%', justifyContent: 'center', height: '84vh', marginTop: '65px', boxSizing: 'border-box', padding: '0 40px' }; const sideNavBtnStyle = { width: '48px', height: '48px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', fontWeight: '800', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', flexShrink: 0, outline: 'none' }; const viewportContainerStyle = { width: '100%', height: '100%', overflow: 'hidden', position: 'relative', maxWidth: '980px', flexShrink: 0 }; const sliderTrackStyle = { display: 'flex', flexDirection: 'column', width: '100%', height: '100%', transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }; const cardSlideInstanceStyle = { width: '100%', height: '100%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', padding: '10px 0' }; const splitFlexContainerLayout = { display: 'flex', flexDirection: 'row', gap: '20px', width: '100%', height: '100%', alignItems: 'stretch', justifyContent: 'center' }; const fixedQuestionCardStyle = { background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '30px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '16px', width: '610px', height: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.015)', flexShrink: 0 }; const scrollableCardContentBody = { flex: 1, overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '16px' }; const separateExplanationCardStyle = { background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '30px', boxSizing: 'border-box', width: '350px', height: '100%', display: 'flex', flexDirection: 'column', boxShadow: '0 4px 20px rgba(0,0,0,0.015)', flexShrink: 0 }; const qHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }; const qTypeLabel = { background: '#f1f5f9', color: '#475569', padding: '5px 12px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase' }; const statusIndicator = { fontSize: '0.75rem', fontWeight: '700' }; const saveBtnStyle = { border: '1px solid #e2e8f0', padding: '8px 16px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700' }; const questionTextStyle = { color: '#0f172a', margin: '5px 0', fontSize: '1.2rem', fontWeight: '800', lineHeight: '1.45', flexShrink: 0 }; const optionsContainerStyle = { display: 'flex', flexDirection: 'column', gap: '10px', margin: '5px 0', flexShrink: 0 }; const optionButtonStyle = { width: '100%', textAlign: 'left', padding: '12px 18px', borderRadius: '10px', border: '1px solid', fontSize: '0.92rem', fontWeight: '600', display: 'flex', alignItems: 'center', transition: 'all 0.15s ease' }; const optLabelMarker = { color: '#94a3b8', marginRight: '10px', fontWeight: '700' }; const inlineCardWarningStyle = { background: '#fef2f2', border: '1px solid #fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', flexShrink: 0 }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }; const modalContentCardStyle = { background: '#fff', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '380px', textAlign: 'center', border: '1px solid #e2e8f0', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }; const modalActionBtn = { width: '100%', padding: '12px', border: 'none', color: '#fff', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.88rem' }; const accuracyMetricsDashboardBox = { display: 'flex', flexDirection: 'column', gap: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px', marginTop: '16px' }; const metricRowItem = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #edf2f7', paddingBottom: '10px' }; const metricLabelText = { fontSize: '0.82rem', fontWeight: '600', color: '#475569' }; const metricValueBadge = { fontSize: '0.78rem', fontWeight: '700', padding: '4px 10px', borderRadius: '6px' };
+const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '35px', borderRadius: '20px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '620px' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.95rem', outline: 'none', marginBottom: '15px', background: '#f8fafc', color: '#0f172a', fontWeight: '500' }; const flexRow = { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '5px' }; const actionBtn = { border: 'none', color: '#fff', width: '100%', fontWeight: '700', transition: '0.2s', fontSize: '0.92rem' }; const horizontalDifficultyContainer = { display: 'flex', gap: '8px', width: '100%', marginBottom: '15px' }; const difficultyTabOption = { flex: 1, padding: '11px 12px', borderRadius: '10px', border: '1px solid', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s ease', textAlign: 'center' }; const feedWrapperStyle = { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: 'Inter, sans-serif' }; const topBarFeedStyle = { position: 'absolute', top: 0, left: 0, width: '100%', padding: '16px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box', borderBottom: '1px solid #e2e8f0', background: '#ffffff', zIndex: 12 }; const exitBtnStyle = { background: '#fff', color: '#ef4444', border: '1px solid #fee2e2', padding: '10px 20px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.82rem' }; const counterBadgeStyle = { background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '8px 18px', borderRadius: '30px', fontSize: '0.82rem', fontWeight: '700' }; const mainControlRowStyle = { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '24px', width: '100%', justifyContent: 'center', height: '84vh', marginTop: '65px', boxSizing: 'border-box', padding: '0 40px' }; const sideNavBtnStyle = { width: '48px', height: '48px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', fontWeight: '800', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', flexShrink: 0, outline: 'none' }; const viewportContainerStyle = { width: '100%', height: '100%', overflow: 'hidden', position: 'relative', maxWidth: '980px', flexShrink: 0 }; const sliderTrackStyle = { display: 'flex', flexDirection: 'column', width: '100%', height: '100%', transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }; const cardSlideInstanceStyle = { width: '100%', height: '100%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', padding: '10px 0' }; const splitFlexContainerLayout = { display: 'flex', flexDirection: 'row', gap: '20px', width: '100%', height: '100%', alignItems: 'stretch', justifyContent: 'center' }; const fixedQuestionCardStyle = { background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '30px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '16px', width: '610px', height: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.015)', flexShrink: 0 }; const scrollableCardContentBody = { flex: 1, overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '16px' }; const explanationPopupStyle = { background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 16px', marginBottom: '2px', boxShadow: '0 4px 12px rgba(16,185,129,0.08)' }; const explanationPopupHeader = { fontSize: '0.68rem', fontWeight: '900', letterSpacing: '0.5px', color: '#166534', marginBottom: '6px' }; const explanationPopupText = { margin: 0, fontSize: '0.85rem', color: '#166534', lineHeight: '1.5', fontWeight: '500' }; const qHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }; const qTypeLabel = { background: '#f1f5f9', color: '#475569', padding: '5px 12px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase' }; const statusIndicator = { fontSize: '0.75rem', fontWeight: '700' }; const saveBtnStyle = { border: '1px solid #e2e8f0', padding: '8px 16px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700' }; const questionTextStyle = { color: '#0f172a', margin: '5px 0', fontSize: '1.2rem', fontWeight: '800', lineHeight: '1.45', flexShrink: 0 }; const optionsContainerStyle = { display: 'flex', flexDirection: 'column', gap: '10px', margin: '5px 0', flexShrink: 0 }; const optionButtonStyle = { width: '100%', textAlign: 'left', padding: '12px 18px', borderRadius: '10px', border: '1px solid', fontSize: '0.92rem', fontWeight: '600', display: 'flex', alignItems: 'center', transition: 'all 0.15s ease' }; const optLabelMarker = { color: '#94a3b8', marginRight: '10px', fontWeight: '700' }; const inlineCardWarningStyle = { background: '#fef2f2', border: '1px solid #fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', flexShrink: 0 }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }; const modalContentCardStyle = { background: '#fff', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '380px', textAlign: 'center', border: '1px solid #e2e8f0', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }; const modalActionBtn = { width: '100%', padding: '12px', border: 'none', color: '#fff', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.88rem' }; const accuracyMetricsDashboardBox = { display: 'flex', flexDirection: 'column', gap: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px', marginTop: '16px' }; const metricRowItem = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #edf2f7', paddingBottom: '10px' }; const metricLabelText = { fontSize: '0.82rem', fontWeight: '600', color: '#475569' }; const metricValueBadge = { fontSize: '0.78rem', fontWeight: '700', padding: '4px 10px', borderRadius: '6px' };
 
 export default BrainFeed;
