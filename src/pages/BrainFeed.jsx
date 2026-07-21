@@ -338,121 +338,124 @@ const BrainFeed = () => {
                 
                 return (
                   <div key={idx} style={cardSlideInstanceStyle}>
-                    <div style={{ ...fixedQuestionCardStyle, width: '100%', maxWidth: isMobile ? '100%' : '610px' }}>
-                      <div style={qHeaderRow}>
-                        <span style={qTypeLabel}>Concept Drill</span>
-                        
-                        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                          {itemChoice !== undefined && (
-                            <span style={{ ...statusIndicator, color: itemChoice === q.correct ? '#10b981' : '#f43f5e' }}>
-                              {itemChoice === q.correct ? 'CORRECT' : 'INCORRECT'}
-                            </span>
-                          )}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', gap: '14px' }}>
+                      <div style={{ ...fixedQuestionCardStyle, width: '100%', maxWidth: isMobile ? '100%' : '610px' }}>
+                        <div style={qHeaderRow}>
+                          <span style={qTypeLabel}>Concept Drill</span>
                           
-                          <button
-                            onClick={handleSaveToLibrary}
-                            disabled={itemChoice === undefined || savedStatus[idx]}
-                            style={{
-                              ...saveBtnStyle,
-                              opacity: itemChoice === undefined ? 0.5 : 1,
-                              background: savedStatus[idx] ? '#f8fafc' : '#000000',
-                              color: savedStatus[idx] ? '#10b981' : '#ffffff',
-                              borderColor: savedStatus[idx] ? '#10b981' : '#000000',
-                              cursor: (itemChoice === undefined || savedStatus[idx]) ? 'not-allowed' : 'pointer'
-                            }}
-                          >
-                            {savedStatus[idx] ? 'Saved' : 'Save to Library'}
-                          </button>
+                          <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                            {itemChoice !== undefined && (
+                              <span style={{ ...statusIndicator, color: itemChoice === q.correct ? '#10b981' : '#f43f5e' }}>
+                                {itemChoice === q.correct ? 'CORRECT' : 'INCORRECT'}
+                              </span>
+                            )}
+                            
+                            <button
+                              onClick={handleSaveToLibrary}
+                              disabled={itemChoice === undefined || savedStatus[idx]}
+                              style={{
+                                ...saveBtnStyle,
+                                opacity: itemChoice === undefined ? 0.5 : 1,
+                                background: savedStatus[idx] ? '#f8fafc' : '#000000',
+                                color: savedStatus[idx] ? '#10b981' : '#ffffff',
+                                borderColor: savedStatus[idx] ? '#10b981' : '#000000',
+                                cursor: (itemChoice === undefined || savedStatus[idx]) ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              {savedStatus[idx] ? 'Saved' : 'Save to Library'}
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div style={scrollableCardContentBody}>
+                          <h2 style={questionTextStyle}><LatexText text={q.question} /></h2>
+
+                          {showWarning && idx === currentIdx && (
+                            <div style={inlineCardWarningStyle}>
+                              Action Required: Question navigation locked. Please select an option from the matrix list below before proceeding.
+                            </div>
+                          )}
+
+                          <div style={optionsContainerStyle}>
+                            {q.options.map((opt, oIdx) => {
+                              let dynamicBg = '#ffffff';
+                              let dynamicBorder = '#e2e8f0';
+                              let dynamicColor = '#334155';
+
+                              if (itemChoice !== undefined) {
+                                if (oIdx === q.correct) {
+                                  dynamicBg = '#f0fdf4';
+                                  dynamicBorder = '#10b981';
+                                  dynamicColor = '#166534';
+                                } else if (itemChoice === oIdx && itemChoice !== q.correct) {
+                                  dynamicBg = '#fff1f2';
+                                  dynamicBorder = '#ef4444';
+                                  dynamicColor = '#991b1b';
+                                } else {
+                                  dynamicBg = '#f8fafc';
+                                  dynamicBorder = '#e2e8f0';
+                                  dynamicColor = '#94a3b8';
+                                }
+                              }
+
+                              const isCorrectOption = oIdx === q.correct;
+
+                              return (
+                                <React.Fragment key={oIdx}>
+                                  {/* 💡 Explanation pops up directly above the correct option, right after attempting */}
+                                  {itemChoice !== undefined && isCorrectOption && (
+                                    <div style={explanationPopupStyle}>
+                                      <div style={explanationPopupHeader}>CORE RESOLUTION STATEMENT</div>
+                                      <p style={explanationPopupText}>
+                                        <LatexText text={q.explanation} />
+                                      </p>
+                                    </div>
+                                  )}
+                                  <button
+                                    onClick={() => handleOptionSelect(oIdx)}
+                                    disabled={itemChoice !== undefined}
+                                    style={{
+                                      ...optionButtonStyle,
+                                      background: dynamicBg,
+                                      borderColor: dynamicBorder,
+                                      color: dynamicColor,
+                                      cursor: itemChoice !== undefined ? 'default' : 'pointer'
+                                    }}
+                                  >
+                                    <span style={optLabelMarker}>{String.fromCharCode(64 + oIdx + 1)}.</span> <LatexText text={opt} />
+                                  </button>
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
-                      
-                      <div style={scrollableCardContentBody}>
-                        <h2 style={questionTextStyle}><LatexText text={q.question} /></h2>
 
-                        {showWarning && idx === currentIdx && (
-                          <div style={inlineCardWarningStyle}>
-                            Action Required: Question navigation locked. Please select an option from the matrix list below before proceeding.
-                          </div>
-                        )}
-
-                        <div style={optionsContainerStyle}>
-                          {q.options.map((opt, oIdx) => {
-                            let dynamicBg = '#ffffff';
-                            let dynamicBorder = '#e2e8f0';
-                            let dynamicColor = '#334155';
-
-                            if (itemChoice !== undefined) {
-                              if (oIdx === q.correct) {
-                                dynamicBg = '#f0fdf4';
-                                dynamicBorder = '#10b981';
-                                dynamicColor = '#166534';
-                              } else if (itemChoice === oIdx && itemChoice !== q.correct) {
-                                dynamicBg = '#fff1f2';
-                                dynamicBorder = '#ef4444';
-                                dynamicColor = '#991b1b';
-                              } else {
-                                dynamicBg = '#f8fafc';
-                                dynamicBorder = '#e2e8f0';
-                                dynamicColor = '#94a3b8';
-                              }
-                            }
-
-                            const isCorrectOption = oIdx === q.correct;
-
-                            return (
-                              <React.Fragment key={oIdx}>
-                                {/* 💡 Explanation pops up directly above the correct option, right after attempting */}
-                                {itemChoice !== undefined && isCorrectOption && (
-                                  <div style={explanationPopupStyle}>
-                                    <div style={explanationPopupHeader}>CORE RESOLUTION STATEMENT</div>
-                                    <p style={explanationPopupText}>
-                                      <LatexText text={q.explanation} />
-                                    </p>
-                                  </div>
-                                )}
-                                <button
-                                  onClick={() => handleOptionSelect(oIdx)}
-                                  disabled={itemChoice !== undefined}
-                                  style={{
-                                    ...optionButtonStyle,
-                                    background: dynamicBg,
-                                    borderColor: dynamicBorder,
-                                    color: dynamicColor,
-                                    cursor: itemChoice !== undefined ? 'default' : 'pointer'
-                                  }}
-                                >
-                                  <span style={optLabelMarker}>{String.fromCharCode(64 + oIdx + 1)}.</span> <LatexText text={opt} />
-                                </button>
-                              </React.Fragment>
-                            );
-                          })}
-                        </div>
+                      {/* ⬅️➡️ Nav buttons now travel with the card as one group, directly beneath it */}
+                      <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', width: '100%', maxWidth: isMobile ? '100%' : '610px', flexShrink: 0 }}>
+                        <button 
+                          type="button"
+                          onClick={handlePrevCard} 
+                          disabled={currentIdx === 0}
+                          style={{ ...navBtnRect, opacity: currentIdx === 0 ? 0.35 : 1, cursor: currentIdx === 0 ? 'not-allowed' : 'pointer' }}
+                          title="Previous question"
+                        >
+                          ← Previous
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={handleNextCard}
+                          style={navBtnRect}
+                          title="Next question"
+                        >
+                          Next →
+                        </button>
                       </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', width: '100%', maxWidth: isMobile ? '100%' : '650px', flexShrink: 0 }}>
-            <button 
-              type="button"
-              onClick={handlePrevCard} 
-              disabled={currentIdx === 0}
-              style={{ ...navBtnRect, opacity: currentIdx === 0 ? 0.35 : 1, cursor: currentIdx === 0 ? 'not-allowed' : 'pointer' }}
-              title="Previous question"
-            >
-              ← Previous
-            </button>
-            <button 
-              type="button" 
-              onClick={handleNextCard}
-              style={navBtnRect}
-              title="Next question"
-            >
-              Next →
-            </button>
           </div>
 
         </div>
