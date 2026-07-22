@@ -57,6 +57,7 @@ const AiTests = ({ onStartTest }) => {
   // --- COMMON METADATA STATES ---
   const [testTitle, setTestTitle] = useState('');
   const [targetExam, setTargetExam] = useState('');
+  const [topicSubjectSection, setTopicSubjectSection] = useState('');
   const [topicName, setTopicName] = useState('');
   const [globalTime, setGlobalTime] = useState('');
 
@@ -158,7 +159,7 @@ const AiTests = ({ onStartTest }) => {
   // ======================================================================
   // ⚡ HARDENED BATCHING ENGINE WITH DYNAMIC PARSER EXTRACTIONS
   // ======================================================================
-  const fetchInBatches = async (exam, topic, targetCount, type, difficulty, language, marks, neg) => {
+  const fetchInBatches = async (exam, topic, targetCount, type, difficulty, language, marks, neg, subject = '') => {
     let remaining = targetCount;
     let masterQuestionsArray = [];
     
@@ -174,6 +175,7 @@ const AiTests = ({ onStartTest }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           exam,
+          subject,
           topic,
           count: currentBatchSize,
           type, 
@@ -346,11 +348,22 @@ const AiTests = ({ onStartTest }) => {
   const handleGenerateTopicTest = async () => {
     if (processingRef.current) return;
     if (!targetExam.trim()) { alert("Target exam name is mandatory."); return; }
-    if (!topicName.trim()) { alert("Please enter a focus topic name."); return; }
+    if (!topicSubjectSection.trim()) { alert("Subject / Section is mandatory."); return; }
     if (!topicQCount || !globalTime) { alert("Please enter the question count and duration."); return; }
-    if (cooldown > 0) { alert(`Server cooldown active. Please wait ${cooldown} seconds.`); return; }
     
     const targetQCount = parseInt(topicQCount);
+    const targetDuration = parseInt(globalTime);
+
+    if (!Number.isFinite(targetQCount) || targetQCount <= 0) {
+      alert("Question count must be a positive number greater than 0.");
+      return;
+    }
+    if (!Number.isFinite(targetDuration) || targetDuration <= 0) {
+      alert("Duration must be a positive number greater than 0.");
+      return;
+    }
+    if (cooldown > 0) { alert(`Server cooldown active. Please wait ${cooldown} seconds.`); return; }
+    
     if (targetQCount > 100) {
       alert("Maximum limit is 100 questions for topic drill modes execution.");
       return;
@@ -369,14 +382,16 @@ const AiTests = ({ onStartTest }) => {
         topicDifficulty,
         topicLanguage,
         topicMarks,
-        topicNeg
+        topicNeg,
+        topicSubjectSection
       );
 
       const generatedTestId = "AI-TOPIC-" + Date.now();
+      const displayTopicLabel = topicName.trim() ? `${topicSubjectSection}: ${topicName}` : topicSubjectSection;
       const topicStructure = {
         id: generatedTestId,
-        title: `AI Drill: ${topicName} (${targetExam})`,
-        time: parseInt(globalTime),
+        title: `AI Drill: ${displayTopicLabel} (${targetExam})`,
+        time: targetDuration,
         questions: topicQuestionsList.length,
         hasSectionalTiming: false,
         questions_list: topicQuestionsList,
@@ -388,7 +403,7 @@ const AiTests = ({ onStartTest }) => {
         category_name: 'AI Lab Generated',
         title: topicStructure.title,
         questions: topicQuestionsList.length,
-        time: parseInt(globalTime),
+        time: targetDuration,
         questions_list: topicQuestionsList,
         has_sectional_timing: false,
         created_at: new Date().getTime()
@@ -788,30 +803,35 @@ const AiTests = ({ onStartTest }) => {
             <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem', fontWeight: '500' }}>Specify single concepts and set direct evaluation criteria.</p>
                        
             <div style={flexRow}>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Target Exam / Class</label><input style={inputStyle} placeholder="e.g. UPSC Prelims" value={targetExam} onChange={e => setTargetExam(e.target.value)} /></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Focus Topic Name</label><input style={inputStyle} placeholder="e.g. Geography" value={topicName} onChange={e => setTopicName(e.target.value)} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Target Exam / Class <span style={mandatoryStar}>*</span></label><input style={inputStyle} placeholder="e.g. UPSC Prelims" value={targetExam} onChange={e => setTargetExam(e.target.value)} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Subject / Section <span style={mandatoryStar}>*</span></label><input style={inputStyle} placeholder="e.g. Maths, English, GK" value={topicSubjectSection} onChange={e => setTopicSubjectSection(e.target.value)} /></div>
+            </div>
+
+            <div>
+              <label style={labelStyle}>Topic Name (Optional)</label>
+              <input style={inputStyle} placeholder="e.g. Geography (leave blank for general)" value={topicName} onChange={e => setTopicName(e.target.value)} />
             </div>
                        
             <div style={flexRow}>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Question Count (Max 100)</label><input style={inputStyle} type="number" placeholder="e.g. 15" value={topicQCount} onChange={e => setTopicQCount(e.target.value)} /></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Total Duration (Mins)</label><input style={inputStyle} type="number" placeholder="e.g. 15" value={globalTime} onChange={e => setGlobalTime(e.target.value)} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Question Count (Max 100) <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" min="1" placeholder="e.g. 15" value={topicQCount} onChange={e => setTopicQCount(e.target.value)} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Total Duration (Mins) <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" min="1" placeholder="e.g. 15" value={globalTime} onChange={e => setGlobalTime(e.target.value)} /></div>
             </div>
                        
             <div style={flexRow}>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Format Type</label>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Format Type <span style={mandatoryStar}>*</span></label>
                 <select style={{ ...inputStyle, padding: '11px' }} value={topicType} onChange={e => setTopicType(e.target.value)}>
                   <option value="Objective">Objective (MCQ)</option>
                   <option value="Subjective">Subjective (Theory)</option>
                 </select>
               </div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Difficulty Level</label>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Difficulty Level <span style={mandatoryStar}>*</span></label>
                 <select style={{ ...inputStyle, padding: '11px' }} value={topicDifficulty} onChange={e => setTopicDifficulty(e.target.value)}>
                   <option value="Easy">Easy</option>
                   <option value="Medium">Medium</option>
                   <option value="Tough">Tough</option>
                 </select>
               </div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Language</label>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Language <span style={mandatoryStar}>*</span></label>
                 <select style={{ ...inputStyle, padding: '11px' }} value={topicLanguage} onChange={e => setTopicLanguage(e.target.value)}>
                   <option value="English">English</option>
                   <option value="Hindi">Hindi</option>
@@ -819,8 +839,8 @@ const AiTests = ({ onStartTest }) => {
               </div>
             </div>
             <div style={flexRow}>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Positive Marks</label><input style={inputStyle} type="number" step="0.5" value={topicMarks} onChange={e => setTopicMarks(e.target.value)} /></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Negative Penalty</label><input style={inputStyle} type="number" step="0.01" value={topicNeg} onChange={e => setTopicNeg(e.target.value)} disabled={topicType === 'Subjective'} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Positive Marks <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" step="0.5" min="0" value={topicMarks} onChange={e => setTopicMarks(e.target.value)} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Negative Penalty <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" step="0.01" min="0" value={topicNeg} onChange={e => setTopicNeg(e.target.value)} disabled={topicType === 'Subjective'} /></div>
             </div>
             <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid #e2e8f0', paddingTop: '20px', marginTop: '10px' }}>
               <button onClick={() => setView('selection')} style={cancelBtn}>Back</button>
@@ -1011,7 +1031,7 @@ const AiTests = ({ onStartTest }) => {
 // --- STYLES SCHEMA ---
 const containerStyle = { padding: '40px 20px', maxWidth: '1050px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }; 
 const selectionGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop: '35px' }; 
-const cardHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '20px' }; const leftCardTitle = { margin: '0 0 16px 0', fontSize: '1.5rem', color: '#0f172a', fontWeight: '800', letterSpacing: '-0.5px' }; const cleanBulletList = { listStyleType: 'none', padding: 0, margin: '0 0 35px 0', display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', flex: 1 }; const bulletItemRow = { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.92rem', color: '#475569', fontWeight: '500', lineHeight: '1.5' }; const fullMockCardStyle = { background: '#ffffff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(79, 70, 229, 0.03)' }; const indigoIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff', border: '1px solid #c7d2fe' }; const indigoBadge = { background: '#e0e7ff', color: '#4f46e5', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const indigoActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }; const topicMockCardStyle = { background: '#ffffff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(16, 185, 129, 0.03)' }; const emeraldIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d1fae5', border: '1px solid #a7f3d0' }; const emeraldBadge = { background: '#d1fae5', color: '#065f46', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const emeraldActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' }; const actionBtn = { border: 'none', color: '#fff', padding: '11px 24px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', width: '100%' }; const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '620px', boxShadow: '0 10px 30px rgba(0,0,0,0.01)' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const miniLabel = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.95rem', outline: 'none', marginBottom: '15px', background: '#f8fafc', fontWeight: '600', color: '#000000', boxSizing: 'border-box' }; const flexRow = { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '5px' }; const nestedBox = { background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '20px' }; const addSecBtn = { width: '100%', padding: '10px', background: '#000000', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const secBadgeRow = { display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: '600' }; const cancelBtn = { padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }; const summaryVaultBox = { background: '#f8fafc', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '16px', textAlign: 'left', margin: '20px 0 30px 0' }; const sumLine = { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.9rem', fontWeight: '500' }; const modeToggleRow = { display: 'flex', gap: '10px', background: '#f1f5f9', padding: '5px', borderRadius: '12px', marginBottom: '15px' }; const modeBtn = { flex: 1, padding: '10px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem', transition: '0.3s' }; 
+const cardHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '20px' }; const leftCardTitle = { margin: '0 0 16px 0', fontSize: '1.5rem', color: '#0f172a', fontWeight: '800', letterSpacing: '-0.5px' }; const cleanBulletList = { listStyleType: 'none', padding: 0, margin: '0 0 35px 0', display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', flex: 1 }; const bulletItemRow = { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.92rem', color: '#475569', fontWeight: '500', lineHeight: '1.5' }; const fullMockCardStyle = { background: '#ffffff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(79, 70, 229, 0.03)' }; const indigoIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff', border: '1px solid #c7d2fe' }; const indigoBadge = { background: '#e0e7ff', color: '#4f46e5', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const indigoActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }; const topicMockCardStyle = { background: '#ffffff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(16, 185, 129, 0.03)' }; const emeraldIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d1fae5', border: '1px solid #a7f3d0' }; const emeraldBadge = { background: '#d1fae5', color: '#065f46', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const emeraldActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' }; const actionBtn = { border: 'none', color: '#fff', padding: '11px 24px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', width: '100%' }; const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '620px', boxShadow: '0 10px 30px rgba(0,0,0,0.01)' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const mandatoryStar = { color: '#ef4444', fontWeight: '900' }; const miniLabel = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.95rem', outline: 'none', marginBottom: '15px', background: '#f8fafc', fontWeight: '600', color: '#000000', boxSizing: 'border-box' }; const flexRow = { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '5px' }; const nestedBox = { background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '20px' }; const addSecBtn = { width: '100%', padding: '10px', background: '#000000', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const secBadgeRow = { display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: '600' }; const cancelBtn = { padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }; const summaryVaultBox = { background: '#f8fafc', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '16px', textAlign: 'left', margin: '20px 0 30px 0' }; const sumLine = { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.9rem', fontWeight: '500' }; const modeToggleRow = { display: 'flex', gap: '10px', background: '#f1f5f9', padding: '5px', borderRadius: '12px', marginBottom: '15px' }; const modeBtn = { flex: 1, padding: '10px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem', transition: '0.3s' }; 
 
 const miniSectionActionControlBtn = {
   padding: '4px 10px',
