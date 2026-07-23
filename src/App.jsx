@@ -18,6 +18,8 @@ function App() {
   // --- 🛰️ GLOBAL AUTH STATES ---
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashZooming, setSplashZooming] = useState(false);
 
   // --- 🛡️ GLOBAL ADMIN ACCESS PRIVILEGES TRACKER ---
   const { isAdmin } = useAdmin(session); // Live system role state
@@ -39,102 +41,62 @@ function App() {
     name: "Student"
   });
 
-  // --- 🧹 SILENT AUTO-CLEANUP: remove abandoned paused-test drafts older than 7 days ---
-  // Runs once whenever the app loads, regardless of which page the user is on.
-  // Only ever touches drafts (status === 'draft') — submitted/evaluated results
-  // are never affected, since it's a separate status.
-  useEffect(() => {
-    const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-    const cleanupOldDrafts = () => {
-      try {
-        const dbName = "InfinityLocalDB";
-        const request = indexedDB.open(dbName, 3);
-
-        request.onupgradeneeded = (e) => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains("test_sessions")) {
-            db.createObjectStore("test_sessions", { keyPath: "id" });
-          }
-        };
-
-        request.onsuccess = (e) => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains("test_sessions")) return;
-
-          const tx = db.transaction("test_sessions", "readwrite");
-          const store = tx.objectStore("test_sessions");
-          const getAllReq = store.getAll();
-
-          getAllReq.onsuccess = () => {
-            const allRecords = getAllReq.result || [];
-            const cutoff = Date.now() - DRAFT_MAX_AGE_MS;
-
-            allRecords.forEach((record) => {
-              if (record.status === 'draft' && (record.created_at || 0) < cutoff) {
-                store.delete(record.id); // 🧹 abandoned draft, past its 7-day window
-              }
-            });
-          };
-        };
-
-        request.onerror = (e) => console.error("Draft cleanup: could not open local storage", e.target.error);
-      } catch (err) {
-        console.error("Draft cleanup skipped:", err);
-      }
-
-      // Keep the lightweight localStorage resume-cache in sync with the same rule.
-      // Entries saved before this update won't have a created_at timestamp yet —
-      // those are left alone rather than guessed at, so nothing recent gets
-      // wiped out just because it predates this field being added.
-      try {
-        const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
-        const cutoff = Date.now() - DRAFT_MAX_AGE_MS;
-        const stillValidDrafts = savedDrafts.filter(d => !d.created_at || d.created_at >= cutoff);
-        if (stillValidDrafts.length !== savedDrafts.length) {
-          localStorage.setItem('infinity_saved_for_later', JSON.stringify(stillValidDrafts));
-        }
-      } catch (lsErr) {
-        console.error("Local resume-cache cleanup skipped:", lsErr);
-      }
-    };
-
-    cleanupOldDrafts();
-  }, []);
-
   // --- 🔄 SUPABASE AUTH LIFECYCLE LISTENER ---
   useEffect(() => {
+    // 🚨 FIX: a hung or failing network call here used to leave the loading
+    // screen stuck forever, since nothing guaranteed setAuthLoading(false)
+    // would ever run. withTimeout() ensures we never wait more than 8s, and
+    // try/catch/finally guarantees the loading screen always gets dismissed
+    // no matter what happens (success, error, or timeout).
+    const withTimeout = (promise, ms = 8000) => {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Session check timed out')), ms))
+      ]);
+    };
+
     const validateActiveSession = async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      
-      if (currentSession) {
-        const { error } = await supabase.auth.getUser();
-        if (error) {
-          await supabase.auth.signOut();
-          setSession(null);
+      try {
+        const { data: { session: currentSession } } = await withTimeout(supabase.auth.getSession());
+
+        if (currentSession) {
+          const { error } = await withTimeout(supabase.auth.getUser());
+          if (error) {
+            await supabase.auth.signOut();
+            setSession(null);
+          } else {
+            setSession(currentSession);
+          }
         } else {
-          setSession(currentSession);
+          setSession(null);
         }
-      } else {
+      } catch (err) {
+        console.error("Session validation failed or timed out — defaulting to logged-out state:", err);
         setSession(null);
+      } finally {
+        setAuthLoading(false);
       }
-      setAuthLoading(false);
     };
 
     validateActiveSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-        const { error } = await supabase.auth.getUser();
-        if (error) {
-          await supabase.auth.signOut();
-          setSession(null);
-          setAuthLoading(false);
-          return;
+      try {
+        if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+          const { error } = await withTimeout(supabase.auth.getUser());
+          if (error) {
+            await supabase.auth.signOut();
+            setSession(null);
+            return;
+          }
         }
+        setSession(currentSession);
+      } catch (err) {
+        console.error("Auth state change handling failed or timed out:", err);
+        setSession(null);
+      } finally {
+        setAuthLoading(false);
       }
-      setSession(currentSession);
-      setAuthLoading(false);
     });
 
     window.addEventListener('focus', validateActiveSession);
@@ -255,12 +217,33 @@ function App() {
     return blocks[0].substring(0, 2).toUpperCase();
   };
 
-  if (authLoading) {
+  // Once the auth check finishes, trigger the zoom-in transition, then
+  // remove the splash overlay after the animation finishes playing.
+  useEffect(() => {
+    if (!authLoading && showSplash) {
+      setSplashZooming(true);
+      const t = setTimeout(() => setShowSplash(false), 650);
+      return () => clearTimeout(t);
+    }
+  }, [authLoading, showSplash]);
+
+  if (showSplash) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f8fafc', fontFamily: 'Inter, sans-serif' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '15px' }}>⚡</div>
-        <h3 style={{ color: '#1e293b', fontWeight: '900', fontSize: '1.3rem' }}>Initializing NEUXENT...</h3>
-        <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: '5px', fontWeight: '500' }}>Securing cloud gateway database layer authentication hooks</p>
+        <svg
+          className={splashZooming ? 'neuxent-splash-logo zooming' : 'neuxent-splash-logo pulsing'}
+          viewBox="0 0 100 100" width="90" height="90" style={{ marginBottom: '15px' }}
+        >
+          <circle cx="50" cy="50" r="42" stroke="black" strokeWidth="6" fill="white" />
+          <circle cx="50" cy="50" r="28" stroke="black" strokeWidth="6" fill="white" />
+          <circle cx="50" cy="50" r="14" stroke="black" strokeWidth="6" fill="white" />
+        </svg>
+        {!splashZooming && (
+          <>
+            <h3 style={{ color: '#1e293b', fontWeight: '900', fontSize: '1.3rem' }}>Initializing NEUXENT...</h3>
+            <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: '5px', fontWeight: '500' }}>Securing cloud gateway database layer authentication hooks</p>
+          </>
+        )}
       </div>
     );
   }

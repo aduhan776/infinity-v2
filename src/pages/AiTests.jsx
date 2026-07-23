@@ -301,6 +301,16 @@ const AiTests = ({ onStartTest }) => {
         if (!fullQCount || !fullDuration) { alert("Please enter the question count and duration."); setLoading(false); processingRef.current = false; return; }
         
         const targetQCount = parseInt(fullQCount);
+        const targetDuration = parseInt(fullDuration);
+
+        if (!Number.isFinite(targetQCount) || targetQCount <= 0) {
+          alert("Question count must be a positive number greater than 0.");
+          setLoading(false); processingRef.current = false; return;
+        }
+        if (!Number.isFinite(targetDuration) || targetDuration <= 0) {
+          alert("Duration must be a positive number greater than 0.");
+          setLoading(false); processingRef.current = false; return;
+        }
         if (targetQCount > 100) { alert("Maximum limit is 100 questions for a single paper flat configuration."); setLoading(false); processingRef.current = false; return; }
         
         const flatPaperQuestionsList = await fetchInBatches(
@@ -427,11 +437,21 @@ const AiTests = ({ onStartTest }) => {
       alert("Please fill out section name, duration, and question count.");
       return;
     }
+    const parsedSecTime = parseInt(secTime);
+    const parsedSecQCount = parseInt(secQCount);
+    if (!Number.isFinite(parsedSecTime) || parsedSecTime <= 0) {
+      alert("Duration must be a positive number greater than 0.");
+      return;
+    }
+    if (!Number.isFinite(parsedSecQCount) || parsedSecQCount <= 0) {
+      alert("Question count must be a positive number greater than 0.");
+      return;
+    }
     if (editingSecIdx === null && aiSections.length >= 5) {
       alert("Maximum limit is 5 sections per test blueprint.");
       return;
     }
-    if (parseInt(secQCount) > 50) {
+    if (parsedSecQCount > 50) {
       alert("Maximum limit is 50 questions per individual section bundle.");
       return;
     }
@@ -658,8 +678,8 @@ const AiTests = ({ onStartTest }) => {
               <div style={nestedBox}>
                 <h4 style={{ margin: '0 0 15px 0', color: '#000000', fontWeight: '800' }}>Configure Full Paper Metrics</h4>
                 <div style={flexRow}>
-                  <div style={{ flex: 1 }}><label style={miniLabel}>Total Questions (Max 100)</label><input style={inputStyle} type="number" placeholder="e.g. 100" value={fullQCount} onChange={e => setFullQCount(e.target.value)} /></div>
-                  <div style={{ flex: 1 }}><label style={miniLabel}>Total Duration (Mins)</label><input style={inputStyle} type="number" placeholder="e.g. 120" value={fullDuration} onChange={e => setFullDuration(e.target.value)} /></div>
+                  <div style={{ flex: 1 }}><label style={miniLabel}>Total Questions (Max 100)</label><input style={inputStyle} type="number" min="1" placeholder="e.g. 100" value={fullQCount} onChange={e => setFullQCount(e.target.value)} /></div>
+                  <div style={{ flex: 1 }}><label style={miniLabel}>Total Duration (Mins)</label><input style={inputStyle} type="number" min="1" placeholder="e.g. 120" value={fullDuration} onChange={e => setFullDuration(e.target.value)} /></div>
                 </div>
                 <div style={flexRow}>
                   <div style={{ flex: 1 }}><label style={miniLabel}>Question Format Type</label>
@@ -679,8 +699,8 @@ const AiTests = ({ onStartTest }) => {
                 </h4>
                 <div style={flexRow}>
                   <div style={{ flex: 1.2 }}><label style={miniLabel}>Section Name</label><input style={inputStyle} placeholder="e.g. History & Culture" value={secName} onChange={e => setSecName(e.target.value)} /></div>
-                  <div style={{ flex: 0.6 }}><label style={miniLabel}>Duration (Mins)</label><input style={inputStyle} type="number" placeholder="20" value={secTime} onChange={e => setSecTime(e.target.value)} /></div>
-                  <div style={{ flex: 0.6 }}><label style={miniLabel}>Questions (Max 50)</label><input style={inputStyle} type="number" placeholder="50" value={secQCount} onChange={e => setSecQCount(e.target.value)} /></div>
+                  <div style={{ flex: 0.6 }}><label style={miniLabel}>Duration (Mins)</label><input style={inputStyle} type="number" min="1" placeholder="20" value={secTime} onChange={e => setSecTime(e.target.value)} /></div>
+                  <div style={{ flex: 0.6 }}><label style={miniLabel}>Questions (Max 50)</label><input style={inputStyle} type="number" min="1" placeholder="50" value={secQCount} onChange={e => setSecQCount(e.target.value)} /></div>
                 </div>
                 <div style={flexRow}>
                   <div style={{ flex: 1 }}><label style={miniLabel}>Question Type</label>
