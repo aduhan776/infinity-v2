@@ -111,7 +111,7 @@ const BrainFeed = () => {
         return;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/serve-questions`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/build-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,12 +128,15 @@ const BrainFeed = () => {
       });
       const data = await response.json();
       if (data.success && data.questions && data.questions.length > 0) {
-        // Note: no 'correct' / 'explanation' here on purpose — the pool
-        // deliberately withholds answers until an attempt is submitted.
+        // 🎯 Answer comes bundled upfront now (same trade-off as AI Labs) —
+        // instant feedback on select, no "checking..." round-trip. Ledger
+        // logging still happens, just silently in the background.
         const mappedQuestions = data.questions.map(q => ({
           id: q.id,
           question: q.question,
-          options: q.options || ["A", "B", "C", "D"]
+          options: q.options || ["A", "B", "C", "D"],
+          correct: q.correctOptionIndex !== undefined ? q.correctOptionIndex : 0,
+          explanation: q.explanation || "Verified conceptual reference."
         }));
         if (isLoadMore) {
           const oldLen = questions.length;
@@ -184,22 +187,29 @@ const BrainFeed = () => {
     }
   };
 
-  const handleOptionSelect = async (optIdx) => {
+  const handleOptionSelect = (optIdx) => {
     if (selectedAnswers[currentIdx] !== undefined) return;
     setShowWarning(false);
 
     const lockedIdx = currentIdx;
     const q = questions[lockedIdx];
 
-    // Lock the card immediately so the student can't double-submit while
-    // we wait for the server to confirm correctness.
     setSelectedAnswers(prev => ({ ...prev, [lockedIdx]: optIdx }));
+    setAnswerResults(prev => ({
+      ...prev,
+      [lockedIdx]: {
+        isCorrect: optIdx === q.correct,
+        correctOptionIndex: q.correct,
+        explanation: q.explanation
+      }
+    }));
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/submit-attempt`, {
+    // 🎯 Silent background ledger log — never blocks or delays the UI.
+    // If this fails (network hiccup), the student never even sees it;
+    // it just means this one attempt won't count toward pool resurfacing.
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/submit-attempt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -207,31 +217,8 @@ const BrainFeed = () => {
           questionId: q.id,
           selectedOptionIndex: optIdx
         })
-      });
-      const data = await response.json();
-
-      if (data.success) {
-        setAnswerResults(prev => ({
-          ...prev,
-          [lockedIdx]: {
-            isCorrect: data.is_correct,
-            correctOptionIndex: data.correct_option_index,
-            explanation: data.explanation || "Verified conceptual reference."
-          }
-        }));
-      } else {
-        throw new Error(data.error || "Failed to record attempt.");
-      }
-    } catch (err) {
-      console.error("Submit attempt failed:", err);
-      setCustomAlert({ show: true, title: 'Network Error', message: 'Could not record your attempt. Please try selecting again.' });
-      // Unlock this card so the student isn't stuck on a failed submission.
-      setSelectedAnswers(prev => {
-        const updated = { ...prev };
-        delete updated[lockedIdx];
-        return updated;
-      });
-    }
+      }).catch(err => console.warn("Ledger update skipped for this question (non-blocking):", err));
+    }).catch(err => console.warn("Could not resolve user for ledger logging (non-blocking):", err));
   };
 
   // 🎯 REALIGNED DATABASE PIPELINE: profiles table ke exact columns (brainfeed_count, brainfeed_accuracy) use honge!
