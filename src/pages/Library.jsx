@@ -59,10 +59,30 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
   // --- LOAD DATA ENGINE FROM OFFLINE STORAGE NODES ---
   const loadLibraryData = async () => {
     try {
-      // 1. Fetch Saved Questions direct from IndexedDB Offline Store
-      const localQuestions = await getAllFromLocalStore("saved_questions");
-      const sortedQuestions = localQuestions.sort((a, b) => new Date(b.saved_at) - new Date(a.saved_at));
-      setSavedQuestions(sortedQuestions);
+      // 1. Fetch Saved Questions from the shared cloud pool (attempts_ledger + question_pool)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const savedRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/saved-questions?studentId=${user.id}`);
+        const savedData = await savedRes.json();
+        if (savedData.success) {
+          const mappedSaved = savedData.savedQuestions.map(q => ({
+            id: q.id,
+            topic: q.topic || q.subject || "Saved Question",
+            question: q.question,
+            answer: (q.type === 'Objective' && Array.isArray(q.options) && q.correctOptionIndex !== null && q.correctOptionIndex !== undefined)
+              ? q.options[q.correctOptionIndex]
+              : "Subjective — evaluated by AI",
+            explanation: q.explanation || "No explanation provided.",
+            saved_at: q.savedAt
+          }));
+          setSavedQuestions(mappedSaved);
+        } else {
+          console.error("Saved questions fetch failed:", savedData.error);
+          setSavedQuestions([]);
+        }
+      } else {
+        setSavedQuestions([]);
+      }
 
       // 2. Fetch Centralized Test Sessions from IndexedDB Offline Store
       const localSessions = await getAllFromLocalStore("test_sessions");
@@ -178,14 +198,30 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
 
   const handleRemove = async (id, category, attemptId = null) => {
     if (category === 'questions') {
-      if (window.confirm("Bhai, kya tu sach mein is question ko offline library se delete karna chahta hai?")) {
+      if (window.confirm("Bhai, kya tu sach mein is question ko library se remove karna chahta hai?")) {
         try {
-          await deleteFromLocalStore("saved_questions", id);
-          setSavedQuestions(savedQuestions.filter(item => item.id !== id));
-          if (selectedItem && selectedItem.id === id) setSelectedItem(null);
-          alert("Success: Question record removed from device storage successfully!");
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            alert("Your session expired. Please log in again to continue.");
+            return;
+          }
+
+          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/toggle-save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentId: user.id, questionId: id, saved: false })
+          });
+          const data = await response.json();
+
+          if (data.success) {
+            setSavedQuestions(savedQuestions.filter(item => item.id !== id));
+            if (selectedItem && selectedItem.id === id) setSelectedItem(null);
+            alert("Success: Question removed from your library!");
+          } else {
+            alert(data.error || "Could not remove this question right now.");
+          }
         } catch (err) {
-          alert("Delete Failure: Hardware IO error.");
+          alert("Network error — could not remove the question.");
         }
       }
       return;
@@ -229,9 +265,9 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
       <div style={privacyNoticeBanner}>
         <div style={privacyIconFrame}>🛡️</div>
         <div style={{ textAlign: 'left' }}>
-          <strong style={{ color: '#0f172a', display: 'block', fontSize: '0.92rem', fontWeight: '800' }}>Local Device Privacy Protection Active</strong>
+          <strong style={{ color: '#0f172a', display: 'block', fontSize: '0.92rem', fontWeight: '800' }}>Your Data, Managed Right</strong>
           <span style={{ color: '#475569', fontSize: '0.84rem', fontWeight: '600', lineHeight: '1.4' }}>
-            Aapke saare test sessions aur saved questions direct aapke browser local storage (IndexedDB) mein saved hain, hamare central database mein nahi. Your data stays 100% offline.
+            Aapke test sessions aur paused drafts aapke browser local storage (IndexedDB) mein rehte hain. Saved questions ab account ke saath synced hain, taaki wo har device par available rahein.
           </span>
         </div>
       </div>
@@ -252,7 +288,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
               </div>
             </div>
             <div style={modalFooter}>
-              <p style={{fontSize: '0.75rem', color: '#94a3b8', margin: 0}}>Device Storage Vault Ref: {selectedItem.id}</p>
+              <p style={{fontSize: '0.75rem', color: '#94a3b8', margin: 0}}>Question Ref: {selectedItem.id}</p>
             </div>
           </div>
         </div>

@@ -251,6 +251,18 @@ const TestPortal = ({ testData, onExit }) => {
     const snapshot = stateRef.current;
     const evaluatedQuestions = [...snapshot.questions];
 
+    // 🎯 Needed to log attempts back to the shared question pool ledger.
+    // Non-blocking by design elsewhere below — if this comes back null
+    // (session hiccup), ledger logging is simply skipped, test submission
+    // itself is never blocked by this.
+    let studentId = null;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      studentId = user ? user.id : null;
+    } catch (authErr) {
+      console.warn("Could not resolve student id for ledger logging (non-blocking):", authErr);
+    }
+
     const hasSubjectiveToEvaluate = evaluatedQuestions.some((q, i) => 
       q.type === 'Subjective' && (snapshot.answers[i] || (snapshot.uploads[i] && snapshot.uploads[i].length > 0))
     );
@@ -276,7 +288,9 @@ const TestPortal = ({ testData, onExit }) => {
               userAnswer: snapshot.answers[i] || "",
               uploadedFiles: snapshot.uploads[i] || [],
               testTitle: data.title,
-              maxMarks: parseFloat(String(q.marks || '10').replace('+', '')) || 10
+              maxMarks: parseFloat(String(q.marks || '10').replace('+', '')) || 10,
+              studentId,
+              questionId: q.id
             })
           });
 
@@ -310,6 +324,22 @@ const TestPortal = ({ testData, onExit }) => {
           } else {
             objectiveCalculatedScore -= parseFloat(String(q.neg || '0.66').replace('-', '')) || 0;
             incorrectCount++;
+          }
+
+          // 🎯 Fire-and-forget ledger logging — only matters for pool-sourced
+          // questions (AI Labs). Admin-made or pre-pool-migration questions
+          // will simply get a harmless "not found" from the backend, which
+          // we intentionally ignore here so it can never block submission.
+          if (studentId && q.id) {
+            fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/submit-attempt`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                studentId,
+                questionId: q.id,
+                selectedOptionIndex: parseInt(userAnswer)
+              })
+            }).catch(err => console.warn("Pool ledger update skipped for a question (non-blocking):", err));
           }
         }
       }

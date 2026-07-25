@@ -158,33 +158,35 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
     if (!q) return;
 
     try {
-      const questionUniqueId = "SAVED_Q_" + Date.now();
-      const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
-      
-      let derivedAnswerText = "Subjective Evaluation Verified";
-      if (q.type === 'Objective' && Array.isArray(q.options)) {
-        const parsedIdx = parseInt(correctAns);
-        if (!isNaN(parsedIdx) && parsedIdx >= 0 && parsedIdx < q.options.length) {
-          derivedAnswerText = q.options[parsedIdx];
-        } else {
-          derivedAnswerText = "Malformed response options value.";
-        }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert("Your session expired. Please log in again to continue.");
+        return;
       }
 
-      const localQuestionPayload = {
-        id: questionUniqueId,
-        topic: "Exam Analysis",
-        question: q.question,
-        answer: derivedAnswerText,
-        explanation: q.explanation || "Saved directly via platform test evaluation metrics portal window.",
-        saved_at: new Date().toISOString()
-      };
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/toggle-save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: user.id,
+          questionId: q.id,
+          saved: true
+        })
+      });
+      const data = await response.json();
 
-      await saveToLocalStore("saved_questions", localQuestionPayload);
-      setSavedStatus(prev => ({ ...prev, [q.question]: true }));
-      alert("Question stored directly in your local device vault library! 🔖");
+      if (data.success) {
+        setSavedStatus(prev => ({ ...prev, [q.question]: true }));
+        alert("Question saved to your library! 🔖");
+      } else {
+        // Most likely cause: this question isn't from the shared pool
+        // (e.g. an admin-made test, or a test generated before the pool
+        // system existed) — no ledger entry exists to attach a save to.
+        alert("Bhai, ye question abhi cloud library mein save nahi ho sakta — sirf AI Lab se generate hue questions save hote hain filhaal.");
+      }
     } catch (err) {
-      alert("Storage engine error while writing question packet.");
+      console.error("Save to library failed:", err);
+      alert("Network error — could not save the question. Please check your connection.");
     }
   };
 
@@ -417,7 +419,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                     disabled={!!savedStatus[questions[selectedQIdx].question]}
                     style={{ ...styles.doubtBtn, background: savedStatus[questions[selectedQIdx].question] ? '#10b981' : '#6366f1', color: '#fff', border: 'none' }}
                   >
-                    {savedStatus[questions[selectedQIdx].question] ? "📁 Question Saved" : "🔖 Save to Offline Vault"}
+                    {savedStatus[questions[selectedQIdx].question] ? "📁 Question Saved" : "🔖 Save to Library"}
                   </button>
                   <button onClick={() => { setSelectedQIdx(prev => Math.min(questions.length - 1, prev + 1)); setShowExplanation(false); }} disabled={selectedQIdx === questions.length - 1} style={styles.navBtn}>Next</button>
                 </div>

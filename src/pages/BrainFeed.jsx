@@ -2,45 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 import LatexText from '../components/LatexText'; // 👈 YEH IMPORT GAYAB THA BHAI, AB FIXED HAI!
 
-// --- 🌐 LOCAL STORAGE STORAGE ENGINE MAPPINGS (matches Library.jsx / AnalysisPortal.jsx) ---
-const dbName = "InfinityLocalDB";
-
-const initBrainFeedDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, 2);
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains("saved_questions")) {
-        db.createObjectStore("saved_questions", { keyPath: "id" });
-      }
-    };
-    request.onsuccess = (e) => resolve(e.target.result);
-    request.onerror = (e) => reject(e.target.error);
-  });
-};
-
-const getAllFromLocalStore = async (storeName) => {
-  const db = await initBrainFeedDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const store = tx.objectStore(storeName);
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = (err) => reject(err);
-  });
-};
-
-const saveToLocalStore = async (storeName, payload) => {
-  const db = await initBrainFeedDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
-    store.put(payload);
-    tx.oncomplete = () => resolve();
-    tx.onerror = (err) => reject(err);
-  });
-};
-
 const BrainFeed = () => {
   // --- CONFIGURATION FORM STATES ---
   const [exam, setExam] = useState('');
@@ -59,6 +20,11 @@ const BrainFeed = () => {
   // --- TRACKING STATE FOR OPTIONS SELECTED & VAULT SAVES ---
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [savedStatus, setSavedStatus] = useState({}); 
+
+  // --- 🎯 SERVER-VERIFIED RESULTS: correctness/explanation now only arrive
+  // AFTER submitting an attempt to the backend (pool answers are hidden
+  // upfront by design) — keyed by question index, same as selectedAnswers.
+  const [answerResults, setAnswerResults] = useState({});
 
   // --- IN-CARD INLINE VALIDATION WARNING STATE ---
   const [showWarning, setShowWarning] = useState(false);
@@ -138,26 +104,36 @@ const BrainFeed = () => {
      }
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-test`, {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setCustomAlert({ show: true, title: 'Authentication Required', message: 'Your session expired. Please log in again to continue.' });
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/serve-questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          studentId: user.id,
           exam: exam,
           subject: subjectSection,
           topic: subject,
           count: 15,
           type: 'Objective',
           difficulty: difficulty,
-          language: language
+          language: language,
+          origin: 'brainfeed'
         })
       });
       const data = await response.json();
       if (data.success && data.questions && data.questions.length > 0) {
+        // Note: no 'correct' / 'explanation' here on purpose — the pool
+        // deliberately withholds answers until an attempt is submitted.
         const mappedQuestions = data.questions.map(q => ({
+          id: q.id,
           question: q.question,
-          options: q.options || ["A", "B", "C", "D"],
-          correct: q.correctOptionIndex !== undefined ? q.correctOptionIndex : 0,
-          explanation: q.explanation || "Verified conceptual reference."
+          options: q.options || ["A", "B", "C", "D"]
         }));
         if (isLoadMore) {
           const oldLen = questions.length;
@@ -169,6 +145,7 @@ const BrainFeed = () => {
           setQuestions(mappedQuestions);
           setCurrentIdx(0);
           setSelectedAnswers({});
+          setAnswerResults({});
           setSavedStatus({});
           setShowWarning(false);
           setIsFeedActive(true);
@@ -207,13 +184,54 @@ const BrainFeed = () => {
     }
   };
 
-  const handleOptionSelect = (optIdx) => {
+  const handleOptionSelect = async (optIdx) => {
     if (selectedAnswers[currentIdx] !== undefined) return;
-    setShowWarning(false); 
-    setSelectedAnswers({
-      ...selectedAnswers,
-      [currentIdx]: optIdx
-    });
+    setShowWarning(false);
+
+    const lockedIdx = currentIdx;
+    const q = questions[lockedIdx];
+
+    // Lock the card immediately so the student can't double-submit while
+    // we wait for the server to confirm correctness.
+    setSelectedAnswers(prev => ({ ...prev, [lockedIdx]: optIdx }));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/submit-attempt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: user.id,
+          questionId: q.id,
+          selectedOptionIndex: optIdx
+        })
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setAnswerResults(prev => ({
+          ...prev,
+          [lockedIdx]: {
+            isCorrect: data.is_correct,
+            correctOptionIndex: data.correct_option_index,
+            explanation: data.explanation || "Verified conceptual reference."
+          }
+        }));
+      } else {
+        throw new Error(data.error || "Failed to record attempt.");
+      }
+    } catch (err) {
+      console.error("Submit attempt failed:", err);
+      setCustomAlert({ show: true, title: 'Network Error', message: 'Could not record your attempt. Please try selecting again.' });
+      // Unlock this card so the student isn't stuck on a failed submission.
+      setSelectedAnswers(prev => {
+        const updated = { ...prev };
+        delete updated[lockedIdx];
+        return updated;
+      });
+    }
   };
 
   // 🎯 REALIGNED DATABASE PIPELINE: profiles table ke exact columns (brainfeed_count, brainfeed_accuracy) use honge!
@@ -221,8 +239,8 @@ const BrainFeed = () => {
     const attempted = Object.keys(selectedAnswers).length;
     if (attempted === 0) return;
 
-    const correct = questions.filter((q, idx) => selectedAnswers[idx] === q.correct).length;
-    const sessionAccuracy = Math.round((correct / attempted) * 100);
+    const correct = Object.values(answerResults).filter(r => r.isCorrect).length;
+    const sessionAccuracy = attempted > 0 ? Math.round((correct / attempted) * 100) : 0;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -268,28 +286,34 @@ const BrainFeed = () => {
 
   const handleSaveToLibrary = async () => {
     const currentQ = questions[currentIdx];
-    try {
-      const existingQuestions = await getAllFromLocalStore("saved_questions");
-      const alreadySaved = existingQuestions.some(q => q.question === currentQ.question);
+    if (savedStatus[currentIdx]) return;
 
-      if (alreadySaved) {
-        return setCustomAlert({ show: true, title: 'Already Saved', message: 'This question framework is already saved in your library.' });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setCustomAlert({ show: true, title: 'Authentication Required', message: 'Your session expired. Please log in again to continue.' });
+        return;
       }
 
-      const localQuestionPayload = {
-        id: "SAVED_Q_" + Date.now(),
-        topic: subject || "BrainFeed Session",
-        question: currentQ.question,
-        answer: currentQ.options[currentQ.correct],
-        explanation: currentQ.explanation,
-        saved_at: new Date().toISOString()
-      };
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/toggle-save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: user.id,
+          questionId: currentQ.id,
+          saved: true
+        })
+      });
+      const data = await response.json();
 
-      await saveToLocalStore("saved_questions", localQuestionPayload);
-      setSavedStatus({ ...savedStatus, [currentIdx]: true });
+      if (data.success) {
+        setSavedStatus({ ...savedStatus, [currentIdx]: true });
+      } else {
+        setCustomAlert({ show: true, title: 'Save Failed', message: data.error || 'Could not save this question to your library.' });
+      }
     } catch (err) {
-      console.error("Local Storage Save Failed:", err);
-      setCustomAlert({ show: true, title: 'Storage Error', message: 'Could not save the question to your local device library.' });
+      console.error("Save to library failed:", err);
+      setCustomAlert({ show: true, title: 'Network Error', message: 'Could not save the question. Please check your connection.' });
     }
   };
 
@@ -308,6 +332,7 @@ const BrainFeed = () => {
     setQuestions([]);
     setCurrentIdx(0);
     setSelectedAnswers({});
+    setAnswerResults({});
     setSavedStatus({});
     setShowWarning(false);
     setIsFeedActive(false);
@@ -341,6 +366,7 @@ const BrainFeed = () => {
             <div style={{ ...sliderTrackStyle, transform: `translateY(-${currentIdx * 100}%)` }}>
               {questions.map((q, idx) => {
                 const itemChoice = selectedAnswers[idx];
+                const resultData = answerResults[idx];
                 
                 return (
                   <div key={idx} style={cardSlideInstanceStyle}>
@@ -351,8 +377,8 @@ const BrainFeed = () => {
                           
                           <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
                             {itemChoice !== undefined && (
-                              <span style={{ ...statusIndicator, color: itemChoice === q.correct ? '#10b981' : '#f43f5e' }}>
-                                {itemChoice === q.correct ? 'CORRECT' : 'INCORRECT'}
+                              <span style={{ ...statusIndicator, color: !resultData ? '#94a3b8' : (resultData.isCorrect ? '#10b981' : '#f43f5e') }}>
+                                {!resultData ? 'CHECKING...' : (resultData.isCorrect ? 'CORRECT' : 'INCORRECT')}
                               </span>
                             )}
                             
@@ -388,12 +414,12 @@ const BrainFeed = () => {
                               let dynamicBorder = '#e2e8f0';
                               let dynamicColor = '#334155';
 
-                              if (itemChoice !== undefined) {
-                                if (oIdx === q.correct) {
+                              if (itemChoice !== undefined && resultData) {
+                                if (oIdx === resultData.correctOptionIndex) {
                                   dynamicBg = '#f0fdf4';
                                   dynamicBorder = '#10b981';
                                   dynamicColor = '#166534';
-                                } else if (itemChoice === oIdx && itemChoice !== q.correct) {
+                                } else if (itemChoice === oIdx && itemChoice !== resultData.correctOptionIndex) {
                                   dynamicBg = '#fff1f2';
                                   dynamicBorder = '#ef4444';
                                   dynamicColor = '#991b1b';
@@ -402,18 +428,23 @@ const BrainFeed = () => {
                                   dynamicBorder = '#e2e8f0';
                                   dynamicColor = '#94a3b8';
                                 }
+                              } else if (itemChoice !== undefined && itemChoice === oIdx) {
+                                // Locked but still waiting on the server's verdict — neutral "selected" look
+                                dynamicBg = '#f8fafc';
+                                dynamicBorder = '#94a3b8';
+                                dynamicColor = '#475569';
                               }
 
-                              const isCorrectOption = oIdx === q.correct;
+                              const isCorrectOption = resultData ? oIdx === resultData.correctOptionIndex : false;
 
                               return (
                                 <React.Fragment key={oIdx}>
-                                  {/* 💡 Explanation pops up directly above the correct option, right after attempting */}
-                                  {itemChoice !== undefined && isCorrectOption && (
+                                  {/* 💡 Explanation pops up directly above the correct option, once the server confirms it */}
+                                  {resultData && isCorrectOption && (
                                     <div style={explanationPopupStyle}>
                                       <div style={explanationPopupHeader}>CORE RESOLUTION STATEMENT</div>
                                       <p style={explanationPopupText}>
-                                        <LatexText text={q.explanation} />
+                                        <LatexText text={resultData.explanation} />
                                       </p>
                                     </div>
                                   )}

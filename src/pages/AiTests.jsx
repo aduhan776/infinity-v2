@@ -159,7 +159,7 @@ const AiTests = ({ onStartTest }) => {
   // ======================================================================
   // ⚡ HARDENED BATCHING ENGINE WITH DYNAMIC PARSER EXTRACTIONS
   // ======================================================================
-  const fetchInBatches = async (exam, topic, targetCount, type, difficulty, language, marks, neg, subject = '') => {
+  const fetchInBatches = async (studentId, exam, topic, targetCount, type, difficulty, language, marks, neg, subject = '') => {
     let remaining = targetCount;
     let masterQuestionsArray = [];
     
@@ -170,17 +170,19 @@ const AiTests = ({ onStartTest }) => {
       
       setLoadingMessage(`Generating Questions ${startIndex} to ${endIndex}... Please wait`);
       
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/generate-test`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/build-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
+          studentId,
           exam,
           subject,
           topic,
           count: currentBatchSize,
           type, 
           difficulty,
-          language
+          language,
+          origin: 'ailabs'
         })
       });
 
@@ -207,11 +209,12 @@ const AiTests = ({ onStartTest }) => {
         throw new Error("Backend response mismatch: 'questions' data array package is missing.");
       }
 
-      const processedBatch = data.questions.map((q, i) => {
-        const structuralIndex = masterQuestionsArray.length + i;
+      const processedBatch = data.questions.map((q) => {
+        // 🎯 'id' here is now the REAL question_pool UUID (not a local index) —
+        // needed later so TestPortal can log attempts back to the shared ledger.
         if (type === 'Objective') {
           return {
-            id: structuralIndex,
+            id: q.id,
             type: 'Objective',
             question: q.question,
             options: q.options || ["Option A", "Option B", "Option C", "Option D"],
@@ -222,7 +225,7 @@ const AiTests = ({ onStartTest }) => {
           };
         } else {
           return {
-            id: structuralIndex,
+            id: q.id,
             type: 'Subjective',
             question: q.question,
             marks: `+${parseFloat(marks || 10.0).toFixed(1)}`,
@@ -248,6 +251,12 @@ const AiTests = ({ onStartTest }) => {
     setLoadingMessage("Initializing Project Infinity Mock Pipeline...");
     
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert("Your session expired. Please log in again to continue.");
+        setLoading(false); processingRef.current = false; return;
+      }
+
       const generatedTestId = "AI-FULL-" + Date.now();
       let finalStructure = {
         id: generatedTestId,
@@ -263,6 +272,7 @@ const AiTests = ({ onStartTest }) => {
 
         for (const sec of aiSections) {
           const sectionalQuestions = await fetchInBatches(
+            user.id,
             testTitle, 
             sec.name, 
             parseInt(sec.qCount), 
@@ -314,6 +324,7 @@ const AiTests = ({ onStartTest }) => {
         if (targetQCount > 100) { alert("Maximum limit is 100 questions for a single paper flat configuration."); setLoading(false); processingRef.current = false; return; }
         
         const flatPaperQuestionsList = await fetchInBatches(
+          user.id,
           testTitle,
           testTitle,
           targetQCount,
@@ -384,7 +395,14 @@ const AiTests = ({ onStartTest }) => {
     setLoadingMessage("Assembling Drill Tracks Layout...");
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert("Your session expired. Please log in again to continue.");
+        setLoading(false); processingRef.current = false; return;
+      }
+
       const topicQuestionsList = await fetchInBatches(
+        user.id,
         targetExam,
         topicName,
         targetQCount,
