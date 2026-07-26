@@ -33,15 +33,12 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
       const loadedSubs = JSON.parse(localStorage.getItem(userKey)) || [];
       setSubscribedExams(loadedSubs);
 
-      // 1. Fetch EVERYTHING from the single unified mock_tests table (Latest Added First)
-      const { data: tests, error: testError } = await supabase
-        .from('mock_tests')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!testError && tests) {
-        setAllMockTests(tests);
-      }
+      // 1. Fetch the browsing tree (metadata only — NEVER question content)
+      // via the backend, since mock_tests direct client access is locked down.
+      const browseRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/browse`);
+      const browseData = await browseRes.json();
+      const tests = browseData.success ? browseData.tests : [];
+      setAllMockTests(tests);
 
       // 2. Fetch User Performance Evaluation History logs
       if (user) {
@@ -73,9 +70,9 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
               answers: row.answers || {},
               uploads: row.uploads || {},
               timeTracker: row.time_tracker || {},
-              questions: cloudMatch.questions_list || [],
-              questions_list: cloudMatch.questions_list || [],
-              sections: cloudMatch.sections || null,
+              // 🔒 Question content is intentionally NOT embedded here anymore —
+              // it's fetched on-demand (with answers revealed) only when
+              // "Detailed Review" is actually clicked, via handleViewDetailedReview.
               hasSectionalTiming: cloudMatch.has_sectional_timing || false,
               mode: cloudMatch.category_name || "Standard",
               time: cloudMatch.time || 180
@@ -238,6 +235,60 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
 
   const toggleAttemptsDropdown = (testId) => {
     setExpandedTestAttempts(prev => ({ ...prev, [testId] : !prev[testId] }));
+  };
+
+  // 🔒 Flattens sectional (sections[].questions) or flat (questions_list)
+  // shape into one array — same flattening TestPortal/AnalysisPortal expect.
+  const flattenTestQuestions = (test) => {
+    if (Array.isArray(test.sections) && test.sections.length > 0) {
+      let flat = [];
+      test.sections.forEach((sec, secIdx) => {
+        if (Array.isArray(sec.questions)) {
+          sec.questions.forEach(q => flat.push({ ...q, sectionIndex: secIdx, sectionName: sec.name, sectionTime: sec.time }));
+        }
+      });
+      return flat;
+    }
+    return test.questions_list || [];
+  };
+
+  // 🔒 "Secure Test Delivery": fetches the test WITHOUT answers, right
+  // before actually starting/reattempting it.
+  const handleStartTest = async (test) => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/load?testId=${encodeURIComponent(test.id)}&reveal=false`);
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.error || "Could not load this test right now. Please try again.");
+        return;
+      }
+      onStartTest({ ...data.test, hasSectionalTiming: data.test.has_sectional_timing || false });
+    } catch (err) {
+      console.error("Failed to load test for attempt:", err);
+      alert("Network error — could not load the test. Please check your connection.");
+    }
+  };
+
+  // 🔒 Post-hoc review of an ALREADY-completed attempt — full answers are
+  // fine to reveal here, the student already finished this attempt.
+  const handleViewDetailedReview = async (attempt) => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/load?testId=${encodeURIComponent(attempt.id)}&reveal=true`);
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.error || "Could not load this attempt's review right now.");
+        return;
+      }
+      onViewAnalysis({
+        ...attempt,
+        questions: flattenTestQuestions(data.test),
+        questions_list: flattenTestQuestions(data.test),
+        sections: data.test.sections || null
+      });
+    } catch (err) {
+      console.error("Failed to load test for review:", err);
+      alert("Network error — could not load the review. Please check your connection.");
+    }
   };
 
   // --- VIEW RENDER 1: HORIZONTAL BRANCHING ALLOCATIONS REEL ---
@@ -438,7 +489,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                             {expandedTestAttempts[test.id] ? "Hide Attempts" : `View Attempts (${matchingAttempts.length})`}
                           </button>
                         )}
-                        <button onClick={() => onStartTest({ ...test, hasSectionalTiming: test.has_sectional_timing || false })} style={monochromeLaunchTestBtn}>
+                        <button onClick={() => handleStartTest(test)} style={monochromeLaunchTestBtn}>
                           {isAttempted ? "Reattempt Test" : "Start Test"}
                         </button>
                       </div>
@@ -458,7 +509,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                                 </span>
                                 <button 
                                   type="button"
-                                  onClick={() => onViewAnalysis(attempt)} 
+                                  onClick={() => handleViewDetailedReview(attempt)} 
                                   style={{
                                     background: '#000000',
                                     color: '#ffffff',
