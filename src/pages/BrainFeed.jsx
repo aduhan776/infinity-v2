@@ -123,7 +123,8 @@ const BrainFeed = () => {
           type: 'Objective',
           difficulty: difficulty,
           language: language,
-          origin: 'brainfeed'
+          origin: 'brainfeed',
+          revealAnswers: true
         })
       });
       const data = await response.json();

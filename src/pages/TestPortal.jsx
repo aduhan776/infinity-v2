@@ -313,34 +313,67 @@ const TestPortal = ({ testData, onExit }) => {
       }
     }
 
+    // 🔒 Secure Test Delivery: this question set never received answers
+    // from the server, so grading MUST happen server-side. We send back
+    // EVERY Objective question (including skipped ones, with a null
+    // selectedOptionIndex) so the analysis screen can still reveal the
+    // right answer even for questions the student didn't attempt — the
+    // backend only counts actually-attempted ones toward score/stats.
+    const objectiveAnswersPayload = [];
     evaluatedQuestions.forEach((q, i) => {
       if (q.type === 'Objective') {
         const userAnswer = snapshot.answers[i];
-        if (userAnswer !== undefined && userAnswer !== null && userAnswer !== "") {
-          const correctAns = q.correct !== undefined ? q.correct : q.correctOptionIndex;
-          if (parseInt(userAnswer) === parseInt(correctAns)) {
-            objectiveCalculatedScore += parseFloat(String(q.marks || '2.0').replace('+', '')) || 0;
-            correctCount++;
-          } else {
-            objectiveCalculatedScore -= parseFloat(String(q.neg || '0.66').replace('-', '')) || 0;
-            incorrectCount++;
-          }
+        const wasAttempted = userAnswer !== undefined && userAnswer !== null && userAnswer !== "";
+        objectiveAnswersPayload.push({
+          questionId: q.id,
+          selectedOptionIndex: wasAttempted ? parseInt(userAnswer) : null,
+          marks: q.marks,
+          neg: q.neg
+        });
+      }
+    });
 
-          // 🎯 Fire-and-forget ledger logging — only matters for pool-sourced
-          // questions (AI Labs). Admin-made or pre-pool-migration questions
-          // will simply get a harmless "not found" from the backend, which
-          // we intentionally ignore here so it can never block submission.
-          if (studentId && q.id) {
-            fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/submit-attempt`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                studentId,
-                questionId: q.id,
-                selectedOptionIndex: parseInt(userAnswer)
-              })
-            }).catch(err => console.warn("Pool ledger update skipped for a question (non-blocking):", err));
-          }
+    let gradingResultsById = {};
+    if (objectiveAnswersPayload.length > 0) {
+      try {
+        const gradeRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/grade-test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId,
+            testId: data.id,
+            answers: objectiveAnswersPayload
+          })
+        });
+        const gradeData = await gradeRes.json();
+        if (!gradeData.success) throw new Error(gradeData.error || "Grading failed.");
+
+        gradeData.results.forEach(r => {
+          gradingResultsById[String(r.questionId)] = r;
+        });
+        objectiveCalculatedScore += gradeData.totalScore;
+        correctCount += gradeData.correctCount;
+        incorrectCount += gradeData.incorrectCount;
+      } catch (err) {
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
+        alert("Busy server, failed to grade your test. Please try submitting again.");
+        return;
+      }
+    }
+
+    // Merge server-verified correctness/explanation back into each question
+    // object — this keeps evaluatedQuestions/finalReport's SHAPE identical
+    // to before, so AnalysisPortal and everything downstream needs no changes.
+    evaluatedQuestions.forEach((q, i) => {
+      if (q.type === 'Objective') {
+        const result = gradingResultsById[String(q.id)];
+        if (result) {
+          evaluatedQuestions[i] = {
+            ...q,
+            correct: result.correctOptionIndex,
+            explanation: result.explanation || q.explanation
+          };
         }
       }
     });

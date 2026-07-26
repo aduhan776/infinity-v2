@@ -212,16 +212,19 @@ const AiTests = ({ onStartTest }) => {
       const processedBatch = data.questions.map((q) => {
         // 🎯 'id' here is now the REAL question_pool UUID (not a local index) —
         // needed later so TestPortal can log attempts back to the shared ledger.
+        // 🔒 Secure Test Delivery: 'correct'/'explanation' are genuinely
+        // unknown here — the backend never sends them at generation time.
+        // They only get filled in by TestPortal after grading.
         if (type === 'Objective') {
           return {
             id: q.id,
             type: 'Objective',
             question: q.question,
             options: q.options || ["Option A", "Option B", "Option C", "Option D"],
-            correct: q.correctOptionIndex !== undefined ? q.correctOptionIndex : 0,
+            correct: null,
             marks: `+${parseFloat(marks || 2.0).toFixed(1)}`,
             neg: `-${parseFloat(neg || 0.66).toFixed(2)}`,
-            explanation: q.explanation || "Resolution matrix computed."
+            explanation: null
           };
         } else {
           return {
@@ -974,16 +977,14 @@ const AiTests = ({ onStartTest }) => {
                          {q.type === 'Objective' && q.options && (
                            <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
                              {q.options.map((opt, oIdx) => (
-                               <div key={oIdx} style={{ padding: '12px 16px', borderRadius: '10px', border: oIdx === q.correct ? '2px solid #10b981' : '1px solid #e2e8f0', background: oIdx === q.correct ? '#f0fdf4' : '#ffffff', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', fontWeight: '500' }}>
+                               <div key={oIdx} style={{ padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', fontSize: '0.9rem', fontWeight: '500' }}>
                                  <span>{String.fromCharCode(64 + oIdx)}. <LatexText text={opt} /></span>
-                                 {oIdx === q.correct && <span style={{ color: '#15803d', fontWeight: '700' }}> Correct Target</span>}
                                </div>
                              ))}
                            </div>
                          )}
-                         <div style={{ background: '#f0f9ff', padding: '14px', borderRadius: '10px', borderLeft: '4px solid #0284c7' }}>
-                           <strong style={{ color: '#0284c7', fontSize: '0.82rem', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}> AI Resolution Matrix:</strong>
-                           <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', lineHeight: '1.5', fontWeight: '500' }}><LatexText text={q.explanation} /></p>
+                         <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', borderLeft: '4px solid #94a3b8' }}>
+                           <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b', lineHeight: '1.5', fontWeight: '600' }}>🔒 Answer & explanation reveal after you attempt this question.</p>
                          </div>
                       </div>
                     ))}
@@ -1002,16 +1003,14 @@ const AiTests = ({ onStartTest }) => {
                   {q.type === 'Objective' && q.options && (
                     <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
                       {q.options.map((opt, oIdx) => (
-                        <div key={oIdx} style={{ padding: '12px 16px', borderRadius: '10px', border: oIdx === q.correct ? '2px solid #10b981' : '1px solid #e2e8f0', background: oIdx === q.correct ? '#f0fdf4' : '#ffffff', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', fontWeight: '500' }}>
+                        <div key={oIdx} style={{ padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', fontSize: '0.9rem', fontWeight: '500' }}>
                           <span>{String.fromCharCode(64 + oIdx)}. <LatexText text={opt} /></span>
-                          {oIdx === q.correct && <span style={{ color: '#15803d', fontWeight: '700' }}> Correct Target</span>}
                         </div>
                       ))}
                     </div>
                   )}
-                  <div style={{ background: '#f0f9ff', padding: '14px', borderRadius: '10px', borderLeft: '4px solid #0284c7' }}>
-                    <strong style={{ color: '#0284c7', fontSize: '0.82rem', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}> AI Resolution Matrix:</strong>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', lineHeight: '1.5', fontWeight: '500' }}><LatexText text={q.explanation} /></p>
+                  <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', borderLeft: '4px solid #94a3b8' }}>
+                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b', lineHeight: '1.5', fontWeight: '600' }}>🔒 Answer & explanation reveal after you attempt this question.</p>
                   </div>
                 </div>
               ))
