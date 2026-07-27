@@ -7,7 +7,7 @@ const dbName = "InfinityLocalDB";
 
 const initLibraryDB = () => {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, 2); // 🚨 BUMPED TO VERSION 2 FOR FORCED CACHE RESET
+    const request = indexedDB.open(dbName, 3); // 🚨 ENGINE VERSION 3 — matches AiTests.jsx, fixes VersionError
     request.onupgradeneeded = (e) => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains("test_sessions")) {
