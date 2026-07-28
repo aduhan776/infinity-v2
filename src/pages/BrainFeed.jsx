@@ -56,27 +56,21 @@ const BrainFeed = () => {
   // --- 🔁 SESSION MODE: 'live' (normal), 'reattempt' (redo, stats not saved), 'revise' (read-only scroll-through) ---
   const [sessionMode, setSessionMode] = useState('live');
   const viewportRef = useRef(null);
-  const scrollSyncGuard = useRef(false);
+  const scrollDebounceTimer = useRef(null);
 
-  // --- 📱 MOBILE: keep the scroll position in sync when currentIdx changes via a button tap ---
-  useEffect(() => {
-    if (!isMobile || !isFeedActive || !viewportRef.current) return;
-    const el = viewportRef.current;
-    scrollSyncGuard.current = true;
-    el.scrollTo({ top: currentIdx * el.clientHeight, behavior: 'smooth' });
-    const t = setTimeout(() => { scrollSyncGuard.current = false; }, 400);
-    return () => clearTimeout(t);
-  }, [currentIdx, isMobile, isFeedActive]);
-
-  // --- 📱 MOBILE: detect which question card is in view while the person scrolls (reel-style navigation) ---
+  // --- 📱 MOBILE: detect which question card is in view once the person stops scrolling (reel-style navigation) ---
   const handleFeedScroll = () => {
-    if (scrollSyncGuard.current || !viewportRef.current) return;
-    const el = viewportRef.current;
-    const newIdx = Math.round(el.scrollTop / el.clientHeight);
-    if (newIdx !== currentIdx && newIdx >= 0 && newIdx < questions.length) {
-      setShowWarning(false);
-      setCurrentIdx(newIdx);
-    }
+    if (!viewportRef.current) return;
+    clearTimeout(scrollDebounceTimer.current);
+    scrollDebounceTimer.current = setTimeout(() => {
+      const el = viewportRef.current;
+      if (!el) return;
+      const newIdx = Math.round(el.scrollTop / el.clientHeight);
+      if (newIdx !== currentIdx && newIdx >= 0 && newIdx < questions.length) {
+        setShowWarning(false);
+        setCurrentIdx(newIdx);
+      }
+    }, 120);
   };
 
   const difficultyLevels = [
@@ -122,6 +116,10 @@ const BrainFeed = () => {
      }
     if (!subjectSection.trim()) {
        setCustomAlert({ show: true, title: 'Required Field', message: 'Please enter a Subject / Section to continue.' });
+       return;
+     }
+    if (!subject.trim()) {
+       setCustomAlert({ show: true, title: 'Required Field', message: 'Please enter a Topic to continue.' });
        return;
      }
     if (cooldown > 0) {
@@ -221,15 +219,17 @@ const BrainFeed = () => {
     const lockedIdx = currentIdx;
     const q = questions[lockedIdx];
 
-    setSelectedAnswers(prev => ({ ...prev, [lockedIdx]: optIdx }));
-    setAnswerResults(prev => ({
-      ...prev,
+    const updatedAnswers = { ...selectedAnswers, [lockedIdx]: optIdx };
+    const updatedResults = {
+      ...answerResults,
       [lockedIdx]: {
         isCorrect: optIdx === q.correct,
         correctOptionIndex: q.correct,
         explanation: q.explanation
       }
-    }));
+    };
+    setSelectedAnswers(updatedAnswers);
+    setAnswerResults(updatedResults);
 
     // 🎯 Silent background ledger log — never blocks or delays the UI.
     // If this fails (network hiccup), the student never even sees it;
@@ -246,14 +246,27 @@ const BrainFeed = () => {
         })
       }).catch(err => console.warn("Ledger update skipped for this question (non-blocking):", err));
     }).catch(err => console.warn("Could not resolve user for ledger logging (non-blocking):", err));
+
+    // 🏁 Answering the LAST card finishes the session automatically — works whether
+    // the person got here by scrolling (mobile) or by tapping Next (desktop), so
+    // there's no dead-end where nothing happens after the final question. Passing
+    // the freshly-merged maps through avoids a stale-state read inside the timeout.
+    if (isMobile && lockedIdx === questions.length - 1) {
+      setTimeout(() => {
+        if (sessionMode === 'live') saveSessionMetricsToProfile(updatedAnswers, updatedResults);
+        setShowEndModal(true);
+      }, 500);
+    }
   };
 
   // 🎯 REALIGNED DATABASE PIPELINE: profiles table ke exact columns (brainfeed_count, brainfeed_accuracy) use honge!
-  const saveSessionMetricsToProfile = async () => {
-    const attempted = Object.keys(selectedAnswers).length;
+  const saveSessionMetricsToProfile = async (answersOverride, resultsOverride) => {
+    const answersData = answersOverride || selectedAnswers;
+    const resultsData = resultsOverride || answerResults;
+    const attempted = Object.keys(answersData).length;
     if (attempted === 0) return;
 
-    const correct = Object.values(answerResults).filter(r => r.isCorrect).length;
+    const correct = Object.values(resultsData).filter(r => r.isCorrect).length;
     const sessionAccuracy = attempted > 0 ? Math.round((correct / attempted) * 100) : 0;
 
     try {
@@ -388,7 +401,7 @@ const BrainFeed = () => {
 
   if (isFeedActive && questions.length > 0) {
     return (
-      <div style={feedWrapperStyle}>
+      <div style={{ ...feedWrapperStyle, height: isMobile ? '100dvh' : '100vh' }}>
         <div style={{ ...topBarFeedStyle, padding: isMobile ? '12px 16px' : '16px 40px' }}>
           <button style={exitBtnStyle} onClick={handleTriggerExit}>End Session</button>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
@@ -402,7 +415,17 @@ const BrainFeed = () => {
           <div style={scrollHintStyle}>Scroll up or down to move between questions</div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '84vh', marginTop: isMobile ? '95px' : '65px', boxSizing: 'border-box', padding: isMobile ? '0 8px' : '0 40px', gap: '14px' }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          width: '100%',
+          height: isMobile ? 'calc(100dvh - 92px)' : '84vh',
+          marginTop: isMobile ? '92px' : '65px',
+          boxSizing: 'border-box',
+          padding: isMobile ? '0' : '0 40px',
+          gap: isMobile ? '0' : '14px'
+        }}>
           <div
             ref={viewportRef}
             onScroll={isMobile ? handleFeedScroll : undefined}
@@ -421,13 +444,21 @@ const BrainFeed = () => {
                 const resultData = answerResults[idx];
                 
                 return (
-                  <div key={idx} style={{ ...cardSlideInstanceStyle, ...(isMobile ? { minHeight: '100%', height: 'auto', scrollSnapAlign: 'start' } : {}) }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', gap: '14px' }}>
+                  <div key={idx} style={{
+                    ...cardSlideInstanceStyle,
+                    ...(isMobile ? { minHeight: '100%', height: 'auto', scrollSnapAlign: 'start', scrollSnapStop: 'always', padding: 0 } : {})
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: isMobile ? '100%' : 'auto', gap: isMobile ? '0' : '14px' }}>
                       <div style={{
                         ...fixedQuestionCardStyle,
                         width: '100%',
                         maxWidth: isMobile ? '100%' : '610px',
-                        maxHeight: isMobile ? 'none' : '100%'
+                        height: isMobile ? '100%' : 'auto',
+                        maxHeight: isMobile ? 'none' : '100%',
+                        borderRadius: isMobile ? 0 : fixedQuestionCardStyle.borderRadius,
+                        border: isMobile ? 'none' : fixedQuestionCardStyle.border,
+                        boxShadow: isMobile ? 'none' : fixedQuestionCardStyle.boxShadow,
+                        padding: isMobile ? '18px 16px' : '30px'
                       }}>
                         <div style={qHeaderRow}>
                           <span style={qTypeLabel}>Practice</span>
@@ -525,8 +556,9 @@ const BrainFeed = () => {
                         </div>
                       </div>
 
-                      {/* ⬅️➡️ Nav buttons now travel with the card as one group, directly beneath it */}
-                      <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', width: '100%', maxWidth: isMobile ? '100%' : '610px', flexShrink: 0 }}>
+                      {/* ⬅️➡️ Nav buttons stay for desktop; mobile navigates purely by scroll */}
+                      {!isMobile && (
+                      <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', width: '100%', maxWidth: '610px', flexShrink: 0 }}>
                         <button 
                           type="button"
                           onClick={handlePrevCard} 
@@ -545,6 +577,7 @@ const BrainFeed = () => {
                           Next →
                         </button>
                       </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -642,33 +675,46 @@ const BrainFeed = () => {
   }
 
   return (
-    <div style={formWrapper}>
-      <div style={{ ...formCard, padding: isMobile ? '18px' : '35px' }}>
-        <h2 style={{ color: '#0f172a', marginBottom: '5px', fontWeight: '900', letterSpacing: '-0.5px', fontSize: isMobile ? '1.15rem' : '1.5rem' }}>Start a BrainFeed Session</h2>
-        <p style={{ color: '#64748b', marginBottom: isMobile ? '16px' : '25px', fontSize: isMobile ? '0.8rem' : '0.9rem', fontWeight: '500' }}>
+    <div style={{ ...formWrapper, ...(isMobile ? { minHeight: 'auto', height: '100%', padding: 0, alignItems: 'stretch' } : {}) }}>
+      {isMobile && (
+        <style>{`
+          .content-view {
+            padding: 0 !important;
+            overflow: hidden !important;
+            height: calc(100dvh - 65px) !important;
+          }
+        `}</style>
+      )}
+      <div style={{
+        ...formCard,
+        padding: isMobile ? '18px' : '35px',
+        ...(isMobile ? { width: '100%', maxWidth: '100%', height: '100%', border: 'none', borderRadius: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' } : {})
+      }}>
+        <h2 style={{ color: '#0f172a', marginBottom: '5px', fontWeight: '900', letterSpacing: '-0.5px', fontSize: isMobile ? '1.1rem' : '1.5rem' }}>Start a BrainFeed Session</h2>
+        <p style={{ color: '#64748b', marginBottom: isMobile ? '12px' : '25px', fontSize: isMobile ? '0.76rem' : '0.9rem', fontWeight: '500' }}>
           Fill in the details to start practicing.
         </p>
         
-        <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '0px' : '15px' }}>
+        <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '0px' : '15px', marginBottom: isMobile ? '0' : flexRow.marginBottom }}>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Target Exam <span style={mandatoryStar}>*</span></label>
-            <input style={inputStyle} placeholder="e.g. UPSC, SSC, Banking" value={exam} onChange={e => setExam(e.target.value)} />
+            <input style={{ ...inputStyle, marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. UPSC, SSC, Banking" value={exam} onChange={e => setExam(e.target.value)} />
           </div>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Subject / Section <span style={mandatoryStar}>*</span></label>
-            <input style={inputStyle} placeholder="e.g. Maths, English, GK" value={subjectSection} onChange={e => setSubjectSection(e.target.value)} />
+            <input style={{ ...inputStyle, marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Maths, English, GK" value={subjectSection} onChange={e => setSubjectSection(e.target.value)} />
           </div>
         </div>
 
         <div>
-          <label style={labelStyle}>Topic (Optional)</label>
-          <input style={inputStyle} placeholder="e.g. Trigonometry, Mughal Empire (leave blank for general)" value={subject} onChange={e => setSubject(e.target.value)} />
+          <label style={labelStyle}>Topic <span style={mandatoryStar}>*</span></label>
+          <input style={{ ...inputStyle, marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Trigonometry, Mughal Empire" value={subject} onChange={e => setSubject(e.target.value)} />
         </div>
 
         <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '0px' : '15px' }}>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Difficulty</label>
-            <div style={horizontalDifficultyContainer}>
+            <div style={{ ...horizontalDifficultyContainer, marginBottom: isMobile ? '10px' : '15px' }}>
               {difficultyLevels.map((level) => (
                 <button
                   key={level.value}
@@ -688,14 +734,14 @@ const BrainFeed = () => {
           </div>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Language</label>
-            <select style={{ ...inputStyle, padding: '11px' }} value={language} onChange={e => setLanguage(e.target.value)}>
+            <select style={{ ...inputStyle, padding: '11px', marginBottom: isMobile ? '10px' : '15px' }} value={language} onChange={e => setLanguage(e.target.value)}>
               <option value="English">English</option>
               <option value="Hindi">Hindi</option>
             </select>
           </div>
         </div>
 
-        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: isMobile ? '14px' : '20px', marginTop: isMobile ? '8px' : '15px' }}>
+        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: isMobile ? '12px' : '20px', marginTop: isMobile ? '4px' : '15px' }}>
           <button
             onClick={() => fetchBrainFeedPacket(false)}
             disabled={cooldown > 0}
