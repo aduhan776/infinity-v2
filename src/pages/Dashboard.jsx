@@ -190,11 +190,20 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
         )}
 
         <div style={{ ...leftMainScrollableColumn, height: isMobile ? 'auto' : '100%', overflowY: isMobile ? 'visible' : 'auto' }}>
-          <h2 style={{ color: '#0f172a', fontWeight: '900', fontSize: isMobile ? '1.4rem' : '1.8rem', margin: 0, letterSpacing: '-0.5px' }}>
+          <h2 style={{
+            color: '#0f172a',
+            fontWeight: '900',
+            fontSize: isMobile ? 'clamp(1.05rem, 5.5vw, 1.4rem)' : '1.8rem',
+            margin: 0,
+            letterSpacing: '-0.5px',
+            whiteSpace: isMobile ? 'nowrap' : 'normal',
+            overflow: isMobile ? 'hidden' : 'visible',
+            textOverflow: isMobile ? 'ellipsis' : 'clip'
+          }}>
             Welcome back, {userName}!
           </h2>
-          <p style={{ color: '#64748b', marginTop: '4px', fontSize: '0.92rem', fontWeight: '500' }}>
-            Bhai, ye raha tera pinned and tracking workspace area:
+          <p style={{ color: '#64748b', marginTop: '4px', fontSize: '0.8rem', fontWeight: '500' }}>
+            Your pinned exam series and quick stats, all in one place.
           </p>
                   
           <div style={{ marginTop: isMobile ? '20px' : '30px' }}>
@@ -209,26 +218,26 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(230px, 1fr))', gap: isMobile ? '12px' : '20px', paddingBottom: '20px' }}>
               
               {/* INDEPENDENT PRIVATE AI LAB GENERATED FOLDER snaps into Dashboard grid */}
-              <div style={{ ...folderCardStyle, border: '1px solid #000000', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }} onClick={() => setShowAiFolderModal(true)}>
-                <div style={{ ...folderIconWrapperFrame, background: '#000000' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <div style={{ ...folderCardStyle, border: '1px solid #000000', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', padding: isMobile ? '14px' : folderCardStyle.padding }} onClick={() => setShowAiFolderModal(true)}>
+                <div style={{ ...folderIconWrapperFrame, background: '#000000', width: isMobile ? '34px' : folderIconWrapperFrame.width, height: isMobile ? '34px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '8px' : folderIconWrapperFrame.margin }}>
+                  <svg width={isMobile ? "15" : "20"} height={isMobile ? "15" : "20"} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 2h4M12 2v7M5 21h14M5 21l6-12h2l6 12M7 17h10"/>
                   </svg>
                 </div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '1.15rem', fontWeight: '900', color: '#000000' }}>AI Lab Generated</h3>
-                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0 0 20px 0', fontWeight: '600' }}>{aiLabTests.length} custom tests compiled.</p>
-                <button type="button" onClick={(e) => { e.stopPropagation(); setShowAiFolderModal(true); }} style={exploreSeriesSolidActionBtn}>Explore Series →</button>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: isMobile ? '0.85rem' : '1.15rem', fontWeight: '900', color: '#000000' }}>AI Lab Generated</h3>
+                <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#64748b', margin: isMobile ? '0 0 10px 0' : '0 0 20px 0', fontWeight: '600' }}>{aiLabTests.length} custom tests compiled.</p>
+                <button type="button" onClick={(e) => { e.stopPropagation(); setShowAiFolderModal(true); }} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '7px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.7rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
               </div>
 
               {subscribedExams.map((folder) => (
-                <div key={folder} style={folderCardStyle}>
+                <div key={folder} style={{ ...folderCardStyle, padding: isMobile ? '14px' : folderCardStyle.padding }}>
                   <button type="button" onClick={(e) => handleUnpinClick(e, folder)} style={unpinIconCloseWidget}>✕</button>
-                  <div style={folderIconWrapperFrame}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                  <div style={{ ...folderIconWrapperFrame, width: isMobile ? '34px' : folderIconWrapperFrame.width, height: isMobile ? '34px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '8px' : folderIconWrapperFrame.margin }}>
+                    <svg width={isMobile ? "15" : "20"} height={isMobile ? "15" : "20"} viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                   </div>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1.15rem', fontWeight: '800', color: '#0f172a' }}>{folder}</h3>
-                  <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0 0 20px 0', fontWeight: '500' }}>Tracked inside dashboard stream.</p>
-                  <button type="button" onClick={() => handleExploreRedirect(folder)} style={exploreSeriesSolidActionBtn}>Explore Series →</button>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: isMobile ? '0.85rem' : '1.15rem', fontWeight: '800', color: '#0f172a' }}>{folder}</h3>
+                  <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#64748b', margin: isMobile ? '0 0 10px 0' : '0 0 20px 0', fontWeight: '500' }}>Tracked inside dashboard stream.</p>
+                  <button type="button" onClick={() => handleExploreRedirect(folder)} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '7px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.7rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
                 </div>
               ))}
             </div>
