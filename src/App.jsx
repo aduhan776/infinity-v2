@@ -41,6 +41,15 @@ function App() {
     name: "Student"
   });
 
+  // --- 📱 MOBILE RESPONSIVE STATES ---
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // --- 🔄 SUPABASE AUTH LIFECYCLE LISTENER ---
   useEffect(() => {
     // 🚨 FIX: a hung or failing network call here used to leave the loading
@@ -325,6 +334,85 @@ function App() {
           padding: 32px !important;
           background-color: #ffffff !important;
         }
+
+        /* 📱 MOBILE LAYOUT — desktop rules above stay untouched */
+        @media (max-width: 768px) {
+          .sidebar {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            height: 100vh !important;
+            z-index: 2000 !important;
+            transform: translateX(-100%);
+            transition: transform 0.25s ease !important;
+            box-shadow: 8px 0 24px rgba(0,0,0,0.15) !important;
+          }
+          .sidebar.mobile-open {
+            transform: translateX(0);
+          }
+          .top-bar {
+            padding: 0 16px !important;
+          }
+          .content-view {
+            padding: 16px !important;
+            padding-bottom: 84px !important;
+          }
+          .main-content {
+            padding-bottom: 0 !important;
+          }
+          .bottom-tab-bar {
+            display: flex !important;
+          }
+        }
+        @media (min-width: 769px) {
+          .bottom-tab-bar {
+            display: none !important;
+          }
+        }
+
+        .mobile-sidebar-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.45);
+          z-index: 1999;
+        }
+
+        .bottom-tab-bar {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 60px;
+          background: #ffffff;
+          border-top: 1px solid #e2e8f0;
+          z-index: 1500;
+          align-items: center;
+          justify-content: space-around;
+          padding-bottom: env(safe-area-inset-bottom);
+        }
+        .bottom-tab-bar button {
+          background: none;
+          border: none;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 3px;
+          color: #94a3b8;
+          font-size: 0.62rem;
+          font-weight: 600;
+          cursor: pointer;
+          flex: 1;
+          padding: 6px 0;
+        }
+        .bottom-tab-bar button svg {
+          stroke: #94a3b8;
+        }
+        .bottom-tab-bar button.active {
+          color: #000000;
+        }
+        .bottom-tab-bar button.active svg {
+          stroke: #000000;
+        }
       `}</style>
 
       {/* 🎁 IN-APP TEST INVITATION MODAL */}
@@ -362,8 +450,12 @@ function App() {
         </div>
       )}
 
+      {isMobile && mobileSidebarOpen && !isTestActive && activeTab !== 'analysis-portal' && (
+        <div className="mobile-sidebar-backdrop" onClick={() => setMobileSidebarOpen(false)} />
+      )}
+
       {!isTestActive && activeTab !== 'analysis-portal' && (
-        <aside className="sidebar" style={{ display: 'flex', flexDirection: 'column' }}>
+        <aside className={`sidebar ${isMobile && mobileSidebarOpen ? 'mobile-open' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="logo" style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '8px', marginBottom: '24px' }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/>
@@ -374,41 +466,46 @@ function App() {
           </div>
           
           <nav className="menu" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7"/>
-                <rect x="14" y="3" width="7" height="7"/>
-                <rect x="14" y="14" width="7" height="7"/>
-                <rect x="3" y="14" width="7" height="7"/>
-              </svg>
-              Dashboard
-            </button>
-            <button className={activeTab === 'BrainFeed' ? 'active' : ''} onClick={() => setActiveTab('BrainFeed')}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v12"/><path d="M6 12h12"/></svg>
-              BrainFeed
-            </button>
-            <button className={activeTab === 'aitests' ? 'active' : ''} onClick={() => setActiveTab('aitests')}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 2h4M12 2v7M5 21h14M5 21l6-12h2l6 12M7 17h10"/>
-              </svg>
-              AI Lab
-            </button>
-            <button className={activeTab === 'tests' ? 'active' : ''} onClick={() => { setActiveTab('tests'); setTestSeriesFolder(null); }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-              Test Series
-            </button>
-            <button className={activeTab === 'library' ? 'active' : ''} onClick={() => setActiveTab('library')}>
+            {/* 📱 On mobile these 4 live in the bottom tab bar instead — hidden here to avoid duplication. Desktop unaffected. */}
+            {!isMobile && (
+              <>
+                <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7"/>
+                    <rect x="14" y="3" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                  </svg>
+                  Dashboard
+                </button>
+                <button className={activeTab === 'BrainFeed' ? 'active' : ''} onClick={() => setActiveTab('BrainFeed')}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v12"/><path d="M6 12h12"/></svg>
+                  BrainFeed
+                </button>
+                <button className={activeTab === 'aitests' ? 'active' : ''} onClick={() => setActiveTab('aitests')}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 2h4M12 2v7M5 21h14M5 21l6-12h2l6 12M7 17h10"/>
+                  </svg>
+                  AI Lab
+                </button>
+                <button className={activeTab === 'tests' ? 'active' : ''} onClick={() => { setActiveTab('tests'); setTestSeriesFolder(null); }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                  Test Series
+                </button>
+              </>
+            )}
+            <button className={activeTab === 'library' ? 'active' : ''} onClick={() => { setActiveTab('library'); setMobileSidebarOpen(false); }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               Library
             </button>
-            <button className={activeTab === 'statistics' ? 'active' : ''} onClick={() => setActiveTab('statistics')}>
+            <button className={activeTab === 'statistics' ? 'active' : ''} onClick={() => { setActiveTab('statistics'); setMobileSidebarOpen(false); }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               Statistics
             </button>
             
             {/* 🛡️ SECURITY INTERFACE: Custom Builder Tab hidden from normal students */}
             {isAdmin && (
-              <button className={activeTab === 'custom-builder' ? 'active' : ''} onClick={() => setActiveTab('custom-builder')}>
+              <button className={activeTab === 'custom-builder' ? 'active' : ''} onClick={() => { setActiveTab('custom-builder'); setMobileSidebarOpen(false); }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                 </svg>
@@ -445,6 +542,19 @@ function App() {
       <main className="main-content" style={{ padding: (isTestActive || activeTab === 'analysis-portal') ? '0' : '20px' }}>
         {!isTestActive && activeTab !== 'analysis-portal' && (
           <header className="top-bar" style={{ display: 'flex', alignItems: 'center', gap: '20px', background: 'none', border: 'none', boxShadow: 'none' }}>
+            {isMobile && (
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(true)}
+                style={{ ...utilityHeaderIconButton, border: '1px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#fff' }}
+                title="Menu"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+              </button>
+            )}
+
             <button 
               onClick={handleGoBack} 
               disabled={activeTab === 'dashboard'} 
@@ -459,15 +569,8 @@ function App() {
               ↩ Back
             </button>
 
-            {/* 🎯 FIXED STYLE TYPO HERE (stray word 'frame' removed) */}
-            <div className="search-box" style={searchEngineWrapperContainer}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }}>
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input type="text" placeholder="Search for exams, topics, tests..." style={searchFieldInputBoxInputBoxOverride} />
-              <span style={searchShortCutBadgeKeyboard}>Ctrl /</span>
-            </div>
-            
+            <div style={{ flex: 1 }} />
+
             <div className="top-bar-actions" style={{ gap: '20px', display: 'flex', alignItems: 'center' }}>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <button type="button" onClick={() => setShowNotifications(!showNotifications)} style={utilityHeaderIconButton}>
@@ -485,10 +588,12 @@ function App() {
                 <div style={initialsProfileCapsuleCircular}>
                   {getNameInitials(headerUser.name)}
                 </div>
-                <div className="profile-info" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
-                  <span className="user-name" style={{ fontSize: '0.88rem', fontWeight: '600', color: '#0f172a' }}>{headerUser.name}</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-                </div>
+                {!isMobile && (
+                  <div className="profile-info" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+                    <span className="user-name" style={{ fontSize: '0.88rem', fontWeight: '600', color: '#0f172a' }}>{headerUser.name}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                )}
               </div>
             </div>
           </header>
@@ -533,6 +638,31 @@ function App() {
           )}
         </section>
       </main>
+
+      {isMobile && !isTestActive && activeTab !== 'analysis-portal' && (
+        <nav className="bottom-tab-bar">
+          <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            Dashboard
+          </button>
+          <button className={activeTab === 'BrainFeed' ? 'active' : ''} onClick={() => setActiveTab('BrainFeed')}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v12"/><path d="M6 12h12"/></svg>
+            BrainFeed
+          </button>
+          <button className={activeTab === 'tests' ? 'active' : ''} onClick={() => { setActiveTab('tests'); setTestSeriesFolder(null); }}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Test Series
+          </button>
+          <button className={activeTab === 'aitests' ? 'active' : ''} onClick={() => setActiveTab('aitests')}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 2h4M12 2v7M5 21h14M5 21l6-12h2l6 12M7 17h10"/>
+            </svg>
+            AI Labs
+          </button>
+        </nav>
+      )}
     </div>
   );
 }
@@ -544,9 +674,6 @@ const inviteModal = { background: '#fff', padding: '30px', borderRadius: '20px',
 const inviteCard = { background: '#f8fafc', padding: '15px', borderRadius: '12px', margin: '15px 0', border: '1px solid #e2e8f0' };
 const cancelBtn = { flex: 1, padding: '12px', background: '#f1f5f9', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', color: '#475569', fontSize: '0.85rem' };
 const confirmBtn = { flex: 1.5, padding: '12px', background: '#000000', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' };
-const searchEngineWrapperContainer = { flex: 1, maxWidth: '440px', position: 'relative', display: 'flex', alignItems: 'center' };
-const searchFieldInputBoxInputBoxOverride = { width: '100%', padding: '10px 80px 10px 42px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.88rem', fontWeight: '500', outline: 'none', color: '#0f172a' };
-const searchShortCutBadgeKeyboard = { position: 'absolute', right: '12px', background: '#ffffff', border: '1px solid #e2e8f0', padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', pointerEvents: 'none' };
 const utilityHeaderIconButton = { background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const notificationDropdownCardOverlay = { position: 'absolute', top: '100%', right: 0, marginTop: '10px', background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', borderRadius: '10px', padding: '14px 20px', width: '220px', zIndex: 1000, textAlign: 'center', fontSize: '0.82rem', fontWeight: '600', color: '#64748b', whiteSpace: 'nowrap' };
 const cleanHeaderProfileContainerNoAvatar = { display: 'flex', alignItems: 'center', gap: '10px', background: 'none', border: 'none', padding: 0, cursor: 'pointer' };

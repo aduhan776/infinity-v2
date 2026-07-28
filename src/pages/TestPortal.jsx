@@ -436,6 +436,32 @@ const TestPortal = ({ testData, onExit }) => {
       console.error("Local sandbox compilation fault:", err);
     }
 
+    // 🌐 Lightweight cloud sync — just the summary (score/accuracy/date/time),
+    // never the full questions or uploaded files. This is what lets
+    // Dashboard, Statistics, Profile, and Test Series' attempt history work
+    // across devices, without duplicating the heavy local-only data.
+    // Best-effort: failure here never blocks the student's local save above.
+    if (studentId) {
+      try {
+        await supabase.from('test_sessions').insert({
+          id: finalReport.attemptId,
+          test_id: data.id,
+          user_id: studentId,
+          title: data.title,
+          status: 'submitted',
+          score: finalScoreString,
+          accuracy: finalAccuracyRate,
+          time_left: Math.floor(snapshot.globalTimeLeft / 60),
+          raw_seconds: snapshot.globalTimeLeft,
+          answers: snapshot.answers,
+          uploads: optimizedLocalUploads,
+          time_tracker: snapshot.timeTracker
+        });
+      } catch (cloudErr) {
+        console.warn("Cloud test session sync skipped (non-blocking):", cloudErr);
+      }
+    }
+
     try {
       const history = JSON.parse(localStorage.getItem('infinity_test_history')) || [];
       history.unshift(finalReport);

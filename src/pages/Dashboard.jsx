@@ -5,6 +5,14 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
   const [subscribedExams, setSubscribedExams] = useState([]);
   const [userName, setUserName] = useState("Student");
   const [folderToUnpin, setFolderToUnpin] = useState(null);
+
+  // --- MOBILE RESPONSIVE DETECTION ---
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // --- IN-APP WINDOW OVERLAY STATES ---
   const [showViewAllModal, setShowViewAllModal] = useState(false);
@@ -154,18 +162,42 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
           flex-direction: column !important;
           padding: 24px 32px !important;
         }
+        @media (max-width: 768px) {
+          .content-view {
+            overflow-y: auto !important;
+            height: auto !important;
+            min-height: calc(100vh - 65px) !important;
+          }
+        }
       `}</style>
 
-      <div style={mainSplitFlexLayoutContainer}>
-        <div style={leftMainScrollableColumn}>
-          <h2 style={{ color: '#0f172a', fontWeight: '900', fontSize: '1.8rem', margin: 0, letterSpacing: '-0.5px' }}>
+      <div style={{ ...mainSplitFlexLayoutContainer, flexDirection: isMobile ? 'column' : 'row', overflow: isMobile ? 'visible' : 'hidden', gap: isMobile ? '20px' : '24px' }}>
+        {isMobile && (
+          <div style={mobileStatsRowStyle}>
+            <div style={mobileStatChip}>
+              <div style={mobileStatChipNumber}>{brainFeedCount}</div>
+              <div style={mobileStatChipLabel}>BrainFeed</div>
+            </div>
+            <div style={mobileStatChip}>
+              <div style={mobileStatChipNumber}>{totalTests}</div>
+              <div style={mobileStatChipLabel}>Tests</div>
+            </div>
+            <div style={mobileStatChip}>
+              <div style={mobileStatChipNumber}>{streakCount}</div>
+              <div style={mobileStatChipLabel}>Streak</div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ ...leftMainScrollableColumn, height: isMobile ? 'auto' : '100%', overflowY: isMobile ? 'visible' : 'auto' }}>
+          <h2 style={{ color: '#0f172a', fontWeight: '900', fontSize: isMobile ? '1.4rem' : '1.8rem', margin: 0, letterSpacing: '-0.5px' }}>
             Welcome back, {userName}!
           </h2>
           <p style={{ color: '#64748b', marginTop: '4px', fontSize: '0.92rem', fontWeight: '500' }}>
             Bhai, ye raha tera pinned and tracking workspace area:
           </p>
                   
-          <div style={{ marginTop: '30px' }}>
+          <div style={{ marginTop: isMobile ? '20px' : '30px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ color: '#0f172a', margin: 0, fontWeight: '800', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
@@ -174,7 +206,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
               <button type="button" onClick={() => setShowViewAllModal(true)} style={headerSectionViewAllLink}>View All</button>
             </div>
             
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '20px', paddingBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(230px, 1fr))', gap: isMobile ? '12px' : '20px', paddingBottom: '20px' }}>
               
               {/* INDEPENDENT PRIVATE AI LAB GENERATED FOLDER snaps into Dashboard grid */}
               <div style={{ ...folderCardStyle, border: '1px solid #000000', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }} onClick={() => setShowAiFolderModal(true)}>
@@ -203,6 +235,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
           </div>
         </div>
 
+        {!isMobile && (
         <div style={rightSidebarMetricsFixedArea}>
           <h3 style={{ color: '#0f172a', margin: '0 0 4px 0', fontWeight: '800', fontSize: '1rem' }}>Your Progress Overview</h3>
           <p style={{ color: '#94a3b8', fontSize: '0.7rem', margin: '0 0 16px 0', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Live Platform Index</p>
@@ -242,6 +275,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* 🗂️ DEDICATED IN-APP WORKSPACE WINDOW MODAL FOR PRIVATE AI TESTS */}
@@ -331,5 +365,9 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
 
 // Styles Configuration Map
 const dashboardLayoutWrapper = { display: 'flex', flexDirection: 'column', height: '100%', width: '100%', fontFamily: 'Inter, sans-serif', boxSizing: 'border-box' }; const mainSplitFlexLayoutContainer = { display: 'flex', flex: 1, gap: '24px', width: '100%', height: '100%', overflow: 'hidden' }; const leftMainScrollableColumn = { flex: 1, overflowY: 'auto', paddingRight: '4px', height: '100%' }; const headerSectionViewAllLink = { background: 'none', border: 'none', color: '#64748b', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline' }; const folderCardStyle = { background: '#fff', padding: '20px', borderRadius: '14px', border: '1px solid #e2e8f0', textAlign: 'center', position: 'relative' }; const folderIconWrapperFrame = { width: '48px', height: '48px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px auto' }; const exploreSeriesSolidActionBtn = { width: '100%', border: 'none', color: '#fff', background: '#000000', padding: '10px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '0.82rem' }; const unpinIconCloseWidget = { position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.82rem', color: '#94a3b8', fontWeight: 'bold' }; const rightSidebarMetricsFixedArea = { width: '240px', flexShrink: 0, borderLeft: '1px solid #e2e8f0', paddingLeft: '20px', height: '100%', overflowY: 'auto', boxSizing: 'border-box' }; const verticalMetricsStackGapLayout = { display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }; const glanceStatMetricCard = { background: '#ffffff', border: '1px solid #e2e8f0', padding: '14px 16px', borderRadius: '12px', textAlign: 'left', width: '100%', boxSizing: 'border-box' }; const glanceCardHeaderLineRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }; const glanceCardTitleLabel = { fontSize: '0.78rem', color: '#475569', fontWeight: '600' }; const glanceIconWrapperCircle = { width: '24px', height: '24px', borderRadius: '50%', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #f1f5f9' }; const glanceCardLargeMetricNumber = { fontSize: '1.75rem', fontWeight: '800', color: '#0f172a', margin: '2px 0', letterSpacing: '-0.5px' }; const glanceCardBottomTrendingIndicatorLine = { fontSize: '0.68rem', color: '#64748b', fontWeight: '500' }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }; const modalCardStyle = { background: '#fff', padding: '28px', borderRadius: '20px', width: '90%', border: '1px solid #e2e8f0', fontFamily: 'Inter, sans-serif' }; const cancelBtnStyle = { flex: 1, padding: '11px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const confirmUnpinBtnStyle = { flex: 1.3, padding: '11px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', fontSize: '0.85rem' };
+const mobileStatsRowStyle = { display: 'flex', width: '100%', gap: '10px' };
+const mobileStatChip = { flex: 1, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '10px 6px', textAlign: 'center' };
+const mobileStatChipNumber = { fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.5px' };
+const mobileStatChipLabel = { fontSize: '0.68rem', color: '#64748b', fontWeight: '600', marginTop: '2px' };
 
 export default Dashboard;
