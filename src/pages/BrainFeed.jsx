@@ -57,30 +57,46 @@ const BrainFeed = () => {
   const [sessionMode, setSessionMode] = useState('live');
   const viewportRef = useRef(null);
   const scrollDebounceTimer = useRef(null);
+  const lastQuestionTimerRef = useRef(null);
+  const awaitingCompletionRef = useRef(false);
+  const pendingCompletionDataRef = useRef(null);
+
+  // --- 🏁 Fires the end-of-session summary — called either after the 7s grace period
+  // on the last question, or the moment the person tries to scroll again on it.
+  const finishMobileSession = () => {
+    if (!awaitingCompletionRef.current) return;
+    awaitingCompletionRef.current = false;
+    clearTimeout(lastQuestionTimerRef.current);
+    const data = pendingCompletionDataRef.current;
+    if (sessionMode === 'live') saveSessionMetricsToProfile(data?.answers, data?.results);
+    setShowEndModal(true);
+  };
 
   // --- 📱 MOBILE: detect which question card is in view once the person stops scrolling (reel-style navigation) ---
   const handleFeedScroll = () => {
     if (!viewportRef.current) return;
+    if (awaitingCompletionRef.current) {
+      finishMobileSession();
+      return;
+    }
     clearTimeout(scrollDebounceTimer.current);
     scrollDebounceTimer.current = setTimeout(() => {
       const el = viewportRef.current;
       if (!el) return;
       const newIdx = Math.round(el.scrollTop / el.clientHeight);
-      if (newIdx === currentIdx) return;
-
-      // Can't skip ahead past a question that hasn't been answered yet — snap back to it.
-      if (newIdx > currentIdx && selectedAnswers[currentIdx] === undefined) {
-        setShowWarning(true);
-        el.scrollTo({ top: currentIdx * el.clientHeight, behavior: 'smooth' });
-        return;
-      }
-
-      if (newIdx >= 0 && newIdx < questions.length) {
+      if (newIdx !== currentIdx && newIdx >= 0 && newIdx < questions.length) {
         setShowWarning(false);
         setCurrentIdx(newIdx);
       }
     }, 120);
   };
+
+  // --- 📱 MOBILE: whenever we jump into revise/reattempt mode, snap the scroll view back to question 1 ---
+  useEffect(() => {
+    if (isMobile && isFeedActive && viewportRef.current && (sessionMode === 'reattempt' || sessionMode === 'revise')) {
+      viewportRef.current.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }, [sessionMode]);
 
   const difficultyLevels = [
     { label: 'Easy', value: 'Easy' },
@@ -256,15 +272,16 @@ const BrainFeed = () => {
       }).catch(err => console.warn("Ledger update skipped for this question (non-blocking):", err));
     }).catch(err => console.warn("Could not resolve user for ledger logging (non-blocking):", err));
 
-    // 🏁 Answering the LAST card finishes the session automatically — works whether
-    // the person got here by scrolling (mobile) or by tapping Next (desktop), so
-    // there's no dead-end where nothing happens after the final question. Passing
-    // the freshly-merged maps through avoids a stale-state read inside the timeout.
+    // 🏁 On the LAST card, don't jump to the summary immediately — give the person
+    // 7 seconds to sit with their answer, or end early the moment they try to
+    // scroll again (whichever happens first).
     if (isMobile && lockedIdx === questions.length - 1) {
-      setTimeout(() => {
-        if (sessionMode === 'live') saveSessionMetricsToProfile(updatedAnswers, updatedResults);
-        setShowEndModal(true);
-      }, 500);
+      pendingCompletionDataRef.current = { answers: updatedAnswers, results: updatedResults };
+      awaitingCompletionRef.current = true;
+      clearTimeout(lastQuestionTimerRef.current);
+      lastQuestionTimerRef.current = setTimeout(() => {
+        finishMobileSession();
+      }, 7000);
     }
   };
 
@@ -365,6 +382,8 @@ const BrainFeed = () => {
   };
 
   const handleForceClearFeed = () => {
+    clearTimeout(lastQuestionTimerRef.current);
+    awaitingCompletionRef.current = false;
     setQuestions([]);
     setCurrentIdx(0);
     setSelectedAnswers({});
@@ -442,7 +461,7 @@ const BrainFeed = () => {
               ...viewportContainerStyle,
               maxWidth: isMobile ? '100%' : '650px',
               flex: 1,
-              overflowY: isMobile ? 'auto' : 'hidden',
+              overflowY: isMobile ? (selectedAnswers[currentIdx] !== undefined ? 'auto' : 'hidden') : 'hidden',
               scrollSnapType: isMobile ? 'y mandatory' : 'none',
               WebkitOverflowScrolling: 'touch'
             }}
