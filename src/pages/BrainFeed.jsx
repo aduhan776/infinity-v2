@@ -66,7 +66,16 @@ const BrainFeed = () => {
       const el = viewportRef.current;
       if (!el) return;
       const newIdx = Math.round(el.scrollTop / el.clientHeight);
-      if (newIdx !== currentIdx && newIdx >= 0 && newIdx < questions.length) {
+      if (newIdx === currentIdx) return;
+
+      // Can't skip ahead past a question that hasn't been answered yet — snap back to it.
+      if (newIdx > currentIdx && selectedAnswers[currentIdx] === undefined) {
+        setShowWarning(true);
+        el.scrollTo({ top: currentIdx * el.clientHeight, behavior: 'smooth' });
+        return;
+      }
+
+      if (newIdx >= 0 && newIdx < questions.length) {
         setShowWarning(false);
         setCurrentIdx(newIdx);
       }
@@ -388,8 +397,8 @@ const BrainFeed = () => {
 
   if (loading) {
     return (
-      <div style={formWrapper}>
-        <div style={{ ...formCard, maxWidth: '450px', textAlign: 'center', padding: '50px 30px' }}>
+      <div style={{ ...formWrapper, boxSizing: 'border-box', ...(isMobile ? { minHeight: 'auto', height: '100%', width: '100%', padding: '20px', overflow: 'hidden' } : {}) }}>
+        <div style={{ ...formCard, boxSizing: 'border-box', maxWidth: '450px', width: '100%', textAlign: 'center', padding: '50px 30px' }}>
           <h3 style={{ color: '#1e293b', fontWeight: '900', fontSize: '1.4rem', margin: 0 }}>Loading your questions...</h3>
           <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '12px', lineHeight: '1.6', fontWeight: '500' }}>
             This'll just take a moment.
@@ -675,7 +684,7 @@ const BrainFeed = () => {
   }
 
   return (
-    <div style={{ ...formWrapper, ...(isMobile ? { minHeight: 'auto', height: '100%', padding: 0, alignItems: 'stretch' } : {}) }}>
+    <div style={{ ...formWrapper, boxSizing: 'border-box', ...(isMobile ? { minHeight: 'auto', height: '100%', width: '100%', padding: 0, alignItems: 'stretch' } : {}) }}>
       {isMobile && (
         <style>{`
           .content-view {
@@ -695,26 +704,26 @@ const BrainFeed = () => {
           Fill in the details to start practicing.
         </p>
         
-        <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '0px' : '15px', marginBottom: isMobile ? '0' : flexRow.marginBottom }}>
+        <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : flexRow.alignItems, gap: isMobile ? '0px' : '15px', marginBottom: isMobile ? '0' : flexRow.marginBottom }}>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Target Exam <span style={mandatoryStar}>*</span></label>
-            <input style={{ ...inputStyle, marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. UPSC, SSC, Banking" value={exam} onChange={e => setExam(e.target.value)} />
+            <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. UPSC, SSC, Banking" value={exam} onChange={e => setExam(e.target.value)} />
           </div>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Subject / Section <span style={mandatoryStar}>*</span></label>
-            <input style={{ ...inputStyle, marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Maths, English, GK" value={subjectSection} onChange={e => setSubjectSection(e.target.value)} />
+            <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Maths, English, GK" value={subjectSection} onChange={e => setSubjectSection(e.target.value)} />
           </div>
         </div>
 
         <div>
           <label style={labelStyle}>Topic <span style={mandatoryStar}>*</span></label>
-          <input style={{ ...inputStyle, marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Trigonometry, Mughal Empire" value={subject} onChange={e => setSubject(e.target.value)} />
+          <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Trigonometry, Mughal Empire" value={subject} onChange={e => setSubject(e.target.value)} />
         </div>
 
-        <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '0px' : '15px' }}>
+        <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : flexRow.alignItems, gap: isMobile ? '0px' : '15px' }}>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Difficulty</label>
-            <div style={{ ...horizontalDifficultyContainer, marginBottom: isMobile ? '10px' : '15px' }}>
+            <div style={{ ...horizontalDifficultyContainer, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }}>
               {difficultyLevels.map((level) => (
                 <button
                   key={level.value}
@@ -722,6 +731,7 @@ const BrainFeed = () => {
                   onClick={() => setDifficulty(level.value)}
                   style={{
                     ...difficultyTabOption,
+                    flex: 1,
                     background: difficulty === level.value ? '#000000' : '#f8fafc',
                     color: difficulty === level.value ? '#ffffff' : '#334155',
                     borderColor: difficulty === level.value ? '#000000' : '#e2e8f0',
@@ -733,11 +743,13 @@ const BrainFeed = () => {
             </div>
           </div>
           <div style={{ flex: 1 }}>
-            <label style={labelStyle}>Language</label>
-            <select style={{ ...inputStyle, padding: '11px', marginBottom: isMobile ? '10px' : '15px' }} value={language} onChange={e => setLanguage(e.target.value)}>
-              <option value="English">English</option>
-              <option value="Hindi">Hindi</option>
-            </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }}>
+              <label style={{ ...labelStyle, marginBottom: 0, whiteSpace: 'nowrap' }}>Language</label>
+              <select style={{ ...inputStyle, flex: 1, width: 'auto', padding: '11px', marginBottom: 0 }} value={language} onChange={e => setLanguage(e.target.value)}>
+                <option value="English">English</option>
+                <option value="Hindi">Hindi</option>
+              </select>
+            </div>
           </div>
         </div>
 
