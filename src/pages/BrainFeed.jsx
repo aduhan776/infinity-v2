@@ -62,7 +62,7 @@ const BrainFeed = () => {
   const pendingCompletionDataRef = useRef(null);
 
   // --- 🏁 Fires the end-of-session summary — called either after the 7s grace period
-  // on the last question, or the moment the person tries to scroll again on it.
+  // on the last question, or the moment the person tries to interact with it again.
   const finishMobileSession = () => {
     if (!awaitingCompletionRef.current) return;
     awaitingCompletionRef.current = false;
@@ -72,23 +72,40 @@ const BrainFeed = () => {
     setShowEndModal(true);
   };
 
-  // --- 📱 MOBILE: detect which question card is in view once the person stops scrolling (reel-style navigation) ---
+  // --- 📱 MOBILE: real-time forward-scroll lock. Going back to a previous question is
+  // always free; moving forward is hard-blocked until the current question is answered.
   const handleFeedScroll = () => {
-    if (!viewportRef.current) return;
+    const el = viewportRef.current;
+    if (!el) return;
+
     if (awaitingCompletionRef.current) {
       finishMobileSession();
       return;
     }
+
+    const currentTop = currentIdx * el.clientHeight;
+    if (selectedAnswers[currentIdx] === undefined && el.scrollTop > currentTop + 2) {
+      el.scrollTop = currentTop;
+      setShowWarning(true);
+      return;
+    }
+
     clearTimeout(scrollDebounceTimer.current);
     scrollDebounceTimer.current = setTimeout(() => {
-      const el = viewportRef.current;
-      if (!el) return;
       const newIdx = Math.round(el.scrollTop / el.clientHeight);
       if (newIdx !== currentIdx && newIdx >= 0 && newIdx < questions.length) {
         setShowWarning(false);
         setCurrentIdx(newIdx);
       }
     }, 120);
+  };
+
+  // --- 📱 MOBILE: on Android, a scroll event never fires when there's nowhere left to
+  // scroll to (the last card) — so we detect the *attempt* to swipe via touch instead.
+  const handleFeedTouchMove = () => {
+    if (awaitingCompletionRef.current) {
+      finishMobileSession();
+    }
   };
 
   // --- 📱 MOBILE: whenever we jump into revise/reattempt mode, snap the scroll view back to question 1 ---
@@ -457,11 +474,12 @@ const BrainFeed = () => {
           <div
             ref={viewportRef}
             onScroll={isMobile ? handleFeedScroll : undefined}
+            onTouchMove={isMobile ? handleFeedTouchMove : undefined}
             style={{
               ...viewportContainerStyle,
               maxWidth: isMobile ? '100%' : '650px',
               flex: 1,
-              overflowY: isMobile ? (selectedAnswers[currentIdx] !== undefined ? 'auto' : 'hidden') : 'hidden',
+              overflowY: isMobile ? 'auto' : 'hidden',
               scrollSnapType: isMobile ? 'y mandatory' : 'none',
               WebkitOverflowScrolling: 'touch'
             }}
