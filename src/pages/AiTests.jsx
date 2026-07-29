@@ -541,11 +541,20 @@ const AiTests = ({ onStartTest }) => {
   };
 
   return (
-    <div style={containerStyle}>
+    <div style={containerStyle} className="ai-container">
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        @media (max-width: 768px) {
+          .ai-container { padding: 20px 14px !important; }
+          .ai-selection-grid { grid-template-columns: 1fr !important; gap: 18px !important; }
+          .ai-flex-row { flex-direction: column !important; gap: 0 !important; }
+          .ai-flex-row > div { flex: 1 1 100% !important; width: 100% !important; }
+          .ai-form-wrapper { padding: 0 !important; min-height: auto !important; align-items: stretch !important; }
+          .ai-form-card { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; border: none !important; padding: 18px !important; box-shadow: none !important; box-sizing: border-box !important; }
+          .ai-mock-card { padding: 22px !important; }
         }
       `}</style>
 
@@ -579,8 +588,8 @@ const AiTests = ({ onStartTest }) => {
             <p style={{ color: '#64748b', marginTop: '8px', fontSize: '1rem', fontWeight: '500' }}>Choose how you want to practice and prepare with AI</p>
           </header>
                    
-          <div style={selectionGrid}>
-            <div style={fullMockCardStyle} onClick={() => { setView('config-full'); setAiSections([]); setFullHasSections(false); setEditingSecIdx(null); }}>
+          <div style={selectionGrid} className="ai-selection-grid">
+            <div className="ai-mock-card" style={fullMockCardStyle} onClick={() => { setView('config-full'); setAiSections([]); setFullHasSections(false); setEditingSecIdx(null); }}>
               <div style={cardHeaderRow}>
                 <div style={indigoIconFrame}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -616,7 +625,7 @@ const AiTests = ({ onStartTest }) => {
               </ul>
               <button style={indigoActionBtn}>Start Full Test</button>
             </div>
-            <div style={topicMockCardStyle} onClick={() => setView('config-topic')}>
+            <div className="ai-mock-card" style={topicMockCardStyle} onClick={() => setView('config-topic')}>
               <div style={cardHeaderRow}>
                 <div style={emeraldIconFrame}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -655,12 +664,12 @@ const AiTests = ({ onStartTest }) => {
       )}
 
       {view === 'config-full' && (
-        <div style={formWrapper}>
-          <div style={formCard}>
+        <div style={formWrapper} className="ai-form-wrapper">
+          <div style={formCard} className="ai-form-card">
             <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Full Scale Exam Blueprint</h2>
             <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem', fontWeight: '500' }}>Configure structure evaluation parameters and let AI model the questions.</p>
                        
-            <div style={flexRow}>
+            <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1.5 }}>
                 <label style={labelStyle}>Exam / Paper Reference Title</label>
                 <input style={inputStyle} placeholder="e.g. UPSC Prelims Mock" value={testTitle} onChange={e => setTestTitle(e.target.value)} />
@@ -698,11 +707,11 @@ const AiTests = ({ onStartTest }) => {
             {!fullHasSections ? (
               <div style={nestedBox}>
                 <h4 style={{ margin: '0 0 15px 0', color: '#000000', fontWeight: '800' }}>Configure Full Paper Metrics</h4>
-                <div style={flexRow}>
+                <div style={flexRow} className="ai-flex-row">
                   <div style={{ flex: 1 }}><label style={miniLabel}>Total Questions (Max 100)</label><input style={inputStyle} type="number" min="1" placeholder="e.g. 100" value={fullQCount} onChange={e => setFullQCount(e.target.value)} /></div>
                   <div style={{ flex: 1 }}><label style={miniLabel}>Total Duration (Mins)</label><input style={inputStyle} type="number" min="1" placeholder="e.g. 120" value={fullDuration} onChange={e => setFullDuration(e.target.value)} /></div>
                 </div>
-                <div style={flexRow}>
+                <div style={flexRow} className="ai-flex-row">
                   <div style={{ flex: 1 }}><label style={miniLabel}>Question Format Type</label>
                     <select style={{ ...inputStyle, padding: '11px' }} value={fullType} onChange={e => setFullType(e.target.value)}>
                       <option value="Objective">Objective (MCQ)</option>
@@ -718,12 +727,12 @@ const AiTests = ({ onStartTest }) => {
                 <h4 style={{ margin: '0 0 15px 0', color: '#000000', fontWeight: '800' }}>
                   {editingSecIdx !== null ? `Modify Section Component #${editingSecIdx + 1}` : "Configure Section Module (Maximum 5)"}
                 </h4>
-                <div style={flexRow}>
+                <div style={flexRow} className="ai-flex-row">
                   <div style={{ flex: 1.2 }}><label style={miniLabel}>Section Name</label><input style={inputStyle} placeholder="e.g. History & Culture" value={secName} onChange={e => setSecName(e.target.value)} /></div>
                   <div style={{ flex: 0.6 }}><label style={miniLabel}>Duration (Mins)</label><input style={inputStyle} type="number" min="1" placeholder="20" value={secTime} onChange={e => setSecTime(e.target.value)} /></div>
                   <div style={{ flex: 0.6 }}><label style={miniLabel}>Questions (Max 50)</label><input style={inputStyle} type="number" min="1" placeholder="50" value={secQCount} onChange={e => setSecQCount(e.target.value)} /></div>
                 </div>
-                <div style={flexRow}>
+                <div style={flexRow} className="ai-flex-row">
                   <div style={{ flex: 1 }}><label style={miniLabel}>Question Type</label>
                     <select style={{ ...inputStyle, padding: '11px' }} value={secType} onChange={e => setSecType(e.target.value)}>
                       <option value="Objective">Objective (MCQ)</option>
@@ -744,7 +753,7 @@ const AiTests = ({ onStartTest }) => {
                     </select>
                   </div>
                 </div>
-                <div style={flexRow}>
+                <div style={flexRow} className="ai-flex-row">
                   <div style={{ flex: 1 }}><label style={miniLabel}>Correct Mark (+)</label><input style={inputStyle} type="number" step="0.5" value={secMarks} onChange={e => setSecMarks(e.target.value)} /></div>
                   <div style={{ flex: 1 }}><label style={miniLabel}>Negative Mark (-)</label><input style={inputStyle} type="number" step="0.01" value={secNeg} onChange={e => setSecNeg(e.target.value)} disabled={secType === 'Subjective'} /></div>
                 </div>
@@ -838,12 +847,12 @@ const AiTests = ({ onStartTest }) => {
       )}
 
       {view === 'config-topic' && (
-        <div style={formWrapper}>
-          <div style={formCard}>
+        <div style={formWrapper} className="ai-form-wrapper">
+          <div style={formCard} className="ai-form-card">
             <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Targeted Topic Drill</h2>
             <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem', fontWeight: '500' }}>Specify single concepts and set direct evaluation criteria.</p>
                        
-            <div style={flexRow}>
+            <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1 }}><label style={labelStyle}>Target Exam / Class <span style={mandatoryStar}>*</span></label><input style={inputStyle} placeholder="e.g. UPSC Prelims" value={targetExam} onChange={e => setTargetExam(e.target.value)} /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>Subject / Section <span style={mandatoryStar}>*</span></label><input style={inputStyle} placeholder="e.g. Maths, English, GK" value={topicSubjectSection} onChange={e => setTopicSubjectSection(e.target.value)} /></div>
             </div>
@@ -853,12 +862,12 @@ const AiTests = ({ onStartTest }) => {
               <input style={inputStyle} placeholder="e.g. Geography (leave blank for general)" value={topicName} onChange={e => setTopicName(e.target.value)} />
             </div>
                        
-            <div style={flexRow}>
+            <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1 }}><label style={labelStyle}>Question Count (Max 100) <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" min="1" placeholder="e.g. 15" value={topicQCount} onChange={e => setTopicQCount(e.target.value)} /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>Total Duration (Mins) <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" min="1" placeholder="e.g. 15" value={globalTime} onChange={e => setGlobalTime(e.target.value)} /></div>
             </div>
                        
-            <div style={flexRow}>
+            <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1 }}><label style={labelStyle}>Format Type <span style={mandatoryStar}>*</span></label>
                 <select style={{ ...inputStyle, padding: '11px' }} value={topicType} onChange={e => setTopicType(e.target.value)}>
                   <option value="Objective">Objective (MCQ)</option>
@@ -879,7 +888,7 @@ const AiTests = ({ onStartTest }) => {
                 </select>
               </div>
             </div>
-            <div style={flexRow}>
+            <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1 }}><label style={labelStyle}>Positive Marks <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" step="0.5" min="0" value={topicMarks} onChange={e => setTopicMarks(e.target.value)} /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>Negative Penalty <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" step="0.01" min="0" value={topicNeg} onChange={e => setTopicNeg(e.target.value)} disabled={topicType === 'Subjective'} /></div>
             </div>
@@ -904,7 +913,7 @@ const AiTests = ({ onStartTest }) => {
       )}
 
       {view === 'ai-summary' && (
-        <div style={formWrapper}>
+        <div style={formWrapper} className="ai-form-wrapper">
           <div style={{ ...formCard, maxWidth: '460px', textAlign: 'center' }}>
             <h2 style={{ color: '#000000', margin: 0, fontWeight: '900' }}>AI Compilation Successful</h2>
             <p style={{ fontSize: '0.82rem', color: '#000000', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '4px' }}>ROOM ID: {aiTestDetails.id}</p>
@@ -1020,8 +1029,8 @@ const AiTests = ({ onStartTest }) => {
       )}
 
       {view === 'admin-push-cloud' && (
-        <div style={formWrapper}>
-          <div style={formCard}>
+        <div style={formWrapper} className="ai-form-wrapper">
+          <div style={formCard} className="ai-form-card">
             <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}> Deploy to Official Series</h2>
             <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem', fontWeight: '500' }}>Rename and position this AI generated exam blueprint inside official routing matrices.</p>
                        
@@ -1068,7 +1077,7 @@ const AiTests = ({ onStartTest }) => {
 // --- STYLES SCHEMA ---
 const containerStyle = { padding: '40px 20px', maxWidth: '1050px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }; 
 const selectionGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop: '35px' }; 
-const cardHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '20px' }; const leftCardTitle = { margin: '0 0 16px 0', fontSize: '1.5rem', color: '#0f172a', fontWeight: '800', letterSpacing: '-0.5px' }; const cleanBulletList = { listStyleType: 'none', padding: 0, margin: '0 0 35px 0', display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', flex: 1 }; const bulletItemRow = { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.92rem', color: '#475569', fontWeight: '500', lineHeight: '1.5' }; const fullMockCardStyle = { background: '#ffffff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(79, 70, 229, 0.03)' }; const indigoIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff', border: '1px solid #c7d2fe' }; const indigoBadge = { background: '#e0e7ff', color: '#4f46e5', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const indigoActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }; const topicMockCardStyle = { background: '#ffffff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(16, 185, 129, 0.03)' }; const emeraldIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d1fae5', border: '1px solid #a7f3d0' }; const emeraldBadge = { background: '#d1fae5', color: '#065f46', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const emeraldActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' }; const actionBtn = { border: 'none', color: '#fff', padding: '11px 24px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', width: '100%' }; const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '620px', boxShadow: '0 10px 30px rgba(0,0,0,0.01)' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const mandatoryStar = { color: '#ef4444', fontWeight: '900' }; const miniLabel = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.95rem', outline: 'none', marginBottom: '15px', background: '#f8fafc', fontWeight: '600', color: '#000000', boxSizing: 'border-box' }; const flexRow = { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '5px' }; const nestedBox = { background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '20px' }; const addSecBtn = { width: '100%', padding: '10px', background: '#000000', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const secBadgeRow = { display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: '600' }; const cancelBtn = { padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }; const summaryVaultBox = { background: '#f8fafc', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '16px', textAlign: 'left', margin: '20px 0 30px 0' }; const sumLine = { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.9rem', fontWeight: '500' }; const modeToggleRow = { display: 'flex', gap: '10px', background: '#f1f5f9', padding: '5px', borderRadius: '12px', marginBottom: '15px' }; const modeBtn = { flex: 1, padding: '10px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem', transition: '0.3s' }; 
+const cardHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '20px' }; const leftCardTitle = { margin: '0 0 16px 0', fontSize: '1.5rem', color: '#0f172a', fontWeight: '800', letterSpacing: '-0.5px' }; const cleanBulletList = { listStyleType: 'none', padding: 0, margin: '0 0 35px 0', display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', flex: 1 }; const bulletItemRow = { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.92rem', color: '#475569', fontWeight: '500', lineHeight: '1.5' }; const fullMockCardStyle = { background: '#ffffff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(79, 70, 229, 0.03)' }; const indigoIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff', border: '1px solid #c7d2fe' }; const indigoBadge = { background: '#e0e7ff', color: '#4f46e5', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const indigoActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }; const topicMockCardStyle = { background: '#ffffff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(16, 185, 129, 0.03)' }; const emeraldIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d1fae5', border: '1px solid #a7f3d0' }; const emeraldBadge = { background: '#d1fae5', color: '#065f46', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const emeraldActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' }; const actionBtn = { border: 'none', color: '#fff', padding: '11px 24px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', width: '100%' }; const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '620px', boxShadow: '0 10px 30px rgba(0,0,0,0.01)' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const mandatoryStar = { color: '#ef4444', fontWeight: '900' }; const miniLabel = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '1rem', outline: 'none', marginBottom: '15px', background: '#f8fafc', fontWeight: '600', color: '#000000', boxSizing: 'border-box' }; const flexRow = { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '5px' }; const nestedBox = { background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '20px' }; const addSecBtn = { width: '100%', padding: '10px', background: '#000000', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const secBadgeRow = { display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: '600' }; const cancelBtn = { padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }; const summaryVaultBox = { background: '#f8fafc', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '16px', textAlign: 'left', margin: '20px 0 30px 0' }; const sumLine = { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.9rem', fontWeight: '500' }; const modeToggleRow = { display: 'flex', gap: '10px', background: '#f1f5f9', padding: '5px', borderRadius: '12px', marginBottom: '15px' }; const modeBtn = { flex: 1, padding: '10px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem', transition: '0.3s' }; 
 
 const miniSectionActionControlBtn = {
   padding: '4px 10px',

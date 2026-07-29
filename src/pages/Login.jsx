@@ -84,9 +84,17 @@ function Login() {
   };
 
   return (
-    <div style={fullScreenContainer}>
+    <div style={fullScreenContainer} className="login-container">
+      <style>{`
+        @media (max-width: 768px) {
+          .login-container { height: 100dvh !important; }
+          .login-left-panel { display: none !important; }
+          .login-right-panel { flex: 1 !important; padding: 20px !important; }
+          .login-form-card { max-width: 100% !important; padding: 28px 22px !important; box-shadow: none !important; border: none !important; }
+        }
+      `}</style>
       {/* LEFT PANEL: BRAND SHOWCASE */}
-      <div style={leftShowcasePanel}>
+      <div style={leftShowcasePanel} className="login-left-panel">
         <div style={brandingWrapper}>
           <div style={brandLogoTarget}>
             <div style={brandLogoTargetInner}></div>
@@ -121,8 +129,8 @@ function Login() {
       </div>
 
       {/* RIGHT PANEL: SIMPLE FORM */}
-      <div style={rightAuthPanel}>
-        <div style={formCardMinimal}>
+      <div style={rightAuthPanel} className="login-right-panel">
+        <div style={formCardMinimal} className="login-form-card">
           
           <h2 style={formHeading}>
             {isSignUpMode ? 'Create Account' : 'Welcome Back'}
@@ -267,7 +275,7 @@ const orDividerMinimalRow = { display: 'flex', alignItems: 'center', margin: '20
 const orDividerMinimalLine = { flex: 1, height: '1px', background: '#e2e8f0' };
 const orDividerMinimalText = { padding: '0 10px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8' };
 const minimalLabelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '6px' };
-const inputCardStyle = { width: '100%', padding: '12px 16px 12px 48px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '0.95rem', outline: 'none', background: '#fff', fontWeight: '500' };
+const inputCardStyle = { width: '100%', padding: '12px 16px 12px 48px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none', background: '#fff', fontWeight: '500' };
 const inputIconLeftStyle = { position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' };
 const eyeToggleIconBtnStyle = { position: 'absolute', right: '14px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' };
 const fruitSelectorMatrixGrid = { display: 'flex', gap: '5px', marginTop: '5px', background: '#f8fafc', padding: '6px', borderRadius: '12px', border: '1px solid #e2e8f0', justifyContent: 'space-between' };

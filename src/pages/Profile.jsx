@@ -101,13 +101,20 @@ const Profile = () => {
   }
 
   return (
-    <div style={profileContainer}>
+    <div style={profileContainer} className="pf-container">
+      <style>{`
+        @media (max-width: 768px) {
+          .pf-container { padding: 16px !important; }
+          .pf-grid { grid-template-columns: 1fr !important; gap: 20px !important; }
+          .pf-form-row { flex-direction: column !important; gap: 0 !important; }
+        }
+      `}</style>
       <header style={{ marginBottom: '35px' }}>
         <h1 style={{ fontSize: '2.4rem', fontWeight: '900', color: '#1e293b', margin: 0 }}>Student Profile</h1>
         <p style={{ color: '#64748b', marginTop: '5px', fontWeight: '600' }}>View your verified parameters and platform identity details.</p>
       </header>
 
-      <div style={profileWorkspaceGrid}>
+      <div style={profileWorkspaceGrid} className="pf-grid">
         {/* LEFT CARD: ACCOUNT BADGE SUMMARY */}
         <div style={badgeCard}>
           <div style={avatarCircle}>
@@ -138,7 +145,7 @@ const Profile = () => {
           </h3>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={formFlexRow}>
+            <div style={formFlexRow} className="pf-form-row">
               <div style={{ flex: 1 }}>
                 <label style={labelStyle}>Full Name <span style={lockBadge}>Fixed</span></label>
                 <input type="text" style={{ ...inputStyle, background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} value={fullName} readOnly />
@@ -189,7 +196,7 @@ const statWidget = { flex: 1, background: '#fcfdfe', border: '1px solid #e2e8f0'
 const statCountText = { fontSize: '1.4rem', fontWeight: '900', color: '#1e293b' };
 const statLabelText = { fontSize: '0.7rem', color: '#94a3b8', fontWeight: 'bold', textTransform: 'uppercase' };
 const labelStyle = { display: 'block', fontSize: '0.72rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' };
-const inputStyle = { width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '0.95rem', outline: 'none', background: '#f8fafc', fontWeight: '500', boxSizing: 'border-box' };
+const inputStyle = { width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', outline: 'none', background: '#f8fafc', fontWeight: '500', boxSizing: 'border-box' };
 const formFlexRow = { display: 'flex', gap: '20px', width: '100%' };
 const lockBadge = { fontSize: '0.62rem', background: '#fee2e2', color: '#ef4444', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', fontWeight: 'bold' };
 const loadingWrapper = { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '80vh', background: '#fff' };

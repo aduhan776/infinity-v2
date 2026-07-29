@@ -266,13 +266,21 @@ const CustomBuilder = ({ onStartTest }) => {
   const sectionsListDropdown = getSectionsForSelectedSeries();
 
   return (
-    <div style={containerStyle}>
+    <div style={containerStyle} className="cb-container">
+      <style>{`
+        @media (max-width: 768px) {
+          .cb-container { padding: 16px 12px !important; }
+          .cb-workspace-grid { grid-template-columns: 1fr !important; gap: 20px !important; }
+          .cb-flex-row { flex-direction: column !important; gap: 10px !important; }
+          .cb-flex-row > * { width: 100% !important; }
+        }
+      `}</style>
       <header style={{ marginBottom: '40px' }}>
         <h1 style={{ fontSize: '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>Custom Test Builder</h1>
         <p style={{ color: '#64748b', marginTop: '4px', fontWeight: '500' }}>Design personalized evaluation items, question sets, and custom sectional blueprints.</p>
       </header>
 
-      <div style={workspaceGrid}>
+      <div style={workspaceGrid} className="cb-workspace-grid">
         
         {/* LEFT COLUMN STACK: VAULT SYSTEM (TOP) & BLUEPRINT PARAMETERS (BOTTOM) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
@@ -354,7 +362,7 @@ const CustomBuilder = ({ onStartTest }) => {
           <div style={cardStyle}>
             <h3 style={{ marginBottom: '20px', color: '#000000', fontWeight: '900', fontSize: '1.15rem' }}>1. Test Blueprint Setup</h3>
             
-            <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }} className="cb-flex-row">
               <div style={{ flex: 2 }}>
                 <label style={labelStyle}>Mock Test Title</label>
                 <input style={inputStyle} placeholder="e.g. Advanced Mock Assessment 01" value={testTitle} onChange={e => setTestTitle(e.target.value)} />
@@ -371,7 +379,7 @@ const CustomBuilder = ({ onStartTest }) => {
             {testStructure === 'Sectional' && (
               <div style={{ background: '#f8fafc', padding: '18px', borderRadius: '16px', border: '1px dashed #000000', marginBottom: '5px' }}>
                 <h4 style={{ margin: '0 0 12px 0', color: '#000000', fontWeight: '800' }}>Initialize Sectional Folders</h4>
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }} className="cb-flex-row">
                   <input style={{...inputStyle, margin:0}} placeholder="Section Name" value={secNameInput} onChange={e => setSecNameInput(e.target.value)} />
                   <input style={{...inputStyle, margin:0, width:'120px'}} type="number" placeholder="Mins" value={secTimeInput} onChange={e => setSecTimeInput(e.target.value)} />
                   <button onClick={handleAddSection} style={{...monochromeControlActionBtn, padding:'0 20px', borderRadius:'10px', background:'#000000', color:'#fff'}}>Add Node</button>
@@ -464,7 +472,7 @@ const CustomBuilder = ({ onStartTest }) => {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', background: '#fff', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', background: '#fff', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }} className="cb-flex-row">
               <div style={{ flex: 1 }}>
                 <label style={{ ...labelStyle, fontSize: '0.65rem' }}>Correct Response Score (+)</label>
                 <input style={{ ...inputStyle, margin: 0, padding: '8px' }} type="number" step="0.5" value={customMarks} onChange={e => setCustomMarks(e.target.value)} />
@@ -513,6 +521,6 @@ const CustomBuilder = ({ onStartTest }) => {
 // --- CORE MONOCHROME STYLING DICTIONARIES ---
 const containerStyle = { padding: '20px 10px', maxWidth: '1200px', margin: '0 auto', fontFamily: 'Inter, sans-serif' }; 
 const workspaceGrid = { display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '30px', alignItems: 'start' }; 
-const cardStyle = { background: '#fff', padding: '30px', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.005)' }; const labelStyle = { display: 'block', fontSize: '0.72rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '0.95rem', outline: 'none', marginBottom: '15px', background: '#f8fafc', fontWeight: '600', boxSizing: 'border-box' }; const selectStyle = { padding: '8px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '0.85rem', fontWeight: 'bold', cursor: 'pointer' }; const questionBuilderBox = { background: '#f8fafc', padding: '20px', borderRadius: '20px', border: '1px solid #e2e8f0' }; const addQBtnStyle = { width: '100%', padding: '12px', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '0.9rem', marginTop: '10px' }; const monochromeControlActionBtn = { padding: '12px 24px', background: '#000000', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }; const runTestBtnStyle = { background: '#000000', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', fontSize: '0.85rem' }; const delBtnStyle = { background: '#ffffff', color: '#ef4444', border: '1px solid #fee2e2', padding: '8px 14px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.82rem' }; const moveCloudTriggerBtnStyle = { background: 'none', border: '1px solid #000000', padding: '6px 14px', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#000000', cursor: 'pointer', width: '100%', textAlign: 'center' };
+const cardStyle = { background: '#fff', padding: '30px', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.005)' }; const labelStyle = { display: 'block', fontSize: '0.72rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none', marginBottom: '15px', background: '#f8fafc', fontWeight: '600', boxSizing: 'border-box' }; const selectStyle = { padding: '8px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' }; const questionBuilderBox = { background: '#f8fafc', padding: '20px', borderRadius: '20px', border: '1px solid #e2e8f0' }; const addQBtnStyle = { width: '100%', padding: '12px', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '0.9rem', marginTop: '10px' }; const monochromeControlActionBtn = { padding: '12px 24px', background: '#000000', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }; const runTestBtnStyle = { background: '#000000', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', fontSize: '0.85rem' }; const delBtnStyle = { background: '#ffffff', color: '#ef4444', border: '1px solid #fee2e2', padding: '8px 14px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.82rem' }; const moveCloudTriggerBtnStyle = { background: 'none', border: '1px solid #000000', padding: '6px 14px', borderRadius: '10px', fontSize: '0.78rem', fontWeight: '800', color: '#000000', cursor: 'pointer', width: '100%', textAlign: 'center' };
 
 export default CustomBuilder;
