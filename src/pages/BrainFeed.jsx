@@ -72,24 +72,12 @@ const BrainFeed = () => {
     setShowEndModal(true);
   };
 
-  // --- 📱 MOBILE: real-time forward-scroll lock. Going back to a previous question is
-  // always free; moving forward is hard-blocked until the current question is answered.
+  // --- 📱 MOBILE: once the scroll has settled on a new card, sync currentIdx to it.
+  // (Forward-blocking itself happens earlier, at the touch level below — this only
+  // ever runs for moves that were actually allowed, so there's nothing to fight here.)
   const handleFeedScroll = () => {
     const el = viewportRef.current;
     if (!el) return;
-
-    if (awaitingCompletionRef.current) {
-      finishMobileSession();
-      return;
-    }
-
-    const currentTop = currentIdx * el.clientHeight;
-    if (selectedAnswers[currentIdx] === undefined && el.scrollTop > currentTop + 2) {
-      el.scrollTop = currentTop;
-      setShowWarning(true);
-      return;
-    }
-
     clearTimeout(scrollDebounceTimer.current);
     scrollDebounceTimer.current = setTimeout(() => {
       const newIdx = Math.round(el.scrollTop / el.clientHeight);
@@ -100,13 +88,35 @@ const BrainFeed = () => {
     }, 120);
   };
 
-  // --- 📱 MOBILE: on Android, a scroll event never fires when there's nowhere left to
-  // scroll to (the last card) — so we detect the *attempt* to swipe via touch instead.
-  const handleFeedTouchMove = () => {
-    if (awaitingCompletionRef.current) {
-      finishMobileSession();
-    }
-  };
+  // --- 📱 MOBILE: block a forward swipe BEFORE it ever starts scrolling (via preventDefault),
+  // so there's no fight with the browser's own snap animation — no jitter, just a hard stop.
+  // Backward (to a previous, already-answered card) is always left completely free.
+  useEffect(() => {
+    if (!isMobile || !isFeedActive) return;
+    const el = viewportRef.current;
+    if (!el) return;
+
+    let touchStartY = 0;
+    const onTouchStart = (e) => { touchStartY = e.touches[0].clientY; };
+    const onTouchMoveNative = (e) => {
+      if (awaitingCompletionRef.current) {
+        finishMobileSession();
+        return;
+      }
+      const movingForward = e.touches[0].clientY < touchStartY;
+      if (movingForward && selectedAnswers[currentIdx] === undefined) {
+        e.preventDefault();
+        setShowWarning(true);
+      }
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMoveNative, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMoveNative);
+    };
+  }, [isMobile, isFeedActive, currentIdx, selectedAnswers, sessionMode]);
 
   // --- 📱 MOBILE: whenever we jump into revise/reattempt mode, snap the scroll view back to question 1 ---
   useEffect(() => {
@@ -474,7 +484,6 @@ const BrainFeed = () => {
           <div
             ref={viewportRef}
             onScroll={isMobile ? handleFeedScroll : undefined}
-            onTouchMove={isMobile ? handleFeedTouchMove : undefined}
             style={{
               ...viewportContainerStyle,
               maxWidth: isMobile ? '100%' : '650px',
