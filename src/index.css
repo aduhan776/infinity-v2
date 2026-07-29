@@ -7,7 +7,20 @@
   font-weight: 400;
   
   /* Background ka color jo poore browser mein dikhega */
-  background-color: #f8fafc; 
+  background-color: #f8fafc;
+
+  /* 📱 Mobile browsers (Chrome/Safari) sometimes auto-inflate text size on load
+     to make it "more readable" — this is inconsistent between loads and is
+     what causes the page to randomly look zoomed-in. Disabling it explicitly. */
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* 2. Margin/Padding reset taaki layout corner se chipak jaye */
