@@ -566,7 +566,7 @@ const AiTests = ({ onStartTest }) => {
     }
   };
 
-  const singleFrameLock = ['selection', 'config-topic', 'confirm-full', 'confirm-topic'].includes(view) || (view === 'config-full' && !fullHasSections);
+  const singleFrameLock = ['selection', 'config-topic', 'confirm-topic'].includes(view) || (view === 'config-full' && !fullHasSections);
 
   return (
     <div style={containerStyle} className="ai-container">
@@ -576,7 +576,7 @@ const AiTests = ({ onStartTest }) => {
           100% { transform: rotate(360deg); }
         }
         @media (max-width: 768px) {
-          .ai-container { padding: 16px 8px !important; }
+          .ai-container { padding: 16px 2px !important; }
           .ai-selection-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
           .ai-flex-row { gap: 8px !important; }
           .ai-form-wrapper { padding: 0 !important; min-height: auto !important; align-items: stretch !important; }
