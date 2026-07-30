@@ -36,6 +36,13 @@ const saveAiTestToLocalStore = async (payload) => {
   });
 };
 
+const ConfirmRow = ({ label, value }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+    <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px' }}>{label}</span>
+    <span style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '700', textAlign: 'right' }}>{value}</span>
+  </div>
+);
+
 const AiTests = ({ onStartTest }) => {
   const [view, setView] = useState('selection'); // selection, config-full, config-topic, ai-summary, admin-preview, admin-push-cloud
   const [aiTestDetails, setAiTestDetails] = useState(null);
@@ -242,6 +249,23 @@ const AiTests = ({ onStartTest }) => {
     }
     
     return masterQuestionsArray;
+  };
+
+  const openFullConfirm = () => {
+    if (!testTitle.trim()) { alert("Please enter a test title to continue."); return; }
+    if (fullHasSections) {
+      if (aiSections.length === 0) { alert("Please add at least one section to build the test blueprint."); return; }
+    } else {
+      if (!fullQCount || !fullDuration) { alert("Please enter the question count and duration."); return; }
+    }
+    setView('confirm-full');
+  };
+
+  const openTopicConfirm = () => {
+    if (!targetExam.trim()) { alert("Target exam name is mandatory."); return; }
+    if (!topicSubjectSection.trim()) { alert("Subject / Section is mandatory."); return; }
+    if (!topicQCount || !globalTime) { alert("Please enter the question count and duration."); return; }
+    setView('confirm-topic');
   };
 
   const handleGenerateFullTest = async () => {
@@ -540,6 +564,8 @@ const AiTests = ({ onStartTest }) => {
     }
   };
 
+  const singleFrameLock = ['selection', 'config-topic', 'confirm-full', 'confirm-topic'].includes(view) || (view === 'config-full' && !fullHasSections);
+
   return (
     <div style={containerStyle} className="ai-container">
       <style>{`
@@ -555,6 +581,10 @@ const AiTests = ({ onStartTest }) => {
           .ai-form-wrapper { padding: 0 !important; min-height: auto !important; align-items: stretch !important; }
           .ai-form-card { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; border: none !important; padding: 18px !important; box-shadow: none !important; box-sizing: border-box !important; }
           .ai-mock-card { padding: 22px !important; }
+          ${singleFrameLock ? `
+          .content-view { padding: 12px !important; overflow: hidden !important; height: calc(100dvh - 65px) !important; }
+          .ai-container { height: 100% !important; overflow-y: auto !important; }
+          ` : ''}
         }
       `}</style>
 
@@ -589,6 +619,40 @@ const AiTests = ({ onStartTest }) => {
           </header>
                    
           <div style={selectionGrid} className="ai-selection-grid">
+            <div className="ai-mock-card" style={topicMockCardStyle} onClick={() => setView('config-topic')}>
+              <div style={cardHeaderRow}>
+                <div style={emeraldIconFrame}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <circle cx="12" cy="12" r="6"></circle>
+                    <circle cx="12" cy="12" r="2"></circle>
+                  </svg>
+                </div>
+                <span style={emeraldBadge}>Targeted Drills</span>
+              </div>
+              <h3 style={leftCardTitle}>Topic Wise Test</h3>
+              <ul style={cleanBulletList}>
+                <li style={bulletItemRow}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>Practice specific weak topics</span>
+                </li>
+                <li style={bulletItemRow}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>Set custom question limits</span>
+                </li>
+                <li style={bulletItemRow}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>Instant step-by-step solutions</span>
+                </li>
+              </ul>
+              <button style={emeraldActionBtn}>Start Topic Test</button>
+            </div>
             <div className="ai-mock-card" style={fullMockCardStyle} onClick={() => { setView('config-full'); setAiSections([]); setFullHasSections(false); setEditingSecIdx(null); }}>
               <div style={cardHeaderRow}>
                 <div style={indigoIconFrame}>
@@ -624,40 +688,6 @@ const AiTests = ({ onStartTest }) => {
                 </li>
               </ul>
               <button style={indigoActionBtn}>Start Full Test</button>
-            </div>
-            <div className="ai-mock-card" style={topicMockCardStyle} onClick={() => setView('config-topic')}>
-              <div style={cardHeaderRow}>
-                <div style={emeraldIconFrame}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <circle cx="12" cy="12" r="6"></circle>
-                    <circle cx="12" cy="12" r="2"></circle>
-                  </svg>
-                </div>
-                <span style={emeraldBadge}>Targeted Drills</span>
-              </div>
-              <h3 style={leftCardTitle}>Topic Wise Test</h3>
-              <ul style={cleanBulletList}>
-                <li style={bulletItemRow}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                  <span>Practice specific weak topics</span>
-                </li>
-                <li style={bulletItemRow}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                  <span>Set custom question limits</span>
-                </li>
-                <li style={bulletItemRow}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                  <span>Instant step-by-step solutions</span>
-                </li>
-              </ul>
-              <button style={emeraldActionBtn}>Start Topic Test</button>
             </div>
           </div>
         </>
@@ -830,7 +860,7 @@ const AiTests = ({ onStartTest }) => {
               <button onClick={() => setView('selection')} style={cancelBtn}>Back</button>
                            
               <button 
-                 onClick={handleGenerateFullTest}
+                 onClick={openFullConfirm}
                 style={{ 
                    ...actionBtn, 
                    padding: '14px', 
@@ -839,7 +869,7 @@ const AiTests = ({ onStartTest }) => {
                   cursor: 'pointer'
                 }}
               >
-                Compile Full AI Exam Blueprint
+                Review & Continue
               </button>
             </div>
           </div>
@@ -896,7 +926,7 @@ const AiTests = ({ onStartTest }) => {
               <button onClick={() => setView('selection')} style={cancelBtn}>Back</button>
                            
               <button 
-                 onClick={handleGenerateTopicTest}
+                 onClick={openTopicConfirm}
                 style={{ 
                    ...actionBtn, 
                    padding: '14px', 
@@ -905,7 +935,91 @@ const AiTests = ({ onStartTest }) => {
                   cursor: 'pointer'
                 }}
               >
-                Initialize AI Sniper Drill
+                Review & Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view === 'confirm-full' && (
+        <div style={formWrapper} className="ai-form-wrapper">
+          <div style={formCard} className="ai-form-card">
+            <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Confirm Your Test</h2>
+            <p style={{ color: '#64748b', marginBottom: '20px', fontSize: '0.9rem', fontWeight: '500' }}>Double-check everything below before we generate the questions.</p>
+
+            <ConfirmRow label="Test Title" value={testTitle || '—'} />
+            <ConfirmRow label="Structure" value={fullHasSections ? 'Multi-Section Paper' : 'Single Flat Paper'} />
+
+            {!fullHasSections && (
+              <>
+                <ConfirmRow label="Question Type" value={fullType} />
+                <ConfirmRow label="Difficulty" value={fullDifficulty} />
+                <ConfirmRow label="Language" value={fullLanguage} />
+                <ConfirmRow label="Question Count" value={fullQCount || '—'} />
+                <ConfirmRow label="Duration" value={fullDuration ? `${fullDuration} mins` : '—'} />
+                <ConfirmRow label="Correct Mark" value={`+${fullMarks}`} />
+                <ConfirmRow label="Negative Mark" value={`-${fullNeg}`} />
+              </>
+            )}
+
+            {fullHasSections && (
+              <>
+                <ConfirmRow label="Strict Sectional Timing" value={hasSectionalTiming ? 'Yes' : 'No'} />
+                <ConfirmRow label="Total Sections" value={aiSections.length} />
+                <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {aiSections.map((sec, idx) => (
+                    <div key={idx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px' }}>
+                      <div style={{ fontWeight: '900', color: '#0f172a', marginBottom: '6px', fontSize: '0.95rem' }}>{idx + 1}. {sec.name}</div>
+                      <ConfirmRow label="Duration" value={`${sec.time} mins`} />
+                      <ConfirmRow label="Questions" value={sec.qCount} />
+                      <ConfirmRow label="Type" value={sec.type} />
+                      <ConfirmRow label="Difficulty" value={sec.difficulty} />
+                      <ConfirmRow label="Language" value={sec.language} />
+                      <ConfirmRow label="Marks (+/-)" value={`+${sec.marks} / -${sec.neg}`} />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid #e2e8f0', paddingTop: '20px', marginTop: '20px' }}>
+              <button onClick={() => setView('config-full')} style={cancelBtn}>Edit</button>
+              <button
+                onClick={handleGenerateFullTest}
+                style={{ ...actionBtn, padding: '14px', borderRadius: '12px', background: '#000000', cursor: 'pointer' }}
+              >
+                Proceed & Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view === 'confirm-topic' && (
+        <div style={formWrapper} className="ai-form-wrapper">
+          <div style={formCard} className="ai-form-card">
+            <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Confirm Your Drill</h2>
+            <p style={{ color: '#64748b', marginBottom: '20px', fontSize: '0.9rem', fontWeight: '500' }}>Double-check everything below before we generate the questions.</p>
+
+            <ConfirmRow label="Target Exam" value={targetExam || '—'} />
+            <ConfirmRow label="Subject / Section" value={topicSubjectSection || '—'} />
+            <ConfirmRow label="Topic" value={topicName.trim() ? topicName : 'General'} />
+            <ConfirmRow label="Question Count" value={topicQCount || '—'} />
+            <ConfirmRow label="Duration" value={globalTime ? `${globalTime} mins` : '—'} />
+            <ConfirmRow label="Format Type" value={topicType} />
+            <ConfirmRow label="Difficulty" value={topicDifficulty} />
+            <ConfirmRow label="Language" value={topicLanguage} />
+            <ConfirmRow label="Positive Marks" value={`+${topicMarks}`} />
+            <ConfirmRow label="Negative Penalty" value={topicType === 'Subjective' ? 'N/A' : `-${topicNeg}`} />
+
+            <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid #e2e8f0', paddingTop: '20px', marginTop: '20px' }}>
+              <button onClick={() => setView('config-topic')} style={cancelBtn}>Edit</button>
+              <button
+                onClick={handleGenerateTopicTest}
+                style={{ ...actionBtn, padding: '14px', borderRadius: '12px', background: '#000000', cursor: 'pointer' }}
+              >
+                Proceed & Generate
               </button>
             </div>
           </div>
