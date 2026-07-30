@@ -576,6 +576,7 @@ const AiTests = ({ onStartTest }) => {
           100% { transform: rotate(360deg); }
         }
         @media (max-width: 768px) {
+          .content-view { padding-left: 0 !important; padding-right: 0 !important; }
           .ai-container { padding: 16px 0px !important; }
           .ai-selection-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
           .ai-flex-row { gap: 8px !important; }
