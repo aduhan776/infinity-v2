@@ -264,6 +264,7 @@ const AiTests = ({ onStartTest }) => {
   const openTopicConfirm = () => {
     if (!targetExam.trim()) { alert("Target exam name is mandatory."); return; }
     if (!topicSubjectSection.trim()) { alert("Subject / Section is mandatory."); return; }
+    if (!topicName.trim()) { alert("Please enter a topic name to continue."); return; }
     if (!topicQCount || !globalTime) { alert("Please enter the question count and duration."); return; }
     setView('confirm-topic');
   };
@@ -397,6 +398,7 @@ const AiTests = ({ onStartTest }) => {
     if (processingRef.current) return;
     if (!targetExam.trim()) { alert("Target exam name is mandatory."); return; }
     if (!topicSubjectSection.trim()) { alert("Subject / Section is mandatory."); return; }
+    if (!topicName.trim()) { alert("Please enter a topic name to continue."); return; }
     if (!topicQCount || !globalTime) { alert("Please enter the question count and duration."); return; }
     
     const targetQCount = parseInt(topicQCount);
@@ -613,9 +615,9 @@ const AiTests = ({ onStartTest }) => {
 
       {view === 'selection' && (
         <>
-          <header style={{ textAlign: 'center', marginBottom: '50px' }}>
-            <h1 style={{ fontSize: '2.6rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.8px' }}>AI Test Lab</h1>
-            <p style={{ color: '#64748b', marginTop: '8px', fontSize: '1rem', fontWeight: '500' }}>Choose how you want to practice and prepare with AI</p>
+          <header style={{ textAlign: 'center', marginBottom: '30px' }}>
+            <h1 style={{ fontSize: '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.8px' }}>AI Test Lab</h1>
+            <p style={{ color: '#64748b', marginTop: '6px', fontSize: '0.95rem', fontWeight: '500' }}>Choose how you want to practice and prepare with AI</p>
           </header>
                    
           <div style={selectionGrid} className="ai-selection-grid">
@@ -697,7 +699,7 @@ const AiTests = ({ onStartTest }) => {
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
             <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Full Scale Exam Blueprint</h2>
-            <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem', fontWeight: '500' }}>Configure structure evaluation parameters and let AI model the questions.</p>
+            <p style={{ color: '#64748b', marginBottom: '16px', fontSize: '0.9rem', fontWeight: '500' }}>Configure structure evaluation parameters and let AI model the questions.</p>
                        
             <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1.5 }}>
@@ -734,6 +736,54 @@ const AiTests = ({ onStartTest }) => {
                 </button>
               </div>
             </div>
+
+            {fullHasSections && aiSections.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <label style={labelStyle}>Added Sections ({aiSections.length}/5):</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {aiSections.map((sec, i) => (
+                    <div key={i} style={{ ...secBadgeRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ flex: 1 }}>
+                        <span>Section: <b>{sec.name}</b> ({sec.type} - {sec.difficulty} - {sec.language})</span>
+                        <span style={{ display: 'block', fontSize: '0.78rem', color: '#64748b', marginTop: '4px' }}>
+                          {sec.qCount} Qs | {sec.time} Mins | {sec.marks} M | -{sec.neg}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setEditingSecIdx(i);
+                            setSecName(sec.name);
+                            setSecTime(sec.time);
+                            setSecQCount(sec.qCount);
+                            setSecMarks(sec.marks);
+                            setSecNeg(sec.neg);
+                            setSecType(sec.type);
+                            setSecDifficulty(sec.difficulty);
+                            setSecLanguage(sec.language);
+                          }} 
+                          style={miniSectionActionControlBtn}
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setAiSections(aiSections.filter((_, idx) => idx !== i));
+                            if (editingSecIdx === i) setEditingSecIdx(null);
+                          }} 
+                          style={{ ...miniSectionActionControlBtn, color: '#ef4444', borderColor: '#fee2e2' }}
+                        >
+                          ❌ Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {!fullHasSections ? (
               <div style={nestedBox}>
                 <h4 style={{ margin: '0 0 15px 0', color: '#000000', fontWeight: '800' }}>Configure Full Paper Metrics</h4>
@@ -804,52 +854,6 @@ const AiTests = ({ onStartTest }) => {
               </div>
             )}
             
-            {fullHasSections && aiSections.length > 0 && (
-              <div style={{ marginBottom: '20px' }}>
-                <label style={labelStyle}>Added Blueprint Layout Matrix ({aiSections.length}/5):</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {aiSections.map((sec, i) => (
-                    <div key={i} style={{ ...secBadgeRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ flex: 1 }}>
-                        <span>Section: <b>{sec.name}</b> ({sec.type} - {sec.difficulty} - {sec.language})</span>
-                        <span style={{ display: 'block', fontSize: '0.78rem', color: '#64748b', marginTop: '4px' }}>
-                          {sec.qCount} Qs | {sec.time} Mins | {sec.marks} M | -{sec.neg}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setEditingSecIdx(i);
-                            setSecName(sec.name);
-                            setSecTime(sec.time);
-                            setSecQCount(sec.qCount);
-                            setSecMarks(sec.marks);
-                            setSecNeg(sec.neg);
-                            setSecType(sec.type);
-                            setSecDifficulty(sec.difficulty);
-                            setSecLanguage(sec.language);
-                          }} 
-                          style={miniSectionActionControlBtn}
-                        >
-                          ✏️ Edit
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setAiSections(aiSections.filter((_, idx) => idx !== i));
-                            if (editingSecIdx === i) setEditingSecIdx(null);
-                          }} 
-                          style={{ ...miniSectionActionControlBtn, color: '#ef4444', borderColor: '#fee2e2' }}
-                        >
-                          ❌ Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
             {fullHasSections && (
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '20px 0', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 'bold', color: '#000000' }}>
                 <input type="checkbox" checked={hasSectionalTiming} onChange={e => setHasSectionalTiming(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: '#000000' }} />
@@ -880,7 +884,7 @@ const AiTests = ({ onStartTest }) => {
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
             <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Targeted Topic Drill</h2>
-            <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem', fontWeight: '500' }}>Specify single concepts and set direct evaluation criteria.</p>
+            <p style={{ color: '#64748b', marginBottom: '16px', fontSize: '0.9rem', fontWeight: '500' }}>Specify single concepts and set direct evaluation criteria.</p>
                        
             <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1 }}><label style={labelStyle}>Target Exam / Class <span style={mandatoryStar}>*</span></label><input style={inputStyle} placeholder="e.g. UPSC Prelims" value={targetExam} onChange={e => setTargetExam(e.target.value)} /></div>
@@ -888,8 +892,8 @@ const AiTests = ({ onStartTest }) => {
             </div>
 
             <div>
-              <label style={labelStyle}>Topic Name (Optional)</label>
-              <input style={inputStyle} placeholder="e.g. Geography (leave blank for general)" value={topicName} onChange={e => setTopicName(e.target.value)} />
+              <label style={labelStyle}>Topic Name <span style={mandatoryStar}>*</span></label>
+              <input style={inputStyle} placeholder="e.g. Geography" value={topicName} onChange={e => setTopicName(e.target.value)} />
             </div>
                        
             <div style={flexRow} className="ai-flex-row">
@@ -1191,7 +1195,7 @@ const AiTests = ({ onStartTest }) => {
 // --- STYLES SCHEMA ---
 const containerStyle = { padding: '40px 20px', maxWidth: '1050px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }; 
 const selectionGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop: '35px' }; 
-const cardHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '20px' }; const leftCardTitle = { margin: '0 0 16px 0', fontSize: '1.5rem', color: '#0f172a', fontWeight: '800', letterSpacing: '-0.5px' }; const cleanBulletList = { listStyleType: 'none', padding: 0, margin: '0 0 35px 0', display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', flex: 1 }; const bulletItemRow = { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.92rem', color: '#475569', fontWeight: '500', lineHeight: '1.5' }; const fullMockCardStyle = { background: '#ffffff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(79, 70, 229, 0.03)' }; const indigoIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff', border: '1px solid #c7d2fe' }; const indigoBadge = { background: '#e0e7ff', color: '#4f46e5', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const indigoActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }; const topicMockCardStyle = { background: '#ffffff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(16, 185, 129, 0.03)' }; const emeraldIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d1fae5', border: '1px solid #a7f3d0' }; const emeraldBadge = { background: '#d1fae5', color: '#065f46', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const emeraldActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' }; const actionBtn = { border: 'none', color: '#fff', padding: '11px 24px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', width: '100%' }; const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '620px', boxShadow: '0 10px 30px rgba(0,0,0,0.01)' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const mandatoryStar = { color: '#ef4444', fontWeight: '900' }; const miniLabel = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '1rem', outline: 'none', marginBottom: '15px', background: '#f8fafc', fontWeight: '600', color: '#000000', boxSizing: 'border-box' }; const flexRow = { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '5px' }; const nestedBox = { background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '20px' }; const addSecBtn = { width: '100%', padding: '10px', background: '#000000', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const secBadgeRow = { display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: '600' }; const cancelBtn = { padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }; const summaryVaultBox = { background: '#f8fafc', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '16px', textAlign: 'left', margin: '20px 0 30px 0' }; const sumLine = { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.9rem', fontWeight: '500' }; const modeToggleRow = { display: 'flex', gap: '10px', background: '#f1f5f9', padding: '5px', borderRadius: '12px', marginBottom: '15px' }; const modeBtn = { flex: 1, padding: '10px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem', transition: '0.3s' }; 
+const cardHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '14px' }; const leftCardTitle = { margin: '0 0 8px 0', fontSize: '1.4rem', color: '#0f172a', fontWeight: '800', letterSpacing: '-0.5px' }; const cleanBulletList = { listStyleType: 'none', padding: 0, margin: '0 0 20px 0', display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', flex: 1 }; const bulletItemRow = { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.92rem', color: '#475569', fontWeight: '500', lineHeight: '1.5' }; const fullMockCardStyle = { background: '#ffffff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(79, 70, 229, 0.03)' }; const indigoIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff', border: '1px solid #c7d2fe' }; const indigoBadge = { background: '#e0e7ff', color: '#4f46e5', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const indigoActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }; const topicMockCardStyle = { background: '#ffffff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(16, 185, 129, 0.03)' }; const emeraldIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d1fae5', border: '1px solid #a7f3d0' }; const emeraldBadge = { background: '#d1fae5', color: '#065f46', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const emeraldActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' }; const actionBtn = { border: 'none', color: '#fff', padding: '11px 24px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', width: '100%' }; const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '600px', boxShadow: '0 10px 30px rgba(0,0,0,0.01)' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const mandatoryStar = { color: '#ef4444', fontWeight: '900' }; const miniLabel = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }; const inputStyle = { width: '100%', padding: '11px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '1rem', outline: 'none', marginBottom: '12px', background: '#f8fafc', fontWeight: '600', color: '#000000', boxSizing: 'border-box' }; const flexRow = { display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '2px' }; const nestedBox = { background: '#f8fafc', padding: '14px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '16px' }; const addSecBtn = { width: '100%', padding: '10px', background: '#000000', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const secBadgeRow = { display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: '600' }; const cancelBtn = { padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }; const summaryVaultBox = { background: '#f8fafc', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '16px', textAlign: 'left', margin: '20px 0 30px 0' }; const sumLine = { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.9rem', fontWeight: '500' }; const modeToggleRow = { display: 'flex', gap: '10px', background: '#f1f5f9', padding: '5px', borderRadius: '12px', marginBottom: '15px' }; const modeBtn = { flex: 1, padding: '10px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem', transition: '0.3s' }; 
 
 const miniSectionActionControlBtn = {
   padding: '4px 10px',
