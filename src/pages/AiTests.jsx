@@ -577,12 +577,26 @@ const AiTests = ({ onStartTest }) => {
         }
         @media (max-width: 768px) {
           .ai-container { padding: 20px 14px !important; }
-          .ai-selection-grid { grid-template-columns: 1fr !important; gap: 18px !important; }
+          .ai-selection-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
           .ai-flex-row { flex-direction: column !important; gap: 0 !important; }
           .ai-flex-row > div { flex: 1 1 100% !important; width: 100% !important; }
           .ai-form-wrapper { padding: 0 !important; min-height: auto !important; align-items: stretch !important; }
           .ai-form-card { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; border: none !important; padding: 18px !important; box-shadow: none !important; box-sizing: border-box !important; }
-          .ai-mock-card { padding: 22px !important; }
+
+          /* 📱 Selection screen: shrink everything so both cards fit in one frame without scrolling */
+          .ai-select-header { margin-bottom: 10px !important; }
+          .ai-select-title { font-size: 1.3rem !important; letter-spacing: -0.3px !important; }
+          .ai-select-subtitle { font-size: 0.72rem !important; margin-top: 2px !important; }
+          .ai-mock-card { padding: 12px !important; border-radius: 16px !important; }
+          .ai-card-header-row { margin-bottom: 6px !important; }
+          .ai-icon-frame { width: 26px !important; height: 26px !important; border-radius: 8px !important; }
+          .ai-icon-frame svg { width: 14px !important; height: 14px !important; }
+          .ai-badge { font-size: 0.6rem !important; padding: 2px 6px !important; border-radius: 6px !important; }
+          .ai-card-title { font-size: 0.98rem !important; margin: 0 0 4px 0 !important; }
+          .ai-bullet-list { gap: 3px !important; margin: 0 0 8px 0 !important; }
+          .ai-bullet-item { font-size: 0.68rem !important; gap: 5px !important; line-height: 1.25 !important; }
+          .ai-bullet-item svg { width: 11px !important; height: 11px !important; }
+          .ai-card-btn { padding: 7px !important; font-size: 0.75rem !important; border-radius: 8px !important; }
           ${singleFrameLock ? `
           .content-view { padding: 12px !important; overflow: hidden !important; height: calc(100dvh - 65px) !important; }
           .ai-container { height: 100% !important; overflow-y: auto !important; }
@@ -615,49 +629,49 @@ const AiTests = ({ onStartTest }) => {
 
       {view === 'selection' && (
         <>
-          <header style={{ textAlign: 'center', marginBottom: '30px' }}>
-            <h1 style={{ fontSize: '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.8px' }}>AI Test Lab</h1>
-            <p style={{ color: '#64748b', marginTop: '6px', fontSize: '0.95rem', fontWeight: '500' }}>Choose how you want to practice and prepare with AI</p>
+          <header className="ai-select-header" style={{ textAlign: 'center', marginBottom: '30px' }}>
+            <h1 className="ai-select-title" style={{ fontSize: '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.8px' }}>AI Test Lab</h1>
+            <p className="ai-select-subtitle" style={{ color: '#64748b', marginTop: '6px', fontSize: '0.95rem', fontWeight: '500' }}>Choose how you want to practice and prepare with AI</p>
           </header>
                    
           <div style={selectionGrid} className="ai-selection-grid">
             <div className="ai-mock-card" style={topicMockCardStyle} onClick={() => setView('config-topic')}>
-              <div style={cardHeaderRow}>
-                <div style={emeraldIconFrame}>
+              <div className="ai-card-header-row" style={cardHeaderRow}>
+                <div className="ai-icon-frame" style={emeraldIconFrame}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <circle cx="12" cy="12" r="6"></circle>
                     <circle cx="12" cy="12" r="2"></circle>
                   </svg>
                 </div>
-                <span style={emeraldBadge}>Targeted Drills</span>
+                <span className="ai-badge" style={emeraldBadge}>Targeted Drills</span>
               </div>
-              <h3 style={leftCardTitle}>Topic Wise Test</h3>
-              <ul style={cleanBulletList}>
-                <li style={bulletItemRow}>
+              <h3 className="ai-card-title" style={leftCardTitle}>Topic Wise Test</h3>
+              <ul className="ai-bullet-list" style={cleanBulletList}>
+                <li className="ai-bullet-item" style={bulletItemRow}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                   <span>Practice specific weak topics</span>
                 </li>
-                <li style={bulletItemRow}>
+                <li className="ai-bullet-item" style={bulletItemRow}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                   <span>Set custom question limits</span>
                 </li>
-                <li style={bulletItemRow}>
+                <li className="ai-bullet-item" style={bulletItemRow}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                   <span>Instant step-by-step solutions</span>
                 </li>
               </ul>
-              <button style={emeraldActionBtn}>Start Topic Test</button>
+              <button className="ai-card-btn" style={emeraldActionBtn}>Start Topic Test</button>
             </div>
             <div className="ai-mock-card" style={fullMockCardStyle} onClick={() => { setView('config-full'); setAiSections([]); setFullHasSections(false); setEditingSecIdx(null); }}>
-              <div style={cardHeaderRow}>
-                <div style={indigoIconFrame}>
+              <div className="ai-card-header-row" style={cardHeaderRow}>
+                <div className="ai-icon-frame" style={indigoIconFrame}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14 2 14 8 20 8"></polyline>
@@ -666,30 +680,30 @@ const AiTests = ({ onStartTest }) => {
                     <polyline points="10 9 9 9 8 9"></polyline>
                   </svg>
                 </div>
-                <span style={indigoBadge}>Syllabus-wide</span>
+                <span className="ai-badge" style={indigoBadge}>Syllabus-wide</span>
               </div>
-              <h3 style={leftCardTitle}>Full Mock Test</h3>
-              <ul style={cleanBulletList}>
-                <li style={bulletItemRow}>
+              <h3 className="ai-card-title" style={leftCardTitle}>Full Mock Test</h3>
+              <ul className="ai-bullet-list" style={cleanBulletList}>
+                <li className="ai-bullet-item" style={bulletItemRow}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                   <span>Complete exam syllabus coverage</span>
                 </li>
-                <li style={bulletItemRow}>
+                <li className="ai-bullet-item" style={bulletItemRow}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                   <span>Real exam interface and timer</span>
                 </li>
-                <li style={bulletItemRow}>
+                <li className="ai-bullet-item" style={bulletItemRow}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}>
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                   <span>Section-wise practice available</span>
                 </li>
               </ul>
-              <button style={indigoActionBtn}>Start Full Test</button>
+              <button className="ai-card-btn" style={indigoActionBtn}>Start Full Test</button>
             </div>
           </div>
         </>
