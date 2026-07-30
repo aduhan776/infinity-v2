@@ -597,6 +597,14 @@ const AiTests = ({ onStartTest }) => {
           .ai-bullet-item { font-size: 0.68rem !important; gap: 5px !important; line-height: 1.25 !important; }
           .ai-bullet-item svg { width: 11px !important; height: 11px !important; }
           .ai-card-btn { padding: 7px !important; font-size: 0.75rem !important; border-radius: 8px !important; }
+
+          /* 📱 Config forms (Topic Drill / Full Mock): compact so everything fits one frame.
+             NOTE: input/select font-size stays at 1rem (16px) on purpose — anything smaller
+             triggers the mobile browser's auto-zoom-on-focus bug we fixed earlier. */
+          .ai-form-title { font-size: 1.05rem !important; margin-bottom: 2px !important; }
+          .ai-form-subtitle { font-size: 0.68rem !important; margin-bottom: 10px !important; line-height: 1.3 !important; }
+          .ai-form-card label { font-size: 0.6rem !important; margin-bottom: 2px !important; }
+          .ai-form-card input, .ai-form-card select { padding: 9px !important; margin-bottom: 8px !important; border-radius: 8px !important; }
           ${singleFrameLock ? `
           .content-view { padding: 12px !important; overflow: hidden !important; height: calc(100dvh - 65px) !important; }
           .ai-container { height: 100% !important; overflow-y: auto !important; }
@@ -712,8 +720,8 @@ const AiTests = ({ onStartTest }) => {
       {view === 'config-full' && (
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
-            <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Full Scale Exam Blueprint</h2>
-            <p style={{ color: '#64748b', marginBottom: '16px', fontSize: '0.9rem', fontWeight: '500' }}>Configure structure evaluation parameters and let AI model the questions.</p>
+            <h2 className="ai-form-title" style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Full Scale Exam Blueprint</h2>
+            <p className="ai-form-subtitle" style={{ color: '#64748b', marginBottom: '16px', fontSize: '0.9rem', fontWeight: '500' }}>Configure structure evaluation parameters and let AI model the questions.</p>
                        
             <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1.5 }}>
@@ -897,8 +905,8 @@ const AiTests = ({ onStartTest }) => {
       {view === 'config-topic' && (
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
-            <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Targeted Topic Drill</h2>
-            <p style={{ color: '#64748b', marginBottom: '16px', fontSize: '0.9rem', fontWeight: '500' }}>Specify single concepts and set direct evaluation criteria.</p>
+            <h2 className="ai-form-title" style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Targeted Topic Drill</h2>
+            <p className="ai-form-subtitle" style={{ color: '#64748b', marginBottom: '16px', fontSize: '0.9rem', fontWeight: '500' }}>Specify single concepts and set direct evaluation criteria.</p>
                        
             <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1 }}><label style={labelStyle}>Target Exam / Class <span style={mandatoryStar}>*</span></label><input style={inputStyle} placeholder="e.g. UPSC Prelims" value={targetExam} onChange={e => setTargetExam(e.target.value)} /></div>
@@ -914,14 +922,16 @@ const AiTests = ({ onStartTest }) => {
               <div style={{ flex: 1 }}><label style={labelStyle}>Question Count (Max 100) <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" min="1" placeholder="e.g. 15" value={topicQCount} onChange={e => setTopicQCount(e.target.value)} /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>Total Duration (Mins) <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" min="1" placeholder="e.g. 15" value={globalTime} onChange={e => setGlobalTime(e.target.value)} /></div>
             </div>
+
+            <div>
+              <label style={labelStyle}>Format Type <span style={mandatoryStar}>*</span></label>
+              <select style={{ ...inputStyle, padding: '11px' }} value={topicType} onChange={e => setTopicType(e.target.value)}>
+                <option value="Objective">Objective (MCQ)</option>
+                <option value="Subjective">Subjective (Theory)</option>
+              </select>
+            </div>
                        
             <div style={flexRow} className="ai-flex-row">
-              <div style={{ flex: 1 }}><label style={labelStyle}>Format Type <span style={mandatoryStar}>*</span></label>
-                <select style={{ ...inputStyle, padding: '11px' }} value={topicType} onChange={e => setTopicType(e.target.value)}>
-                  <option value="Objective">Objective (MCQ)</option>
-                  <option value="Subjective">Subjective (Theory)</option>
-                </select>
-              </div>
               <div style={{ flex: 1 }}><label style={labelStyle}>Difficulty Level <span style={mandatoryStar}>*</span></label>
                 <select style={{ ...inputStyle, padding: '11px' }} value={topicDifficulty} onChange={e => setTopicDifficulty(e.target.value)}>
                   <option value="Easy">Easy</option>
