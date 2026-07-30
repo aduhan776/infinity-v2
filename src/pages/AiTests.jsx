@@ -37,9 +37,9 @@ const saveAiTestToLocalStore = async (payload) => {
 };
 
 const ConfirmRow = ({ label, value }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-    <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px' }}>{label}</span>
-    <span style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '700', textAlign: 'right' }}>{value}</span>
+  <div className="ai-confirm-row" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+    <span className="ai-confirm-label" style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px' }}>{label}</span>
+    <span className="ai-confirm-value" style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '700', textAlign: 'right' }}>{value}</span>
   </div>
 );
 
@@ -576,11 +576,11 @@ const AiTests = ({ onStartTest }) => {
           100% { transform: rotate(360deg); }
         }
         @media (max-width: 768px) {
-          .ai-container { padding: 20px 14px !important; }
+          .ai-container { padding: 16px 8px !important; }
           .ai-selection-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
           .ai-flex-row { gap: 8px !important; }
           .ai-form-wrapper { padding: 0 !important; min-height: auto !important; align-items: stretch !important; }
-          .ai-form-card { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; border: none !important; padding: 18px !important; box-shadow: none !important; box-sizing: border-box !important; }
+          .ai-form-card { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; border: none !important; padding: 12px !important; box-shadow: none !important; box-sizing: border-box !important; }
 
           /* 📱 Selection screen: shrink everything so both cards fit in one frame without scrolling */
           .ai-select-header { margin-bottom: 10px !important; }
@@ -604,8 +604,14 @@ const AiTests = ({ onStartTest }) => {
           .ai-form-subtitle { font-size: 0.68rem !important; margin-bottom: 10px !important; line-height: 1.3 !important; }
           .ai-form-card label { font-size: 0.6rem !important; margin-bottom: 2px !important; }
           .ai-form-card input, .ai-form-card select { padding: 9px !important; margin-bottom: 8px !important; border-radius: 8px !important; }
+
+          /* 📱 Confirm screens: shrink so the summary isn't oversized */
+          .ai-form-card h2 { font-size: 1.15rem !important; }
+          .ai-confirm-row { padding: 6px 0 !important; }
+          .ai-confirm-label { font-size: 0.65rem !important; }
+          .ai-confirm-value { font-size: 0.78rem !important; }
           ${singleFrameLock ? `
-          .content-view { padding: 12px !important; overflow: hidden !important; height: calc(100dvh - 65px) !important; }
+          .content-view { padding: 8px !important; overflow: hidden !important; height: calc(100dvh - 65px) !important; }
           .ai-container { height: 100% !important; overflow-y: auto !important; }
           ` : ''}
         }
@@ -761,43 +767,48 @@ const AiTests = ({ onStartTest }) => {
             {fullHasSections && aiSections.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
                 <label style={labelStyle}>Added Sections ({aiSections.length}/5):</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {aiSections.map((sec, i) => (
-                    <div key={i} style={{ ...secBadgeRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ flex: 1 }}>
-                        <span>Section: <b>{sec.name}</b> ({sec.type} - {sec.difficulty} - {sec.language})</span>
-                        <span style={{ display: 'block', fontSize: '0.78rem', color: '#64748b', marginTop: '4px' }}>
-                          {sec.qCount} Qs | {sec.time} Mins | {sec.marks} M | -{sec.neg}
-                        </span>
+                    <div key={i} style={{ background: '#fff', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0f172a' }}>{sec.name}</div>
+                          <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: '600', marginTop: '2px' }}>{sec.type} · {sec.difficulty} · {sec.language}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              setEditingSecIdx(i);
+                              setSecName(sec.name);
+                              setSecTime(sec.time);
+                              setSecQCount(sec.qCount);
+                              setSecMarks(sec.marks);
+                              setSecNeg(sec.neg);
+                              setSecType(sec.type);
+                              setSecDifficulty(sec.difficulty);
+                              setSecLanguage(sec.language);
+                            }} 
+                            style={{ ...miniSectionActionControlBtn, padding: '5px 8px', fontSize: '0.75rem' }}
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              setAiSections(aiSections.filter((_, idx) => idx !== i));
+                              if (editingSecIdx === i) setEditingSecIdx(null);
+                            }} 
+                            style={{ ...miniSectionActionControlBtn, color: '#ef4444', borderColor: '#fee2e2', padding: '5px 8px', fontSize: '0.75rem' }}
+                            title="Delete"
+                          >
+                            ❌
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setEditingSecIdx(i);
-                            setSecName(sec.name);
-                            setSecTime(sec.time);
-                            setSecQCount(sec.qCount);
-                            setSecMarks(sec.marks);
-                            setSecNeg(sec.neg);
-                            setSecType(sec.type);
-                            setSecDifficulty(sec.difficulty);
-                            setSecLanguage(sec.language);
-                          }} 
-                          style={miniSectionActionControlBtn}
-                        >
-                          ✏️ Edit
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setAiSections(aiSections.filter((_, idx) => idx !== i));
-                            if (editingSecIdx === i) setEditingSecIdx(null);
-                          }} 
-                          style={{ ...miniSectionActionControlBtn, color: '#ef4444', borderColor: '#fee2e2' }}
-                        >
-                          ❌ Delete
-                        </button>
+                      <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: '700', marginTop: '6px' }}>
+                        {sec.qCount} Qs &nbsp;·&nbsp; {sec.time} Mins &nbsp;·&nbsp; +{sec.marks} / -{sec.neg}
                       </div>
                     </div>
                   ))}
