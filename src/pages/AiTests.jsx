@@ -580,7 +580,9 @@ const AiTests = ({ onStartTest }) => {
           .ai-selection-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
           .ai-flex-row { gap: 8px !important; }
           .ai-form-wrapper { padding: 0 !important; min-height: auto !important; align-items: stretch !important; }
-          .ai-form-card { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; border: none !important; padding: 12px !important; box-shadow: none !important; box-sizing: border-box !important; }
+          .ai-form-card { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; border: none !important; padding: 8px !important; box-shadow: none !important; box-sizing: border-box !important; background: transparent !important; }
+          .ai-form-wrapper { background: transparent !important; }
+          .ai-container { background: transparent !important; }
 
           /* 📱 Selection screen: shrink everything so both cards fit in one frame without scrolling */
           .ai-select-header { margin-bottom: 10px !important; }
