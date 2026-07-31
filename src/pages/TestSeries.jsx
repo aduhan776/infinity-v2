@@ -304,6 +304,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
             .ts-header h1 { font-size: 1.3rem !important; }
             .ts-header p { font-size: 0.72rem !important; margin-top: 2px !important; }
             .ts-category-row { flex-direction: column !important; padding: 12px !important; border-radius: 16px !important; gap: 12px !important; }
+            .ts-series-scroller { width: 100% !important; max-width: 100% !important; }
             .ts-descriptor-block { width: 100% !important; border-right: none !important; border-bottom: 1px solid #f1f5f9 !important; padding-right: 0 !important; padding-bottom: 10px !important; margin-bottom: 2px !important; }
             .ts-descriptor-block h3 { font-size: 1.05rem !important; }
             .ts-descriptor-block p { font-size: 0.66rem !important; margin-bottom: 8px !important; }
@@ -351,7 +352,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                 </div>
 
                 {/* Branch Horizontal Scroller Split Tracks Panel */}
-                <div style={seriesHorizontalFlexScroller}>
+                <div style={seriesHorizontalFlexScroller} className="ts-series-scroller">
                   {seriesList.length > 0 ? (
                     seriesList.map((seriesName) => {
                       const totalTestCount = allMockTests.filter(t => t.category_name === catName && t.series_name === seriesName && t.title).length;
