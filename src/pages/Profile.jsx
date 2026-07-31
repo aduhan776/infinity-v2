@@ -104,60 +104,75 @@ const Profile = () => {
     <div style={profileContainer} className="pf-container">
       <style>{`
         @media (max-width: 768px) {
-          .pf-container { padding: 16px !important; }
-          .pf-grid { grid-template-columns: 1fr !important; gap: 20px !important; }
-          .pf-form-row { flex-direction: column !important; gap: 0 !important; }
+          .content-view { padding-left: 0 !important; padding-right: 0 !important; }
+          .pf-container { padding: 12px 4px !important; }
+          .pf-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+          .pf-form-row { flex-direction: row !important; gap: 8px !important; }
+          .pf-header { margin-bottom: 14px !important; padding: 0 6px !important; }
+          .pf-header h1 { font-size: 1.3rem !important; }
+          .pf-header p { font-size: 0.7rem !important; margin-top: 2px !important; }
+          .pf-badge-card, .pf-settings-card { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; padding: 8px 6px !important; }
+          .pf-avatar { width: 60px !important; height: 60px !important; font-size: 1.7rem !important; }
+          .pf-name { font-size: 1.05rem !important; margin: 8px 0 2px 0 !important; }
+          .pf-username { font-size: 0.75rem !important; margin: 0 0 12px 0 !important; }
+          .pf-stat-count { font-size: 1.05rem !important; }
+          .pf-stat-label { font-size: 0.58rem !important; }
+          .pf-settings-title { font-size: 0.95rem !important; margin-bottom: 12px !important; padding-bottom: 8px !important; }
+          .pf-container label { font-size: 0.6rem !important; margin-bottom: 3px !important; }
+          .pf-container input { padding: 9px 10px !important; }
+          .pf-lock-badge { font-size: 0.55rem !important; padding: 1px 5px !important; }
+          .pf-tip { font-size: 0.6rem !important; }
         }
       `}</style>
-      <header style={{ marginBottom: '35px' }}>
+      <header className="pf-header" style={{ marginBottom: '35px' }}>
         <h1 style={{ fontSize: '2.4rem', fontWeight: '900', color: '#1e293b', margin: 0 }}>Student Profile</h1>
         <p style={{ color: '#64748b', marginTop: '5px', fontWeight: '600' }}>View your verified parameters and platform identity details.</p>
       </header>
 
       <div style={profileWorkspaceGrid} className="pf-grid">
         {/* LEFT CARD: ACCOUNT BADGE SUMMARY */}
-        <div style={badgeCard}>
-          <div style={avatarCircle}>
+        <div style={badgeCard} className="pf-badge-card">
+          <div style={avatarCircle} className="pf-avatar">
             {fullName ? fullName.charAt(0).toUpperCase() : 'S'}
           </div>
-          <h2 style={{ color: '#1e293b', fontWeight: '900', margin: '15px 0 5px 0', fontSize: '1.4rem' }}>{fullName || 'Anonymous Student'}</h2>
-          <p style={{ color: '#6366f1', fontWeight: '800', margin: '0 0 25px 0', fontSize: '0.9rem' }}>@{username || 'username'}</p>
+          <h2 className="pf-name" style={{ color: '#1e293b', fontWeight: '900', margin: '15px 0 5px 0', fontSize: '1.4rem' }}>{fullName || 'Anonymous Student'}</h2>
+          <p className="pf-username" style={{ color: '#6366f1', fontWeight: '800', margin: '0 0 25px 0', fontSize: '0.9rem' }}>@{username || 'username'}</p>
           
           {/* DYNAMIC PERFORMANCE MILESTONES COUNTER CONTAINER */}
           <div style={statsDashboardRow}>
             <div style={statWidget}>
-              <span style={statCountText}>{totalTestsGiven}</span>
-              <span style={statLabelText}>Tests Submitted</span>
+              <span className="pf-stat-count" style={statCountText}>{totalTestsGiven}</span>
+              <span className="pf-stat-label" style={statLabelText}>Tests Submitted</span>
             </div>
             <div style={statWidget}>
-              <span style={{...statCountText, color: isAdmin ? '#6366f1' : '#10b981'}}>
+              <span className="pf-stat-count" style={{...statCountText, color: isAdmin ? '#6366f1' : '#10b981'}}>
                 {isAdmin ? 'Admin' : 'Student'}
               </span>
-              <span style={statLabelText}>System Role</span>
+              <span className="pf-stat-label" style={statLabelText}>System Role</span>
             </div>
           </div>
         </div>
 
         {/* RIGHT CARD: CORE CONFIGURATION SETTINGS FORM */}
-        <div style={settingsCard}>
-          <h3 style={{ margin: '0 0 25px 0', color: '#1e293b', fontWeight: '800', fontSize: '1.2rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' }}>
+        <div style={settingsCard} className="pf-settings-card">
+          <h3 className="pf-settings-title" style={{ margin: '0 0 25px 0', color: '#1e293b', fontWeight: '800', fontSize: '1.2rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' }}>
              ⚙️ Verified Parameters Vault
           </h3>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={formFlexRow} className="pf-form-row">
               <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Full Name <span style={lockBadge}>Fixed</span></label>
+                <label style={labelStyle}>Full Name <span className="pf-lock-badge" style={lockBadge}>Fixed</span></label>
                 <input type="text" style={{ ...inputStyle, background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} value={fullName} readOnly />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Unique System Username <span style={lockBadge}>Fixed</span></label>
+                <label style={labelStyle}>Unique System Username <span className="pf-lock-badge" style={lockBadge}>Fixed</span></label>
                 <input type="text" style={{ ...inputStyle, background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} value={username} readOnly />
               </div>
             </div>
 
             <div>
-              <label style={labelStyle}>Authenticated Email Address <span style={lockBadge}>Fixed</span></label>
+              <label style={labelStyle}>Authenticated Email Address <span className="pf-lock-badge" style={lockBadge}>Fixed</span></label>
               <input type="email" style={{ ...inputStyle, background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} value={email} readOnly />
             </div>
 
@@ -174,7 +189,7 @@ const Profile = () => {
                 onBlur={(e) => handleAutoSaveTargetExam(e.target.value)}
                 placeholder="e.g. UPSC CSE, NEET 2026, IIT-JEE" 
               />
-              <span style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '4px', display: 'block', fontWeight: '500' }}>
+              <span className="pf-tip" style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '4px', display: 'block', fontWeight: '500' }}>
                 💡 Tip: This field updates automatically in the database when you click outside.
               </span>
             </div>

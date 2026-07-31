@@ -5,15 +5,20 @@ function Login() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState('');
-  const [selectedAvatar, setSelectedAvatar] = useState('🍎');
   const [isSignUpMode, setIsSignUpMode] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notification, setNotification] = useState({ type: '', message: '' });
 
-  const fruitAvatars = ['🍎', '🥭', '🍉', '🍓', '🍊', '🥑'];
+  // 🧠 Username is still auto-generated from the email — only the display
+  // name is entered manually now, since that can't be reliably guessed.
+  const deriveUsernameFromEmail = (email) => {
+    const prefix = email.split('@')[0] || 'student';
+    const usernameBase = prefix.toLowerCase().replace(/[^a-z0-9]/g, '') || 'student';
+    const uniqueSuffix = Math.floor(1000 + Math.random() * 9000);
+    return `${usernameBase}${uniqueSuffix}`;
+  };
 
   const handleGoogleSignIn = async () => {
     setNotification({ type: '', message: '' });
@@ -40,10 +45,12 @@ function Login() {
 
     try {
       if (isSignUpMode) {
-        if (!fullName.trim() || !username.trim()) {
+        if (!fullName.trim()) {
           setIsSubmitting(false);
-          return setNotification({ type: 'error', message: 'Please fill in all fields.' });
+          return setNotification({ type: 'error', message: 'Please enter your name.' });
         }
+
+        const username = deriveUsernameFromEmail(authEmail.trim());
 
         const { error } = await supabase.auth.signUp({
           email: authEmail,
@@ -51,8 +58,7 @@ function Login() {
           options: {
             data: {
               full_name: fullName.trim(),
-              username: username.trim().toLowerCase(),
-              avatar: selectedAvatar,
+              username: username,
             }
           }
         });
@@ -60,7 +66,6 @@ function Login() {
         if (error) throw error;
         setNotification({ type: 'success', message: 'Account created successfully! You can now sign in.' });
         setFullName('');
-        setUsername('');
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: authEmail,
@@ -78,8 +83,6 @@ function Login() {
   const handleToggleMode = () => {
     setIsSignUpMode(!isSignUpMode);
     setFullName('');
-    setUsername('');
-    setSelectedAvatar('🍎');
     setNotification({ type: '', message: '' });
   };
 
@@ -91,13 +94,18 @@ function Login() {
           .login-left-panel { display: none !important; }
           .login-right-panel { flex: 1 !important; padding: 20px !important; }
           .login-form-card { max-width: 100% !important; padding: 28px 22px !important; box-shadow: none !important; border: none !important; }
+          .login-mobile-brand { display: flex !important; }
         }
       `}</style>
       {/* LEFT PANEL: BRAND SHOWCASE */}
       <div style={leftShowcasePanel} className="login-left-panel">
         <div style={brandingWrapper}>
-          <div style={brandLogoTarget}>
-            <div style={brandLogoTargetInner}></div>
+          <div style={{ marginBottom: '25px' }}>
+            <svg width="70" height="70" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="42" stroke="#1e293b" strokeWidth="6" fill="white" />
+              <circle cx="50" cy="50" r="28" stroke="#1e293b" strokeWidth="6" fill="white" />
+              <circle cx="50" cy="50" r="14" stroke="#1e293b" strokeWidth="6" fill="white" />
+            </svg>
           </div>
           <h1 style={brandingTitle}>NEUXENT<span>.</span></h1>
           <p style={brandingSubtitle}>AI-powered learning and practice. <br/>Continue your preparation journey.</p>
@@ -131,7 +139,16 @@ function Login() {
       {/* RIGHT PANEL: SIMPLE FORM */}
       <div style={rightAuthPanel} className="login-right-panel">
         <div style={formCardMinimal} className="login-form-card">
-          
+
+          <div className="login-mobile-brand" style={{ display: 'none', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+            <svg width="34" height="34" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="42" stroke="#1e293b" strokeWidth="6" fill="white" />
+              <circle cx="50" cy="50" r="28" stroke="#1e293b" strokeWidth="6" fill="white" />
+              <circle cx="50" cy="50" r="14" stroke="#1e293b" strokeWidth="6" fill="white" />
+            </svg>
+            <span style={{ fontSize: '1.3rem', fontWeight: '900', color: '#1e293b', letterSpacing: '-0.5px' }}>NEUXENT.</span>
+          </div>
+
           <h2 style={formHeading}>
             {isSignUpMode ? 'Create Account' : 'Welcome Back'}
           </h2>
@@ -162,36 +179,13 @@ function Login() {
           </div>
 
           <form onSubmit={handleAuthSubmission} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            
+
             {isSignUpMode && (
-              <div style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
-                <div style={{ position: 'relative' }}>
-                  <span style={inputIconLeftStyle}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  </span>
-                  <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" style={inputCardStyle} />
-                </div>
-                <div style={{ position: 'relative' }}>
-                  <span style={inputIconLeftStyle}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                  </span>
-                  <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" style={inputCardStyle} />
-                </div>
-                <div>
-                  <label style={minimalLabelStyle}>Select avatar 🍎</label>
-                  <div style={fruitSelectorMatrixGrid}>
-                    {fruitAvatars.map((fruit) => (
-                      <button
-                        key={fruit}
-                        type="button"
-                        onClick={() => setSelectedAvatar(fruit)}
-                        style={{...fruitSelectorWidget, background: selectedAvatar === fruit ? '#f1f5f9' : 'none', border: selectedAvatar === fruit ? '2px solid #1e293b' : '2px solid #e2e8f0'}}
-                      >
-                        {fruit}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              <div style={{ position: 'relative' }}>
+                <span style={inputIconLeftStyle}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </span>
+                <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" style={inputCardStyle} />
               </div>
             )}
 
@@ -256,8 +250,6 @@ const fullScreenContainer = { display: 'flex', height: '100vh', background: '#ff
 const leftShowcasePanel = { flex: 1, background: '#f8fafc', padding: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative', borderRight: '1px solid #e2e8f0' };
 const rightAuthPanel = { flex: 1.1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' };
 const brandingWrapper = { maxWidth: '450px', margin: '0 auto', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' };
-const brandLogoTarget = { width: '70px', height: '70px', border: '7px solid #1e293b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '25px' };
-const brandLogoTargetInner = { width: '22px', height: '22px', background: '#1e293b', borderRadius: '50%' };
 const brandingTitle = { fontSize: '2.5rem', fontWeight: '900', color: '#000', margin: 0, letterSpacing: '-1px', marginBottom: '10px' };
 const brandingSubtitle = { fontSize: '0.95rem', color: '#64748b', margin: 0, fontWeight: '500', lineHeight: '1.6' };
 const brandingFooter = { position: 'absolute', bottom: '30px', left: '30px', fontSize: '0.8rem', color: '#94a3b8' };
@@ -274,12 +266,9 @@ const googleBtnCardStyle = { width: '100%', padding: '12px', borderRadius: '12px
 const orDividerMinimalRow = { display: 'flex', alignItems: 'center', margin: '20px 0', color: '#e2e8f0' };
 const orDividerMinimalLine = { flex: 1, height: '1px', background: '#e2e8f0' };
 const orDividerMinimalText = { padding: '0 10px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8' };
-const minimalLabelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '6px' };
 const inputCardStyle = { width: '100%', padding: '12px 16px 12px 48px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none', background: '#fff', fontWeight: '500' };
 const inputIconLeftStyle = { position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' };
 const eyeToggleIconBtnStyle = { position: 'absolute', right: '14px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' };
-const fruitSelectorMatrixGrid = { display: 'flex', gap: '5px', marginTop: '5px', background: '#f8fafc', padding: '6px', borderRadius: '12px', border: '1px solid #e2e8f0', justifyContent: 'space-between' };
-const fruitSelectorWidget = { fontSize: '1.4rem', border: 'none', borderRadius: '8px', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const actionBtnSolidDark = { width: '100%', border: 'none', color: '#fff', padding: '14px', borderRadius: '12px', fontWeight: '700', fontSize: '0.95rem', marginTop: '10px', cursor: 'pointer' };
 
 export default Login;

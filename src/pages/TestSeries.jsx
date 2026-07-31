@@ -299,12 +299,21 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
       <div style={containerStyle} className="ts-container">
         <style>{`
           @media (max-width: 768px) {
-            .ts-container { padding: 16px 10px !important; }
-            .ts-category-row { flex-direction: column !important; }
-            .ts-descriptor-block { width: 100% !important; border-right: none !important; border-bottom: 1px solid #f1f5f9 !important; padding-right: 0 !important; padding-bottom: 14px !important; margin-bottom: 4px !important; }
+            .content-view { padding-left: 0 !important; padding-right: 0 !important; }
+            .ts-container { padding: 10px 6px !important; }
+            .ts-header h1 { font-size: 1.3rem !important; }
+            .ts-header p { font-size: 0.72rem !important; margin-top: 2px !important; }
+            .ts-category-row { flex-direction: column !important; padding: 12px !important; border-radius: 16px !important; gap: 12px !important; }
+            .ts-descriptor-block { width: 100% !important; border-right: none !important; border-bottom: 1px solid #f1f5f9 !important; padding-right: 0 !important; padding-bottom: 10px !important; margin-bottom: 2px !important; }
+            .ts-descriptor-block h3 { font-size: 1.05rem !important; }
+            .ts-descriptor-block p { font-size: 0.66rem !important; margin-bottom: 8px !important; }
+            .ts-series-card { width: 160px !important; padding: 12px !important; border-radius: 14px !important; }
+            .ts-series-card h4 { font-size: 0.92rem !important; margin-bottom: 3px !important; }
+            .ts-series-card p { font-size: 0.68rem !important; margin-bottom: 10px !important; }
+            .ts-series-card button { padding: 7px !important; font-size: 0.68rem !important; }
           }
         `}</style>
-        <header style={headerPanelRow}>
+        <header style={headerPanelRow} className="ts-header">
           <div>
             <h1 style={{ fontSize: '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>Test Series Hub</h1>
             <p style={{ color: '#64748b', marginTop: '4px', fontWeight: '500' }}>Explore custom testing frameworks and enroll to track progress.</p>
@@ -349,7 +358,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                       const isEnrolled = subscribedExams.includes(seriesName);
 
                       return (
-                        <div key={seriesName} style={seriesChronologicalCardBox}>
+                        <div key={seriesName} style={seriesChronologicalCardBox} className="ts-series-card">
                           <h4 style={seriesThemeTitleCardHeader}>{seriesName}</h4>
                           <p style={totalTestCountFooterText}>{totalTestCount} Mock Tests</p>
                           
@@ -427,22 +436,34 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
       <div style={containerStyle} className="ts-container">
         <style>{`
           @media (max-width: 768px) {
-            .ts-container { padding: 16px 10px !important; }
-            .ts-item-header-row { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+            .content-view { padding-left: 0 !important; padding-right: 0 !important; }
+            .ts-container { padding: 10px 6px !important; }
+            .ts-breadcrumb { font-size: 0.62rem !important; }
+            .ts-workspace-title { font-size: 1.15rem !important; }
+            .ts-back-btn { padding: 6px 10px !important; font-size: 0.68rem !important; }
+            .ts-tab-row { gap: 14px !important; margin-bottom: 14px !important; }
+            .ts-tab-btn { padding: 8px 2px !important; font-size: 0.7rem !important; }
+            .ts-item-row { padding: 12px !important; border-radius: 14px !important; }
+            .ts-item-header-row { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
             .ts-item-header-row > div:last-child { width: 100% !important; }
-            .ts-item-header-row > div:last-child button { flex: 1 !important; }
+            .ts-item-header-row > div:last-child button { flex: 1 !important; padding: 8px 4px !important; font-size: 0.68rem !important; }
+            .ts-item-title { font-size: 0.92rem !important; }
+            .ts-stat-badge { font-size: 0.62rem !important; padding: 3px 6px !important; }
+            .ts-attempt-row { flex-direction: column !important; align-items: stretch !important; gap: 8px !important; padding: 8px 10px !important; }
+            .ts-attempt-top { display: flex !important; justify-content: space-between !important; font-size: 0.7rem !important; }
+            .ts-attempt-row button { width: 100% !important; text-align: center !important; }
           }
         `}</style>
         <header style={{ marginBottom: '30px' }}>
-          <button onClick={() => { setSelectedFolder(null); setView('categories'); }} style={backDirectoryLinkBtn}>
+          <button className="ts-back-btn" onClick={() => { setSelectedFolder(null); setView('categories'); }} style={backDirectoryLinkBtn}>
             ← Back to Test Series Hub
           </button>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '15px' }}>
             <div>
-              <div style={breadcrumbTrailRow}>
+              <div className="ts-breadcrumb" style={breadcrumbTrailRow}>
                 <span>{activeCategory}</span> / <span style={{ color: '#000000' }}>{activeSeries}</span>
               </div>
-              <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#0f172a', margin: '4px 0 0 0' }}>
+              <h2 className="ts-workspace-title" style={{ fontSize: '1.8rem', fontWeight: '900', color: '#0f172a', margin: '4px 0 0 0' }}>
                 {activeSeries} Workspace
               </h2>
             </div>
@@ -457,10 +478,11 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
 
         {/* ADMIN DRIVEN SECTION TAB REEL BAR */}
         {tabsList.length > 0 && (
-          <div style={tabMenuBarRow}>
+          <div style={tabMenuBarRow} className="ts-tab-row">
             {tabsList.map(tab => (
               <button 
                 key={tab} 
+                className="ts-tab-btn"
                 onClick={() => setActiveSubSection(tab)} 
                 style={{
                   ...tabElementBtn, 
@@ -484,15 +506,15 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                 const bestScore = isAttempted ? Math.max(...matchingAttempts.map(a => parseFloat(a.score) || 0)) : 0;
 
                 return (
-                  <div key={test.id} style={testItemInstanceRow}>
+                  <div key={test.id} style={testItemInstanceRow} className="ts-item-row">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }} className="ts-item-header-row">
                       <div>
-                        <h4 style={testTitleHeaderStyle}>{test.title}</h4>
-                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '6px' }}>
-                          <span style={statBadge}>Time: {test.time} Mins</span>
-                          <span style={statBadge}>Questions: {test.questions}</span>
+                        <h4 style={testTitleHeaderStyle} className="ts-item-title">{test.title}</h4>
+                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
+                          <span style={statBadge} className="ts-stat-badge">Time: {test.time} Mins</span>
+                          <span style={statBadge} className="ts-stat-badge">Questions: {test.questions}</span>
                           {isAttempted && (
-                            <span style={{ ...statBadge, background: '#f8fafc', color: '#000000', fontWeight: '800' }}>
+                            <span style={{ ...statBadge, background: '#f8fafc', color: '#000000', fontWeight: '800' }} className="ts-stat-badge">
                               Best Score: {bestScore.toFixed(2)} M
                             </span>
                           )}
@@ -514,32 +536,32 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                       <div style={nestedAttemptsScrollerContainer}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           {matchingAttempts.map((attempt, index) => (
-                            <div key={attempt.attemptId || index} style={attemptHistoryItemLine}>
-                              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>
-                                Run #{matchingAttempts.length - index} — Completed {attempt.date}
-                              </span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <div key={attempt.attemptId || index} style={attemptHistoryItemLine} className="ts-attempt-row">
+                              <div className="ts-attempt-top" style={{ display: 'contents' }}>
+                                <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>
+                                  Run #{matchingAttempts.length - index} — Completed {attempt.date}
+                                </span>
                                 <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0f172a' }}>
                                   Score: {parseFloat(attempt.score).toFixed(2)} M ({attempt.accuracy})
                                 </span>
-                                <button 
-                                  type="button"
-                                  onClick={() => handleViewDetailedReview(attempt)} 
-                                  style={{
-                                    background: '#000000',
-                                    color: '#ffffff',
-                                    border: 'none',
-                                    padding: '6px 12px',
-                                    borderRadius: '6px',
-                                    fontWeight: '700',
-                                    fontSize: '0.78rem',
-                                    cursor: 'pointer',
-                                    display: 'inline-block'
-                                  }}
-                                >
-                                  Detailed Review
-                                </button>
                               </div>
+                              <button 
+                                type="button"
+                                onClick={() => handleViewDetailedReview(attempt)} 
+                                style={{
+                                  background: '#000000',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  padding: '6px 12px',
+                                  borderRadius: '6px',
+                                  fontWeight: '700',
+                                  fontSize: '0.78rem',
+                                  cursor: 'pointer',
+                                  display: 'inline-block'
+                                }}
+                              >
+                                Detailed Review
+                              </button>
                             </div>
                           ))}
                         </div>

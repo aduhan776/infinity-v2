@@ -106,42 +106,60 @@ const Statistics = () => {
   const flatRatioWidth = stats.totalAttempts > 0 ? (stats.flatTestsCount / stats.totalAttempts) * 100 : 0;
 
   return (
-    <div style={containerStyle}>
-      <header style={{ marginBottom: '35px' }}>
+    <div style={containerStyle} className="stat-container">
+      <style>{`
+        @media (max-width: 768px) {
+          .content-view { padding-left: 0 !important; padding-right: 0 !important; }
+          .stat-container { padding: 10px 6px !important; }
+          .stat-header { margin-bottom: 14px !important; padding: 0 4px !important; }
+          .stat-header h1 { font-size: 1.3rem !important; }
+          .stat-header p { font-size: 0.72rem !important; margin-top: 2px !important; }
+          .stat-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; margin-bottom: 12px !important; }
+          .stat-card { padding: 12px 10px !important; border-radius: 12px !important; }
+          .stat-card-label { font-size: 0.58rem !important; margin-bottom: 4px !important; }
+          .stat-card-metric { font-size: 1.15rem !important; }
+          .stat-card-sub { font-size: 0.6rem !important; margin-top: 4px !important; }
+          .stat-split-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+          .stat-large-card { padding: 14px !important; border-radius: 14px !important; }
+          .stat-section-heading { font-size: 0.95rem !important; }
+          .stat-section-sub { font-size: 0.68rem !important; margin-bottom: 14px !important; }
+        }
+      `}</style>
+      <header className="stat-header" style={{ marginBottom: '35px' }}>
         <h1 style={{ fontSize: '2.4rem', fontWeight: '900', color: '#1e293b', margin: 0 }}>Precision Analytics</h1>
         <p style={{ color: '#64748b', marginTop: '5px', fontWeight: '500' }}>Bhai, ye raha tera live learning index aur productivity footprint:</p>
       </header>
 
-      <div style={statsGrid}>
-        <div style={{ ...cardStyle, background: 'linear-gradient(135deg, #000000, #475569)', color: '#fff', border: 'none' }}>
-          <span style={{ ...cardLabel, color: '#cbd5e1' }}>BrainFeed Practice</span>
-          <h2 style={cardMetric}>Fed {stats.brainAttempted} Times</h2>
-          <p style={{ ...cardSubText, color: '#cbd5e1' }}>Accuracy index: <b>{stats.brainAccuracy}%</b></p>
+      <div style={statsGrid} className="stat-grid">
+        <div className="stat-card" style={{ ...cardStyle, background: 'linear-gradient(135deg, #000000, #475569)', color: '#fff', border: 'none' }}>
+          <span className="stat-card-label" style={{ ...cardLabel, color: '#cbd5e1' }}>BrainFeed Practice</span>
+          <h2 className="stat-card-metric" style={cardMetric}>Fed {stats.brainAttempted} Times</h2>
+          <p className="stat-card-sub" style={{ ...cardSubText, color: '#cbd5e1' }}>Accuracy index: <b>{stats.brainAccuracy}%</b></p>
         </div>
 
-        <div style={{ ...cardStyle, borderTop: '6px solid #000000' }}>
-          <span style={cardLabel}>Total Test Runs</span>
-          <h2 style={cardMetric}>{stats.totalAttempts}</h2>
-          <p style={cardSubText}>Mock exams executed</p>
+        <div className="stat-card" style={{ ...cardStyle, borderTop: '6px solid #000000' }}>
+          <span className="stat-card-label" style={cardLabel}>Total Test Runs</span>
+          <h2 className="stat-card-metric" style={cardMetric}>{stats.totalAttempts}</h2>
+          <p className="stat-card-sub" style={cardSubText}>Mock exams executed</p>
         </div>
 
-        <div style={{ ...cardStyle, borderTop: '6px solid #475569' }}>
-          <span style={cardLabel}>Mean Test Score</span>
-          <h2 style={cardMetric}>{stats.avgScore.toFixed(2)}<span style={{ fontSize: '0.9rem', color: '#64748b' }}> M</span></h2>
-          <p style={cardSubText}>Average yield across sessions</p>
+        <div className="stat-card" style={{ ...cardStyle, borderTop: '6px solid #475569' }}>
+          <span className="stat-card-label" style={cardLabel}>Mean Test Score</span>
+          <h2 className="stat-card-metric" style={cardMetric}>{stats.avgScore.toFixed(2)}<span style={{ fontSize: '0.9rem', color: '#64748b' }}> M</span></h2>
+          <p className="stat-card-sub" style={cardSubText}>Average yield across sessions</p>
         </div>
 
-        <div style={{ ...cardStyle, borderTop: '6px solid #94a3b8' }}>
-          <span style={cardLabel}>Peak Mock Score</span>
-          <h2 style={cardMetric}>{stats.highestScore.toFixed(2)}<span style={{ fontSize: '0.9rem', color: '#64748b' }}> M</span></h2>
-          <p style={cardSubText}>Highest score registered</p>
+        <div className="stat-card" style={{ ...cardStyle, borderTop: '6px solid #94a3b8' }}>
+          <span className="stat-card-label" style={cardLabel}>Peak Mock Score</span>
+          <h2 className="stat-card-metric" style={cardMetric}>{stats.highestScore.toFixed(2)}<span style={{ fontSize: '0.9rem', color: '#64748b' }}> M</span></h2>
+          <p className="stat-card-sub" style={cardSubText}>Highest score registered</p>
         </div>
       </div>
 
-      <div style={splitLayoutGrid}>
-        <div style={largeCardBase}>
-          <h3 style={sectionHeading}>Platform Intelligence Split</h3>
-          <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '25px', fontWeight: '500' }}>
+      <div style={splitLayoutGrid} className="stat-split-grid">
+        <div style={largeCardBase} className="stat-large-card">
+          <h3 className="stat-section-heading" style={sectionHeading}>Platform Intelligence Split</h3>
+          <p className="stat-section-sub" style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '25px', fontWeight: '500' }}>
             Tracking engagement ratios between autonomous AI Labs vs static papers.
           </p>
 
@@ -177,9 +195,9 @@ const Statistics = () => {
           </div>
         </div>
 
-        <div style={largeCardBase}>
-          <h3 style={sectionHeading}>Recent Performance Velocity</h3>
-          <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '20px', fontWeight: '500' }}>
+        <div style={largeCardBase} className="stat-large-card">
+          <h3 className="stat-section-heading" style={sectionHeading}>Recent Performance Velocity</h3>
+          <p className="stat-section-sub" style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '20px', fontWeight: '500' }}>
             Chronological growth curve mapping your last 5 examination runs.
           </p>
 

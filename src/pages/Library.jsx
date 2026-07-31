@@ -264,24 +264,37 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
     <div style={libContainer} className="lib-container">
       <style>{`
         @media (max-width: 768px) {
-          .lib-container { padding: 16px !important; }
-          .lib-header-row { flex-direction: column !important; align-items: stretch !important; gap: 14px !important; }
+          .content-view { padding-left: 0 !important; padding-right: 0 !important; }
+          .lib-container { padding: 10px 6px !important; }
+          .lib-privacy-banner { padding: 10px 12px !important; gap: 10px !important; margin-bottom: 14px !important; }
+          .lib-privacy-icon { width: 30px !important; height: 30px !important; font-size: 0.9rem !important; }
+          .lib-privacy-title { font-size: 0.75rem !important; }
+          .lib-privacy-text { font-size: 0.68rem !important; }
+          .lib-header-row { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+          .lib-header h1 { font-size: 1.25rem !important; margin-bottom: 2px !important; }
+          .lib-header p { font-size: 0.68rem !important; }
           .lib-search-wrapper { width: 100% !important; }
-          .lib-item-card { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
-          .lib-item-card button { width: 100% !important; }
-          .lib-group-header-row { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
-          .lib-group-header-row > div:last-child { width: 100% !important; }
-          .lib-group-header-row > div:last-child button { flex: 1 !important; }
-          .lib-attempt-row { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
-          .lib-attempt-actions { flex-wrap: wrap !important; width: 100% !important; gap: 8px !important; }
-          .lib-attempt-actions button { flex: 1 !important; min-width: 100px !important; }
+          .lib-tab-row { gap: 14px !important; margin-bottom: 14px !important; }
+          .lib-tab-btn { padding: 8px 4px !important; font-size: 0.72rem !important; }
+          .lib-item-card { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; padding: 10px 12px !important; border-radius: 12px !important; }
+          .lib-item-card button { width: 100% !important; padding: 8px !important; font-size: 0.75rem !important; }
+          .lib-group-card { padding: 10px 12px !important; border-radius: 14px !important; gap: 8px !important; }
+          .lib-group-title { font-size: 0.9rem !important; }
+          .lib-group-sub { font-size: 0.68rem !important; }
+          .lib-group-actions { width: 100% !important; }
+          .lib-group-actions button { flex: 1 !important; padding: 8px 4px !important; font-size: 0.68rem !important; }
+          .lib-attempt-row { padding: 8px 10px !important; border-radius: 10px !important; }
+          .lib-attempt-top { font-size: 0.7rem !important; }
+          .lib-attempt-score { font-size: 0.75rem !important; }
+          .lib-attempt-actions button { padding: 6px 4px !important; font-size: 0.62rem !important; }
+          .lib-icon-box { width: 36px !important; height: 36px !important; font-size: 1rem !important; border-radius: 10px !important; }
         }
       `}</style>
-      <div style={privacyNoticeBanner}>
-        <div style={privacyIconFrame}>🛡️</div>
+      <div style={privacyNoticeBanner} className="lib-privacy-banner">
+        <div style={privacyIconFrame} className="lib-privacy-icon">🛡️</div>
         <div style={{ textAlign: 'left' }}>
-          <strong style={{ color: '#0f172a', display: 'block', fontSize: '0.92rem', fontWeight: '800' }}>Your Data, Managed Right</strong>
-          <span style={{ color: '#475569', fontSize: '0.84rem', fontWeight: '600', lineHeight: '1.4' }}>
+          <strong className="lib-privacy-title" style={{ color: '#0f172a', display: 'block', fontSize: '0.92rem', fontWeight: '800' }}>Your Data, Managed Right</strong>
+          <span className="lib-privacy-text" style={{ color: '#475569', fontSize: '0.84rem', fontWeight: '600', lineHeight: '1.4' }}>
             Aapke test sessions aur paused drafts aapke browser local storage (IndexedDB) mein rehte hain. Saved questions ab account ke saath synced hain, taaki wo har device par available rahein.
           </span>
         </div>
@@ -309,7 +322,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
         </div>
       )}
 
-      <header style={libHeader}>
+      <header style={libHeader} className="lib-header">
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end'}} className="lib-header-row">
           <div>
             <h1 style={{color: '#1e293b', marginBottom: '5px', fontSize: '2.2rem', fontWeight: '900', letterSpacing: '-0.5px'}}>Academic Library</h1>
@@ -321,9 +334,9 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
         </div>
       </header>
 
-      <div style={tabRow}>
+      <div style={tabRow} className="lib-tab-row">
         {['tests', 'questions'].map(tab => (
-           <button key={tab} onClick={() => { setActiveSubTab(tab); setSearchQuery(''); }} style={{...tabStyle, color: activeSubTab === tab ? '#000000' : '#94a3b8', borderBottom: activeSubTab === tab ? '3px solid #000000' : 'none'}}>{tab === 'tests' ? "TEST SESSIONS" : tab.toUpperCase()}</button>
+           <button key={tab} className="lib-tab-btn" onClick={() => { setActiveSubTab(tab); setSearchQuery(''); }} style={{...tabStyle, color: activeSubTab === tab ? '#000000' : '#94a3b8', borderBottom: activeSubTab === tab ? '3px solid #000000' : 'none'}}>{tab === 'tests' ? "TEST SESSIONS" : tab.toUpperCase()}</button>
         ))}
       </div>
 
@@ -354,59 +367,59 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
                   const numericalScores = group.attempts.map(a => parseFloat(a.score) || 0);
                   const highestHistoricScore = Math.max(...numericalScores);
                   return (
-                    <div key={group.id || i} style={{ display: 'flex', flexDirection: 'column', background: 'white', padding: '20px 25px', borderRadius: '20px', border: '1px solid #e2e8f0', gap: '15px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="lib-group-header-row">
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <h4 style={{ ...itemTitle, fontSize: '1.15rem' }}>{group.title}</h4>
-                            {group.isAi && <span style={aiBadge}>AI Engine Built</span>}
-                            {group.isSectional && <span style={secBadge}>Sectional</span>}
-                          </div>
-                          <p style={{ ...itemSubText, marginTop: '5px' }}>
-                            Total Session Attempts: <b>{group.attempts.length} records</b> | Performance Peak: <b style={{color:'#000000'}}>{highestHistoricScore.toFixed(2)} M</b>
-                          </p>
+                    <div key={group.id || i} className="lib-group-card" style={{ display: 'flex', flexDirection: 'column', background: 'white', padding: '20px 25px', borderRadius: '20px', border: '1px solid #e2e8f0', gap: '15px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                          <h4 className="lib-group-title" style={{ ...itemTitle, fontSize: '1.15rem' }}>{group.title}</h4>
+                          {group.isAi && <span style={aiBadge}>AI Engine Built</span>}
+                          {group.isSectional && <span style={secBadge}>Sectional</span>}
                         </div>
-                        
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button 
-                            onClick={() => {
-                              const baseTest = group.attempts[0];
-                              const testPayload = {
-                                id: baseTest.id,
-                                title: baseTest.title,
-                                time: baseTest.time || 180, 
-                                sections: baseTest.sections,
-                                hasSectionalTiming: baseTest.hasSectionalTiming,
-                                mode: baseTest.mode,
-                                questions_list: baseTest.questions_list
-                              };
-                              onStartTest?.(testPayload);
-                            }} 
-                            style={{ ...actionBtn, background: '#000000', color: '#fff', border: 'none' }}
-                          >
-                            Reattempt Test
-                          </button>
-                          <button onClick={() => toggleGroupDropdown(group.id || group.title)} style={actionBtn}>
-                            {isExpanded ? "Hide Analytics" : "View Attempt History"}
-                          </button>
-                        </div>
+                        <p className="lib-group-sub" style={{ ...itemSubText, marginTop: '5px' }}>
+                          Total Session Attempts: <b>{group.attempts.length} records</b> | Performance Peak: <b style={{color:'#000000'}}>{highestHistoricScore.toFixed(2)} M</b>
+                        </p>
+                      </div>
+
+                      <div className="lib-group-actions" style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                          onClick={() => {
+                            const baseTest = group.attempts[0];
+                            const testPayload = {
+                              id: baseTest.id,
+                              title: baseTest.title,
+                              time: baseTest.time || 180, 
+                              sections: baseTest.sections,
+                              hasSectionalTiming: baseTest.hasSectionalTiming,
+                              mode: baseTest.mode,
+                              questions_list: baseTest.questions_list
+                            };
+                            onStartTest?.(testPayload);
+                          }} 
+                          style={{ ...actionBtn, background: '#000000', color: '#fff', border: 'none' }}
+                        >
+                          Reattempt Test
+                        </button>
+                        <button onClick={() => toggleGroupDropdown(group.id || group.title)} style={actionBtn}>
+                          {isExpanded ? "Hide Analytics" : "View Attempt History"}
+                        </button>
                       </div>
 
                       {isExpanded && (
                         <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '14px', border: '1px dashed #000000' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {group.attempts.map((attempt, idx) => (
-                              <div key={attempt.attemptId || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #e2e8f0' }} className="lib-attempt-row">
-                                <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>
-                                    Execution Run #{group.attempts.length - idx} ({attempt.date})
-                                </span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }} className="lib-attempt-actions">
-                                  <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#1e293b' }}>
-                                    Score Evaluation: {attempt.score} M ({attempt.accuracy})
+                              <div key={attempt.attemptId || idx} className="lib-attempt-row" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                <div className="lib-attempt-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>
+                                      Execution Run #{group.attempts.length - idx} ({attempt.date})
                                   </span>
-                                  <button onClick={() => onViewAnalysis?.(attempt)} style={{ ...actionBtn, background: '#000000', color: '#fff', border: 'none' }}>Detailed Review</button>
-                                  <button onClick={() => handleShareTest(attempt)} style={actionBtn}>Share</button>
-                                  <button onClick={() => handleRemove(null, 'history', attempt.attemptId)} style={{ ...actionBtn, color: '#ef4444', borderColor: '#fee2e2' }}>Wipe Record</button>
+                                  <span className="lib-attempt-score" style={{ fontSize: '0.88rem', fontWeight: '800', color: '#1e293b' }}>
+                                    {attempt.score} M ({attempt.accuracy})
+                                  </span>
+                                </div>
+                                <div className="lib-attempt-actions" style={{ display: 'flex', gap: '8px' }}>
+                                  <button onClick={() => onViewAnalysis?.(attempt)} style={{ ...actionBtn, flex: 1, textAlign: 'center', background: '#000000', color: '#fff', border: 'none' }}>Detailed Review</button>
+                                  <button onClick={() => handleShareTest(attempt)} style={{ ...actionBtn, flex: 1, textAlign: 'center' }}>Share</button>
+                                  <button onClick={() => handleRemove(null, 'history', attempt.attemptId)} style={{ ...actionBtn, flex: 1, textAlign: 'center', color: '#ef4444', borderColor: '#fee2e2' }}>Wipe Record</button>
                                 </div>
                               </div>
                             ))}
@@ -418,12 +431,14 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
                 })
               ) : (
                 savedTests.filter(draft => draft.title.toLowerCase().includes(searchQuery.toLowerCase())).map(draft => (
-                  <div key={draft.id} style={{...itemCard, borderLeft: '5px solid #000000'}} className="lib-item-card">
-                    <div style={{...iconBox, background: '#f1f5f9'}}>⏳</div>
-                    <div style={{flex: 1}}><h4 style={itemTitle}>{draft.title}</h4><p style={itemSubText}>Suspended at assessment position: Q{draft.lastIndex + 1} ({draft.timeLeft} mins left)</p></div>
-                    <div style={{display: 'flex', gap: '10px'}}>
-                       <button onClick={() => onResumeTest?.(draft)} style={{...actionBtn, background: '#000000', color: '#fff', border: 'none'}}>Resume Session</button>
-                       <button onClick={() => handleRemove(draft.id, 'drafts', null)} style={{...actionBtn, color: '#ef4444', borderColor: '#fee2e2'}}>Discard Draft</button>
+                  <div key={draft.id} className="lib-group-card" style={{...itemCard, borderLeft: '5px solid #000000', flexDirection: 'column', alignItems: 'stretch', gap: '12px'}}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{...iconBox, background: '#f1f5f9', flexShrink: 0}} className="lib-icon-box">⏳</div>
+                      <div style={{flex: 1, minWidth: 0}}><h4 style={itemTitle} className="lib-group-title">{draft.title}</h4><p style={itemSubText} className="lib-group-sub">Suspended at assessment position: Q{draft.lastIndex + 1} ({draft.timeLeft} mins left)</p></div>
+                    </div>
+                    <div className="lib-group-actions" style={{display: 'flex', gap: '10px'}}>
+                       <button onClick={() => onResumeTest?.(draft)} style={{...actionBtn, flex: 1, textAlign: 'center', background: '#000000', color: '#fff', border: 'none'}}>Resume Session</button>
+                       <button onClick={() => handleRemove(draft.id, 'drafts', null)} style={{...actionBtn, flex: 1, textAlign: 'center', color: '#ef4444', borderColor: '#fee2e2'}}>Discard Draft</button>
                     </div>
                   </div>
                 ))
