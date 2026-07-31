@@ -266,14 +266,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
         @media (max-width: 768px) {
           .content-view { padding-left: 0 !important; padding-right: 0 !important; }
           .lib-container { padding: 10px 6px !important; }
-          .lib-privacy-banner { padding: 10px 12px !important; gap: 10px !important; margin-bottom: 14px !important; }
-          .lib-privacy-icon { width: 30px !important; height: 30px !important; font-size: 0.9rem !important; }
-          .lib-privacy-title { font-size: 0.75rem !important; }
-          .lib-privacy-text { font-size: 0.68rem !important; }
-          .lib-header-row { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
-          .lib-header h1 { font-size: 1.25rem !important; margin-bottom: 2px !important; }
-          .lib-header p { font-size: 0.68rem !important; }
-          .lib-search-wrapper { width: 100% !important; }
+          .lib-header h1 { font-size: 1.4rem !important; }
           .lib-tab-row { gap: 14px !important; margin-bottom: 14px !important; }
           .lib-tab-btn { padding: 8px 4px !important; font-size: 0.72rem !important; }
           .lib-item-card { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; padding: 10px 12px !important; border-radius: 12px !important; }
@@ -290,16 +283,6 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
           .lib-icon-box { width: 36px !important; height: 36px !important; font-size: 1rem !important; border-radius: 10px !important; }
         }
       `}</style>
-      <div style={privacyNoticeBanner} className="lib-privacy-banner">
-        <div style={privacyIconFrame} className="lib-privacy-icon">🛡️</div>
-        <div style={{ textAlign: 'left' }}>
-          <strong className="lib-privacy-title" style={{ color: '#0f172a', display: 'block', fontSize: '0.92rem', fontWeight: '800' }}>Your Data, Managed Right</strong>
-          <span className="lib-privacy-text" style={{ color: '#475569', fontSize: '0.84rem', fontWeight: '600', lineHeight: '1.4' }}>
-            Aapke test sessions aur paused drafts aapke browser local storage (IndexedDB) mein rehte hain. Saved questions ab account ke saath synced hain, taaki wo har device par available rahein.
-          </span>
-        </div>
-      </div>
-
       {selectedItem && selectedItem.question && (
         <div style={modalOverlay} onClick={() => setSelectedItem(null)}>
           <div style={modalContent} onClick={e => e.stopPropagation()}>
@@ -322,16 +305,8 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
         </div>
       )}
 
-      <header style={libHeader} className="lib-header">
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end'}} className="lib-header-row">
-          <div>
-            <h1 style={{color: '#1e293b', marginBottom: '5px', fontSize: '2.2rem', fontWeight: '900', letterSpacing: '-0.5px'}}>Academic Library</h1>
-            <p style={{color: '#64748b', fontWeight: '600', fontSize: '0.92rem'}}>Manage your personalized workspace and secure question vaults.</p>
-          </div>
-          <div style={searchWrapper} className="lib-search-wrapper">
-            <input type="text" placeholder={`Search fields in ${activeSubTab}...`} style={searchField} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-          </div>
-        </div>
+      <header style={{ ...libHeader, marginBottom: '20px' }} className="lib-header">
+        <h1 style={{color: '#1e293b', margin: 0, fontSize: '2.2rem', fontWeight: '900', letterSpacing: '-0.5px'}}>Academic Library</h1>
       </header>
 
       <div style={tabRow} className="lib-tab-row">
