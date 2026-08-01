@@ -308,18 +308,18 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         <style>{`
           @media (max-width: 768px) {
             .content-view { padding-left: 0 !important; padding-right: 0 !important; }
-            .ts-container { padding: 10px 6px !important; overflow-x: hidden !important; }
+            .ts-container { padding: 10px 6px !important; }
             .ts-header h1 { font-size: 1.3rem !important; }
             .ts-header p { font-size: 0.72rem !important; margin-top: 2px !important; }
-            .ts-category-row { flex-direction: column !important; padding: 12px !important; border-radius: 16px !important; gap: 12px !important; }
+            .ts-category-row { flex-direction: column !important; padding: 12px !important; border-radius: 16px !important; gap: 12px !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow: hidden !important; }
             .ts-scroll-arrow-btn { display: none !important; }
-            .ts-scroller-arrow-group { width: 100% !important; }
-            .ts-series-scroller-wrap { width: 100% !important; overflow-x: visible !important; }
-            .ts-series-scroller { width: 100% !important; flex-direction: column !important; align-items: stretch !important; }
+            .ts-scroller-arrow-group { width: 100% !important; min-width: 0 !important; }
+            .ts-series-scroller-wrap { width: 100% !important; max-width: 100% !important; overflow-x: auto !important; }
+            .ts-series-scroller { width: max-content !important; }
             .ts-descriptor-block { width: 100% !important; border-right: none !important; border-bottom: 1px solid #f1f5f9 !important; padding-right: 0 !important; padding-bottom: 10px !important; margin-bottom: 2px !important; }
             .ts-descriptor-block h3 { font-size: 1.05rem !important; }
             .ts-descriptor-block p { font-size: 0.66rem !important; margin-bottom: 8px !important; }
-            .ts-series-card { width: 100% !important; padding: 14px !important; border-radius: 14px !important; }
+            .ts-series-card { width: 150px !important; padding: 12px !important; border-radius: 14px !important; }
             .ts-series-card h4 { font-size: 0.92rem !important; margin-bottom: 3px !important; }
             .ts-series-card p { font-size: 0.68rem !important; margin-bottom: 10px !important; }
             .ts-series-card button { padding: 7px !important; font-size: 0.68rem !important; }
