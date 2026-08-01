@@ -9,6 +9,16 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
 
+  // 📱 MOBILE DETECTION — same window.innerWidth-based approach used on
+  // Dashboard/BrainFeed/AiTests, so layout doesn't depend on CSS media-query
+  // matching at all (avoids any inconsistency between pages).
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // 📱 One scroll-container ref per category, so left/right arrow buttons can
   // reliably drive the scroll directly — no dependence on touch-gesture detection.
   const categoryScrollRefs = useRef({});
@@ -304,31 +314,16 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
     const renderCategories = getUniqueCategories();
 
     return (
-      <div style={containerStyle} className="ts-container">
+      <div style={{ ...containerStyle, ...(isMobile ? { padding: '10px 6px' } : {}) }} className="ts-container">
         <style>{`
           @media (max-width: 768px) {
             .content-view { padding-left: 0 !important; padding-right: 0 !important; }
-            .ts-container { padding: 10px 6px !important; }
-            .ts-header h1 { font-size: 1.3rem !important; }
-            .ts-header p { font-size: 0.72rem !important; margin-top: 2px !important; }
-            .ts-category-row { flex-direction: column !important; padding: 12px !important; border-radius: 16px !important; gap: 12px !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow: hidden !important; }
-            .ts-scroll-arrow-btn { display: none !important; }
-            .ts-scroller-arrow-group { width: 100% !important; min-width: 0 !important; }
-            .ts-series-scroller-wrap { width: 100% !important; max-width: 100% !important; overflow-x: auto !important; }
-            .ts-series-scroller { width: max-content !important; }
-            .ts-descriptor-block { width: 100% !important; border-right: none !important; border-bottom: 1px solid #f1f5f9 !important; padding-right: 0 !important; padding-bottom: 10px !important; margin-bottom: 2px !important; }
-            .ts-descriptor-block h3 { font-size: 1.05rem !important; }
-            .ts-descriptor-block p { font-size: 0.66rem !important; margin-bottom: 8px !important; }
-            .ts-series-card { width: 150px !important; padding: 12px !important; border-radius: 14px !important; }
-            .ts-series-card h4 { font-size: 0.92rem !important; margin-bottom: 3px !important; }
-            .ts-series-card p { font-size: 0.68rem !important; margin-bottom: 10px !important; }
-            .ts-series-card button { padding: 7px !important; font-size: 0.68rem !important; }
           }
         `}</style>
         <header style={headerPanelRow} className="ts-header">
           <div>
-            <h1 style={{ fontSize: '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>Test Series Hub</h1>
-            <p style={{ color: '#64748b', marginTop: '4px', fontWeight: '500' }}>Explore custom testing frameworks and enroll to track progress.</p>
+            <h1 style={{ fontSize: isMobile ? '1.3rem' : '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>Test Series Hub</h1>
+            <p style={{ color: '#64748b', marginTop: '4px', fontWeight: '500', fontSize: isMobile ? '0.72rem' : '1rem' }}>Explore custom testing frameworks and enroll to track progress.</p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
             {/* 🛡️ Admin Verification Wrapper */}
@@ -344,16 +339,39 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
           {renderCategories.map((catName) => {
             const seriesList = getSeriesForCategory(catName);
             return (
-              <div key={catName} style={horizontalCategorySpaceRow} className="ts-category-row">
+              <div
+                key={catName}
+                className="ts-category-row"
+                style={{
+                  ...horizontalCategorySpaceRow,
+                  flexDirection: isMobile ? 'column' : 'row',
+                  width: '100%',
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  padding: isMobile ? '12px' : horizontalCategorySpaceRow.padding,
+                  gap: isMobile ? '12px' : horizontalCategorySpaceRow.gap
+                }}
+              >
                 
                 {/* Branch Anchor Left Node Box */}
-                <div style={categoryLeftDescriptorBlock} className="ts-descriptor-block">
+                <div
+                  className="ts-descriptor-block"
+                  style={{
+                    ...categoryLeftDescriptorBlock,
+                    width: isMobile ? '100%' : categoryLeftDescriptorBlock.width,
+                    borderRight: isMobile ? 'none' : categoryLeftDescriptorBlock.borderRight,
+                    borderBottom: isMobile ? '1px solid #f1f5f9' : 'none',
+                    paddingRight: isMobile ? 0 : categoryLeftDescriptorBlock.paddingRight,
+                    paddingBottom: isMobile ? '10px' : 0
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <h3 style={categoryHeadingText}>{catName}</h3>
+                    <h3 style={{ ...categoryHeadingText, fontSize: isMobile ? '1.05rem' : categoryHeadingText.fontSize }}>{catName}</h3>
                     {/* 🛡️ Admin Verification Wrapper */}
                     {isAdmin && <button onClick={(e) => handleDeleteCategoryPath(e, catName)} style={deleteMinimalCrossLink}>✕</button>}
                   </div>
-                  <p style={subLabelMetaDataText}>{seriesList.length} Series Total</p>
+                  <p style={{ ...subLabelMetaDataText, fontSize: isMobile ? '0.66rem' : subLabelMetaDataText.fontSize }}>{seriesList.length} Series Total</p>
                   {/* 🛡️ Admin Verification Wrapper */}
                   {isAdmin && (
                     <button onClick={() => handleAddTestSeries(catName)} style={smallMonochromeOutlineWidgetBtn}>
@@ -363,31 +381,29 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                 </div>
 
                 {/* Branch Horizontal Scroller Split Tracks Panel */}
-                <div className="ts-scroller-arrow-group" style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '6px', position: 'relative' }}>
-                  <button
-                    type="button"
-                    onClick={() => scrollCategoryBy(catName, -240)}
-                    className="ts-scroll-arrow-btn"
-                    style={scrollArrowBtnStyle}
-                    aria-label="Scroll left"
-                  >
-                    ‹
-                  </button>
-                  <div
-                    className="ts-series-scroller-wrap"
-                    ref={(el) => { categoryScrollRefs.current[catName] = el; }}
-                    style={{ flex: 1, minWidth: 0, width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
-                  >
-                  <div style={seriesHorizontalFlexScroller} className="ts-series-scroller">
+                <div
+                  className="ts-series-scroller-wrap"
+                  ref={(el) => { categoryScrollRefs.current[catName] = el; }}
+                  style={{ flex: 1, minWidth: 0, width: '100%', maxWidth: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', boxSizing: 'border-box' }}
+                >
+                  <div style={{ ...seriesHorizontalFlexScroller, width: 'max-content' }} className="ts-series-scroller">
                   {seriesList.length > 0 ? (
                     seriesList.map((seriesName) => {
                       const totalTestCount = allMockTests.filter(t => t.category_name === catName && t.series_name === seriesName && t.title).length;
                       const isEnrolled = subscribedExams.includes(seriesName);
 
                       return (
-                        <div key={seriesName} style={seriesChronologicalCardBox} className="ts-series-card">
-                          <h4 style={seriesThemeTitleCardHeader}>{seriesName}</h4>
-                          <p style={totalTestCountFooterText}>{totalTestCount} Mock Tests</p>
+                        <div
+                          key={seriesName}
+                          className="ts-series-card"
+                          style={{
+                            ...seriesChronologicalCardBox,
+                            width: isMobile ? '150px' : seriesChronologicalCardBox.width,
+                            padding: isMobile ? '12px' : seriesChronologicalCardBox.padding
+                          }}
+                        >
+                          <h4 style={{ ...seriesThemeTitleCardHeader, fontSize: isMobile ? '0.92rem' : seriesThemeTitleCardHeader.fontSize }}>{seriesName}</h4>
+                          <p style={{ ...totalTestCountFooterText, fontSize: isMobile ? '0.68rem' : totalTestCountFooterText.fontSize }}>{totalTestCount} Mock Tests</p>
                           
                           {/* DUAL MONOCHROME MANAGEMENT BUTTON MATRIX */}
                           <div style={seriesCardActionContainerLayout}>
@@ -432,20 +448,10 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                   )}
                   </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => scrollCategoryBy(catName, 240)}
-                    className="ts-scroll-arrow-btn"
-                    style={scrollArrowBtnStyle}
-                    aria-label="Scroll right"
-                  >
-                    ›
-                  </button>
                 </div>
 
-              </div>
-            );
-          })}
+              );
+            })}
           {renderCategories.length === 0 && <p style={emptyStateTextPlaceholder}>No category path clusters found in the database grid.</p>}
         </div>
 

@@ -221,6 +221,18 @@ const BrainFeed = () => {
           setCurrentIdx(oldLen); 
           setShowWarning(false);
           setShowEndModal(false);
+          // 📱 MOBILE FIX: card position on mobile is driven purely by native
+          // scroll (scroll-snap), not by the currentIdx transform. Without this,
+          // closing the summary modal leaves the viewport scrolled to the last
+          // (already-answered) card of the previous batch instead of the new one,
+          // making the session look "stuck". Wait a tick for the new cards to
+          // actually render before jumping the scroll position.
+          if (isMobile) {
+            requestAnimationFrame(() => {
+              const el = viewportRef.current;
+              if (el) el.scrollTo({ top: oldLen * el.clientHeight, behavior: 'auto' });
+            });
+          }
         } else {
           setQuestions(mappedQuestions);
           setCurrentIdx(0);
