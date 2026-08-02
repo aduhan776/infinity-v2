@@ -60,6 +60,7 @@ const BrainFeed = () => {
   const lastQuestionTimerRef = useRef(null);
   const awaitingCompletionRef = useRef(false);
   const pendingCompletionDataRef = useRef(null);
+  const pendingLedgerWritesRef = useRef([]); // tracks in-flight submit-attempt promises, so Load More can wait for them to land before re-querying the ledger
 
   // --- 🏁 Fires the end-of-session summary — called either after the 7s grace period
   // on the last question, or the moment the person tries to interact with it again.
@@ -180,6 +181,16 @@ const BrainFeed = () => {
      }
     setLoading(true);
     try {
+      // ⏳ On Load More, the last few submit-attempt calls from the batch that
+      // just ended may still be in flight (they're fire-and-forget so the UI
+      // never waited on them). If we query the ledger before those land, those
+      // questions look "unseen" instead of "incorrect" and can slip back into
+      // the very next batch. Wait for them here — this only delays the Load
+      // More request itself (already a loading state), never the live feed.
+      if (isLoadMore && pendingLedgerWritesRef.current.length > 0) {
+        await Promise.allSettled(pendingLedgerWritesRef.current);
+        pendingLedgerWritesRef.current = [];
+      }
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setCustomAlert({ show: true, title: 'Authentication Required', message: 'Your session expired. Please log in again to continue.' });
@@ -200,7 +211,8 @@ const BrainFeed = () => {
           difficulty: difficulty,
           language: language,
           origin: 'brainfeed',
-          revealAnswers: true
+          revealAnswers: true,
+          skipResurfacing: isLoadMore
         })
       });
       const data = await response.json();
@@ -298,9 +310,12 @@ const BrainFeed = () => {
     // 🎯 Silent background ledger log — never blocks or delays the UI.
     // If this fails (network hiccup), the student never even sees it;
     // it just means this one attempt won't count toward pool resurfacing.
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    // We DO keep a handle on this promise (pendingLedgerWritesRef) purely so
+    // "Load More" can await in-flight writes before re-querying the ledger —
+    // see fetchBrainFeedPacket. This doesn't delay anything the student sees.
+    const ledgerWritePromise = supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/submit-attempt`, {
+      return fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/submit-attempt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -310,6 +325,8 @@ const BrainFeed = () => {
         })
       }).catch(err => console.warn("Ledger update skipped for this question (non-blocking):", err));
     }).catch(err => console.warn("Could not resolve user for ledger logging (non-blocking):", err));
+
+    pendingLedgerWritesRef.current.push(ledgerWritePromise);
 
     // 🏁 On the LAST card, don't jump to the summary immediately — give the person
     // 7 seconds to sit with their answer, or end early the moment they try to
