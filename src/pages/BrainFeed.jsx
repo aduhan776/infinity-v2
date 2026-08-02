@@ -185,10 +185,12 @@ const BrainFeed = () => {
       // just ended may still be in flight (they're fire-and-forget so the UI
       // never waited on them). If we query the ledger before those land, those
       // questions look "unseen" instead of "incorrect" and can slip back into
-      // the very next batch. Wait for them here — this only delays the Load
-      // More request itself (already a loading state), never the live feed.
+      // the very next batch. Wait for them here, but with a hard cap — if a
+      // write is genuinely stuck (bad network etc.), we'd rather risk one
+      // resurfaced question than freeze the whole session on Load More.
       if (isLoadMore && pendingLedgerWritesRef.current.length > 0) {
-        await Promise.allSettled(pendingLedgerWritesRef.current);
+        const safetyTimeout = new Promise(resolve => setTimeout(resolve, 2500));
+        await Promise.race([Promise.allSettled(pendingLedgerWritesRef.current), safetyTimeout]);
         pendingLedgerWritesRef.current = [];
       }
       const { data: { user } } = await supabase.auth.getUser();
