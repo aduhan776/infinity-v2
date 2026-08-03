@@ -31,6 +31,7 @@ const BrainFeed = () => {
 
   // --- MODAL POPUP WINDOW STATES ---
   const [showEndModal, setShowEndModal] = useState(false);
+  const [hasLoadedMore, setHasLoadedMore] = useState(false); // caps Load More to once per session (15 -> 30, no chaining beyond that)
   const [showExitWarning, setShowExitWarning] = useState(false);
   
   // --- IN-APP WINDOW NOTIFICATION STATE ---
@@ -235,6 +236,7 @@ const BrainFeed = () => {
           setCurrentIdx(oldLen); 
           setShowWarning(false);
           setShowEndModal(false);
+          setHasLoadedMore(true);
           // 📱 MOBILE FIX: card position on mobile is driven purely by native
           // scroll (scroll-snap), not by the currentIdx transform. Without this,
           // closing the summary modal leaves the viewport scrolled to the last
@@ -255,6 +257,7 @@ const BrainFeed = () => {
           setSavedStatus({});
           setShowWarning(false);
           setIsFeedActive(true);
+          setHasLoadedMore(false);
         }
       } else {
         setCustomAlert({ show: true, title: 'Server Message', message: data.error || 'Failed to get questions from the server.' });
@@ -290,11 +293,11 @@ const BrainFeed = () => {
     }
   };
 
-  const handleOptionSelect = (optIdx) => {
-    if (selectedAnswers[currentIdx] !== undefined) return;
+  const handleOptionSelect = (targetIdx, optIdx) => {
+    if (selectedAnswers[targetIdx] !== undefined) return;
     setShowWarning(false);
 
-    const lockedIdx = currentIdx;
+    const lockedIdx = targetIdx;
     const q = questions[lockedIdx];
 
     const updatedAnswers = { ...selectedAnswers, [lockedIdx]: optIdx };
@@ -452,6 +455,7 @@ const BrainFeed = () => {
     setShowExitWarning(false);
     setShowEndModal(false);
     setSessionMode('live');
+    setHasLoadedMore(false);
   };
 
   // --- 📖 REVISE: re-open the same finished session, read-only, so the person can scroll back through it ---
@@ -623,7 +627,7 @@ const BrainFeed = () => {
                                     </div>
                                   )}
                                   <button
-                                    onClick={() => handleOptionSelect(oIdx)}
+                                    onClick={() => handleOptionSelect(idx, oIdx)}
                                     disabled={itemChoice !== undefined}
                                     style={{
                                       ...optionButtonStyle,
@@ -704,9 +708,15 @@ const BrainFeed = () => {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '24px' }}>
-                <button onClick={() => fetchBrainFeedPacket(true)} style={{ ...modalActionBtn, background: '#000000', color: '#ffffff' }}>
-                  Load More Questions
-                </button>
+                {!hasLoadedMore ? (
+                  <button onClick={() => fetchBrainFeedPacket(true)} style={{ ...modalActionBtn, background: '#000000', color: '#ffffff' }}>
+                    Load More Questions
+                  </button>
+                ) : (
+                  <p style={{ margin: '0 0 4px 0', color: '#94a3b8', fontSize: '0.78rem', fontWeight: '600', textAlign: 'center' }}>
+                    You've already loaded more once this session — start a fresh session for more.
+                  </p>
+                )}
                 <button onClick={handleReviseSession} style={{ ...modalActionBtn, background: '#f1f5f9', color: '#0f172a', border: '1px solid #e2e8f0' }}>
                   Revise Questions
                 </button>

@@ -348,7 +348,6 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                   width: '100%',
                   maxWidth: '100%',
                   boxSizing: 'border-box',
-                  overflow: 'hidden',
                   padding: isMobile ? '12px' : horizontalCategorySpaceRow.padding,
                   gap: isMobile ? '12px' : horizontalCategorySpaceRow.gap
                 }}
@@ -398,15 +397,15 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                           className="ts-series-card"
                           style={{
                             ...seriesChronologicalCardBox,
-                            width: isMobile ? '150px' : seriesChronologicalCardBox.width,
-                            padding: isMobile ? '12px' : seriesChronologicalCardBox.padding
+                            width: isMobile ? '128px' : seriesChronologicalCardBox.width,
+                            padding: isMobile ? '10px' : seriesChronologicalCardBox.padding
                           }}
                         >
-                          <h4 style={{ ...seriesThemeTitleCardHeader, fontSize: isMobile ? '0.92rem' : seriesThemeTitleCardHeader.fontSize }}>{seriesName}</h4>
-                          <p style={{ ...totalTestCountFooterText, fontSize: isMobile ? '0.68rem' : totalTestCountFooterText.fontSize }}>{totalTestCount} Mock Tests</p>
+                          <h4 style={{ ...seriesThemeTitleCardHeader, fontSize: isMobile ? '0.85rem' : seriesThemeTitleCardHeader.fontSize, marginBottom: isMobile ? '2px' : seriesThemeTitleCardHeader.marginBottom }}>{seriesName}</h4>
+                          <p style={{ ...totalTestCountFooterText, fontSize: isMobile ? '0.64rem' : totalTestCountFooterText.fontSize, marginBottom: isMobile ? '8px' : totalTestCountFooterText.marginBottom }}>{totalTestCount} Mock Tests</p>
                           
                           {/* DUAL MONOCHROME MANAGEMENT BUTTON MATRIX */}
-                          <div style={seriesCardActionContainerLayout}>
+                          <div style={{ ...seriesCardActionContainerLayout, gap: isMobile ? '6px' : seriesCardActionContainerLayout.gap }}>
                             <button 
                               type="button" 
                               onClick={() => toggleEnrollSeries(seriesName)} 
@@ -414,7 +413,9 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                                 ...seriesActionBtnStyle, 
                                 background: isEnrolled ? '#475569' : '#000000', 
                                 color: '#ffffff',
-                                border: 'none'
+                                border: 'none',
+                                padding: isMobile ? '7px 4px' : seriesActionBtnStyle.padding,
+                                fontSize: isMobile ? '0.66rem' : seriesActionBtnStyle.fontSize
                               }}
                             >
                               {isEnrolled ? "Enrolled ✓" : "Enroll in Series"}
@@ -432,7 +433,9 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                                 ...seriesActionBtnStyle, 
                                 background: '#ffffff', 
                                 color: '#000000', 
-                                border: '1px solid #000000' 
+                                border: '1px solid #000000',
+                                padding: isMobile ? '7px 4px' : seriesActionBtnStyle.padding,
+                                fontSize: isMobile ? '0.66rem' : seriesActionBtnStyle.fontSize
                               }}
                             >
                               Explore Test Series
