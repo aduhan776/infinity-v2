@@ -44,6 +44,19 @@ const deleteFromLocalStore = async (storeName, id) => {
   });
 };
 
+// --- 📱 MOBILE BREAKPOINT DETECTION ---
+const useIsMobile = (breakpoint = 768) => {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth <= breakpoint
+  );
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= breakpoint);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, [breakpoint]);
+  return isMobile;
+};
+
 const TestPortal = ({ testData, onExit }) => {
   // --- 1. DATA PARSING & FALLBACKS ---
   const data = testData || { title: "Standard Mock Test", time: 180, questions: 100, id: 'test_' + Date.now() };
@@ -94,6 +107,20 @@ const TestPortal = ({ testData, onExit }) => {
   const fileInputRef = useRef(null);
 
   const isSubmittingRef = useRef(false);
+
+  // --- 📱 MOBILE UI STATES ---
+  const isMobile = useIsMobile();
+  const [showDrawer, setShowDrawer] = useState(false);
+  const [toastMsg, setToastMsg] = useState(null);
+  const toastTimerRef = useRef(null);
+  const touchStartXRef = useRef(null);
+  const touchStartYRef = useRef(null);
+
+  const showToast = (msg) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMsg(msg);
+    toastTimerRef.current = setTimeout(() => setToastMsg(null), 1200);
+  };
 
   // --- TIMING STATES ---
   const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
@@ -598,6 +625,46 @@ const TestPortal = ({ testData, onExit }) => {
     setUploads({ ...uploads, [currentQ]: up });
   };
 
+  // Toggles the current question's marked-for-review state and confirms it
+  // with a short toast — used by both the desktop text button and the
+  // mobile "!" icon.
+  const toggleMarkReview = () => {
+    const isMarked = markedForReview.includes(currentQ);
+    if (isMarked) {
+      setMarkedForReview(markedForReview.filter(i => i !== currentQ));
+      showToast("Removed from review");
+    } else {
+      setMarkedForReview([...markedForReview, currentQ]);
+      showToast("Question marked for review");
+    }
+  };
+
+  // Lets the student tap an already-selected option again to deselect it,
+  // replacing the old explicit "Clear Response" button on both mobile and desktop.
+  const handleOptionSelect = (idx) => {
+    setAnswers({ ...answers, [currentQ]: answers[currentQ] === idx ? null : idx });
+  };
+
+  // --- 👉 SWIPE NAVIGATION (mobile) — swipe left for next, right for previous ---
+  const SWIPE_THRESHOLD = 55;
+  const handleTouchStart = (e) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+  };
+  const handleTouchEnd = (e) => {
+    if (touchStartXRef.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
+    touchStartXRef.current = null;
+    // Ignore mostly-vertical swipes (those are just scrolling the question content)
+    if (Math.abs(deltaX) < SWIPE_THRESHOLD || Math.abs(deltaX) < Math.abs(deltaY)) return;
+    if (deltaX < 0) {
+      handleNextNavigation();
+    } else {
+      handlePrevNavigation();
+    }
+  };
+
   const handlePrevNavigation = () => {
     if (currentQ > 0) {
       if (isSectionalTimed && questions[currentQ - 1] && questions[currentQ - 1].sectionIndex !== currentSectionIdx) return;
@@ -667,30 +734,42 @@ const TestPortal = ({ testData, onExit }) => {
         </div>
       )}
 
-      <header style={styles.topBarStyle}>
-        <div style={styles.headerLeft}>
-          <button onClick={() => { if(window.confirm("Warning: Exit test module? operational changes will be discarded.")) onExit(null); }} style={styles.exitBtn}>🚪 Exit</button>
-          <div style={styles.testTitle}>
-            {data.title} {hasSections && questions[currentQ] && <span style={{fontSize:'0.85rem', background:'#e0e7ff', color:'#4338ca', padding:'3px 8px', borderRadius:'6px', marginLeft:'10px'}}>{questions[currentQ].sectionName}</span>}
-          </div>
-        </div>
-        <div style={styles.headerRight}>
-          {isSectionalTimed && (
-            <div style={{...styles.timerBox, borderColor: '#ef4444', marginRight: '5px'}}>
-               <span style={{...styles.timerLabel, color: '#ef4444'}}>SECTION TIME</span>
-               <span style={{fontWeight:'bold', color: '#ef4444'}}>{formatTime(sectionTimeLeft)}</span>
+      {isMobile ? (
+        <header style={styles.mobileHeaderBar}>
+          <button onClick={() => setIsPaused(true)} style={styles.mobilePauseIcon} title="Pause">⏸️</button>
+          <div style={styles.mobileTitleBlock}>
+            <div style={styles.mobileTimerText}>
+              {isSectionalTimed ? formatTime(sectionTimeLeft) : formatTime(globalTimeLeft)}
             </div>
-          )}
-          <div style={styles.timerBox}>
-             <span style={styles.timerLabel}>TOTAL REMAINING</span>
-             <span>{formatTime(globalTimeLeft)}</span>
+            <div style={styles.mobileTestName}>{data.title}</div>
           </div>
-          <button onClick={() => setIsPaused(true)} style={styles.pauseBtn}>⏸️ Pause</button>
-          <button onClick={() => setShowSummary(true)} style={styles.submitBtn}>Submit Test</button>
-        </div>
-      </header>
+          <button onClick={() => setShowDrawer(true)} style={styles.mobileHamburger} title="Question palette">☰</button>
+        </header>
+      ) : (
+        <header style={styles.topBarStyle}>
+          <div style={styles.headerLeft}>
+            <div style={styles.testTitle}>
+              {data.title} {hasSections && questions[currentQ] && <span style={{fontSize:'0.85rem', background:'#e0e7ff', color:'#4338ca', padding:'3px 8px', borderRadius:'6px', marginLeft:'10px'}}>{questions[currentQ].sectionName}</span>}
+            </div>
+          </div>
+          <div style={styles.headerRight}>
+            {isSectionalTimed && (
+              <div style={{...styles.timerBox, borderColor: '#ef4444', marginRight: '5px'}}>
+                 <span style={{...styles.timerLabel, color: '#ef4444'}}>SECTION TIME</span>
+                 <span style={{fontWeight:'bold', color: '#ef4444'}}>{formatTime(sectionTimeLeft)}</span>
+              </div>
+            )}
+            <div style={styles.timerBox}>
+               <span style={styles.timerLabel}>TOTAL REMAINING</span>
+               <span>{formatTime(globalTimeLeft)}</span>
+            </div>
+            <button onClick={() => setIsPaused(true)} style={styles.pauseBtn}>⏸️ Pause</button>
+            <button onClick={() => setShowSummary(true)} style={styles.submitBtn}>Submit Test</button>
+          </div>
+        </header>
+      )}
 
-      {hasSections && (
+      {!isMobile && hasSections && (
         <div style={styles.sectionTabsBar}>
           <div style={styles.sectionTabsScroll}>
             {data.sections.map((sec, secIdx) => {
@@ -724,43 +803,52 @@ const TestPortal = ({ testData, onExit }) => {
        
       <div style={styles.mainLayout}>
         <div style={styles.questionSection}>
-          <div style={styles.controlCenterFrame}>
-            <div style={styles.qInfoLine}>
-              <div style={styles.qBadge}>Question {currentQ + 1} of {questions.length}</div>
-              {questions[currentQ] && (
-                <div style={styles.marksGroup}>
-                  <span style={{color:'#22c55e'}}>Weight: {questions[currentQ].marks}</span>
-                  <span style={{color:'#ef4444'}}>Penalty: {questions[currentQ].neg}</span>
-                  <span style={{color:'#64748b', background:'#f1f5f9', padding:'2px 8px', borderRadius:'4px'}}>{questions[currentQ].type}</span>
+          {isMobile ? (
+            <div style={styles.mobileQInfoRow}>
+              <div style={styles.mobileQNumBadge}>{currentQ + 1}</div>
+              <div style={styles.mobileDivider}></div>
+              <div style={styles.mobileStopwatch}>🕒 {formatTime(qStopwatch)}</div>
+              <div style={{flex:1}}></div>
+              <div style={{fontSize:'0.75rem', color:'#94a3b8', fontWeight:'700'}}>{currentQ + 1} / {questions.length}</div>
+            </div>
+          ) : (
+            <div style={styles.controlCenterFrame}>
+              <div style={styles.qInfoLine}>
+                <div style={styles.qBadge}>Question {currentQ + 1} of {questions.length}</div>
+                {questions[currentQ] && (
+                  <div style={styles.marksGroup}>
+                    <span style={{color:'#22c55e'}}>Weight: {questions[currentQ].marks}</span>
+                    <span style={{color:'#ef4444'}}>Penalty: {questions[currentQ].neg}</span>
+                    <span style={{color:'#64748b', background:'#f1f5f9', padding:'2px 8px', borderRadius:'4px'}}>{questions[currentQ].type}</span>
+                  </div>
+                )}
+              </div>
+              <div style={styles.buttonActionLine}>
+                <div style={styles.leftActions}>
+                  <button style={{...styles.secBtnSmall, color: markedForReview.includes(currentQ) ? '#fff' : '#f59e0b', background: markedForReview.includes(currentQ) ? '#f59e0b' : '#fff'}} 
+                     onClick={toggleMarkReview}>
+                    {markedForReview.includes(currentQ) ? 'Unmark Review' : 'Mark for Review'}
+                  </button>
+                  <div style={styles.stopwatchBadge}>⏱️ {formatTime(qStopwatch)}</div>
                 </div>
-              )}
-            </div>
-            <div style={styles.buttonActionLine}>
-              <div style={styles.leftActions}>
-                <button style={styles.secBtnSmall} onClick={() => { setAnswers({...answers, [currentQ]: null}); setUploads({...uploads, [currentQ]: []}); }}>Clear Response</button>
-                <button style={{...styles.secBtnSmall, color: markedForReview.includes(currentQ) ? '#fff' : '#f59e0b', background: markedForReview.includes(currentQ) ? '#f59e0b' : '#fff'}} 
-                   onClick={() => markedForReview.includes(currentQ) ? setMarkedForReview(markedForReview.filter(i=>i!==currentQ)) : setMarkedForReview([...markedForReview, currentQ])}>
-                  {markedForReview.includes(currentQ) ? 'Unmark Review' : 'Mark for Review'}
-                </button>
-                <div style={styles.stopwatchBadge}>⏱️ {formatTime(qStopwatch)}</div>
-              </div>
-              <div style={styles.rightActions}>
-                <button style={styles.navBtn} disabled={currentQ === 0} onClick={handlePrevNavigation}>Previous</button>
-                <button style={styles.priBtn} onClick={handleNextNavigation}>
-                  {currentQ === questions.length - 1 ? "Finish Test 🏁" : "Save & Next"}
-                </button>
+                <div style={styles.rightActions}>
+                  <button style={styles.navBtn} disabled={currentQ === 0} onClick={handlePrevNavigation}>Previous</button>
+                  <button style={styles.priBtn} onClick={handleNextNavigation}>
+                    {currentQ === questions.length - 1 ? "Finish Test 🏁" : "Save & Next"}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
            
-          <div style={styles.qContentScroll}>
+          <div style={{...styles.qContentScroll, ...(isMobile ? {paddingBottom:'80px'} : {})}} onTouchStart={isMobile ? handleTouchStart : undefined} onTouchEnd={isMobile ? handleTouchEnd : undefined}>
             {questions[currentQ] ? (
-              <div style={styles.qInnerFrame}>
-                <p style={styles.qText}><LatexText text={questions[currentQ].question} /></p>
+              <div style={{...styles.qInnerFrame, ...(isMobile ? styles.qInnerFrameMobile : {})}}>
+                <p style={{...styles.qText, ...(isMobile ? styles.qTextMobile : {})}}><LatexText text={questions[currentQ].question} /></p>
                 {questions[currentQ].type === 'Objective' ? (
                   <div style={styles.optionsGrid}>
                     {(questions[currentQ].options || []).map((opt, idx) => (
-                      <div key={idx} style={{...styles.optCard, border: answers[currentQ] === idx ? '2px solid #6366f1' : '1px solid #e2e8f0', background: answers[currentQ] === idx ? '#f5f7ff' : '#fff'} } onClick={() => setAnswers({ ...answers, [currentQ]: idx })}>
+                      <div key={idx} style={{...styles.optCard, ...(isMobile ? styles.optCardMobile : {}), border: answers[currentQ] === idx ? '2px solid #6366f1' : '1px solid #e2e8f0', background: answers[currentQ] === idx ? '#f5f7ff' : '#fff'} } onClick={() => handleOptionSelect(idx)}>
                         <span style={{...styles.optLabel, background: answers[currentQ] === idx ? '#6366f1' : '#f1f5f9', color: answers[currentQ] === idx ? '#fff' : '#1e293b'}}>{String.fromCharCode(65 + idx)}</span>
                         <LatexText text={opt} />
                       </div>
@@ -798,40 +886,155 @@ const TestPortal = ({ testData, onExit }) => {
           </div>
         </div>
 
-        <aside style={styles.paletteSection}>
-          <div style={styles.palHeader}>Question Matrix Palette</div>
-          <div style={styles.pGridScroll}>
-            {questions.map((qObj, i) => {
-              const isLocked = isSectionalTimed && qObj.sectionIndex !== currentSectionIdx;
-              return (
-                <div key={i} 
-                   onClick={() => {
-                     if (isLocked) {
-                       alert("Security Restriction: Sectional configurations restrict navigation.");
-                       return;
-                     }
-                     setCurrentQ(i);
-                   }}
-                   style={{
-                     ...styles.pNum, 
-                     background: currentQ === i ? '#1e293b' : isLocked ? '#e2e8f0' : isAttempted(i) ? '#22c55e' : markedForReview.includes(i) ? '#f59e0b' : '#fff', 
-                     color: isLocked ? '#94a3b8' : (currentQ === i || isAttempted(i) || markedForReview.includes(i)) ? '#fff' : '#64748b', 
-                     borderColor: currentQ === i ? '#6366f1' : '#e2e8f0',
-                     cursor: isLocked ? 'not-allowed' : 'pointer',
-                     opacity: isLocked ? 0.6 : 1
-                   }}
-                >
-                  {i + 1}
-                </div>
-              );
-            })}
-          </div>
-        </aside>
+        {!isMobile && (
+          <aside style={styles.paletteSection}>
+            <div style={styles.palHeader}>Question Matrix Palette</div>
+            <div style={styles.pGridScroll}>
+              {questions.map((qObj, i) => {
+                const isLocked = isSectionalTimed && qObj.sectionIndex !== currentSectionIdx;
+                return (
+                  <div key={i} 
+                     onClick={() => {
+                       if (isLocked) {
+                         alert("Security Restriction: Sectional configurations restrict navigation.");
+                         return;
+                       }
+                       setCurrentQ(i);
+                     }}
+                     style={{
+                       ...styles.pNum, 
+                       background: currentQ === i ? '#1e293b' : isLocked ? '#e2e8f0' : isAttempted(i) ? '#22c55e' : markedForReview.includes(i) ? '#f59e0b' : '#fff', 
+                       color: isLocked ? '#94a3b8' : (currentQ === i || isAttempted(i) || markedForReview.includes(i)) ? '#fff' : '#64748b', 
+                       borderColor: currentQ === i ? '#6366f1' : '#e2e8f0',
+                       cursor: isLocked ? 'not-allowed' : 'pointer',
+                       opacity: isLocked ? 0.6 : 1
+                     }}
+                  >
+                    {i + 1}
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
+        )}
       </div>
+
+      {/* --- 📱 MOBILE BOTTOM ACTION BAR --- */}
+      {isMobile && (
+        <div style={styles.mobileBottomBar}>
+          <button
+            style={{...styles.mobileReviewBtn, ...(markedForReview.includes(currentQ) ? styles.mobileReviewBtnActive : {})}}
+            onClick={toggleMarkReview}
+            title="Mark for review"
+          >
+            !
+          </button>
+          <button style={styles.mobileNextBtn} onClick={handleNextNavigation}>
+            {currentQ === questions.length - 1 ? "Finish Test 🏁" : "Save & Next"}
+          </button>
+        </div>
+      )}
+
+      {/* --- 📱 MOBILE TOAST --- */}
+      {isMobile && toastMsg && (
+        <div style={styles.toastBox}>{toastMsg}</div>
+      )}
+
+      {/* --- 📱 MOBILE DRAWER: section tabs + answered stats + palette grid + submit --- */}
+      {isMobile && showDrawer && (
+        <>
+          <div style={styles.drawerOverlay} onClick={() => setShowDrawer(false)}></div>
+          <div style={styles.drawerPanel}>
+            <div style={styles.drawerHeader}>
+              <strong>Question Palette</strong>
+              <button onClick={() => setShowDrawer(false)} style={{background:'none', border:'none', fontSize:'1.3rem', cursor:'pointer', color:'#64748b'}}>✕</button>
+            </div>
+
+            {hasSections && (
+              <div style={styles.drawerTabsRow}>
+                {data.sections.map((sec, secIdx) => {
+                  const isActive = secIdx === activeSectionForDisplay;
+                  const isLockedTab = isSectionalTimed && secIdx !== currentSectionIdx;
+                  return (
+                    <button
+                      key={secIdx}
+                      onClick={() => handleSectionSwitch(secIdx)}
+                      disabled={isSectionalTimed}
+                      style={{
+                        ...styles.sectionTab,
+                        ...(isActive ? styles.sectionTabActive : {}),
+                        ...(isLockedTab ? styles.sectionTabDisabled : {}),
+                        cursor: isSectionalTimed ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {sec.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {questions[currentQ] && (
+              <div style={styles.drawerSectionTitle}>{questions[currentQ].sectionName || data.title}</div>
+            )}
+
+            <div style={styles.drawerStatsBox}>
+              <div style={styles.drawerStatRow}>
+                <span>Answered Qs</span>
+                <span style={{color:'#22c55e'}}>{attemptedCount}</span>
+              </div>
+              <div style={{...styles.drawerStatRow, borderBottom:'none'}}>
+                <span>Unanswered Qs</span>
+                <span style={{color:'#6366f1'}}>{unattemptedCount}</span>
+              </div>
+            </div>
+
+            <div style={styles.drawerGridScroll}>
+              {questions.map((qObj, i) => {
+                const isLocked = isSectionalTimed && qObj.sectionIndex !== currentSectionIdx;
+                return (
+                  <div key={i}
+                     onClick={() => {
+                       if (isLocked) {
+                         alert("Security Restriction: Sectional configurations restrict navigation.");
+                         return;
+                       }
+                       setCurrentQ(i);
+                       setShowDrawer(false);
+                     }}
+                     style={{
+                       ...styles.drawerPNum,
+                       background: currentQ === i ? '#1e293b' : isLocked ? '#e2e8f0' : isAttempted(i) ? '#22c55e' : markedForReview.includes(i) ? '#f59e0b' : '#fff',
+                       color: isLocked ? '#94a3b8' : (currentQ === i || isAttempted(i) || markedForReview.includes(i)) ? '#fff' : '#64748b',
+                       borderColor: currentQ === i ? '#6366f1' : '#e2e8f0',
+                       cursor: isLocked ? 'not-allowed' : 'pointer',
+                       opacity: isLocked ? 0.6 : 1
+                     }}
+                  >
+                    {i + 1}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={styles.drawerSubmitBar}>
+              {isSectionalTimed ? (
+                <button onClick={() => { setShowDrawer(false); handleSubmitSection(); }} style={styles.drawerSubmitBtn}>
+                  {currentSectionIdx >= data.sections.length - 1 ? "Finish Test 🏁" : "Submit Section ✅"}
+                </button>
+              ) : (
+                <button onClick={() => { setShowDrawer(false); setShowSummary(true); }} style={styles.drawerSubmitBtn}>
+                  Submit Test
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {showSummary && (
         <div style={styles.overlay}>
-          <div style={styles.modalSummary}>
+          <div style={{...styles.modalSummary, ...(isMobile ? {width:'90vw', padding:'24px 20px'} : {})}}>
             <div style={styles.summaryTimerHeader}>Remaining Session Timer: <strong style={{color:'#ef4444'}}>{formatTime(globalTimeLeft)}</strong></div>
             <h2 style={{margin:'20px 0'}}>Assessment Submission Summary</h2>
             <div style={styles.summaryGrid}>
@@ -850,7 +1053,7 @@ const TestPortal = ({ testData, onExit }) => {
 
       {isPaused && (
         <div style={styles.overlay}>
-          <div style={styles.modal}>
+          <div style={{...styles.modal, ...(isMobile ? {width:'88vw', padding:'28px 22px'} : {})}}>
             <h2>Assessment Suspended</h2>
             <p style={{marginBottom:'15px', fontWeight:'600'}}>Would you like to cache this execution session inside Drafts for later retrieval?</p>
             <div style={styles.pauseWarningBox}>
@@ -882,7 +1085,6 @@ const styles = {
   topBarStyle: { height:'65px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 25px', flexShrink:0 }, 
   headerLeft: { display:'flex', alignItems:'center', gap:'20px' }, 
   testTitle: { fontWeight:'800', fontSize:'1.1rem', display:'flex', alignItems:'center' }, 
-  exitBtn: { background:'none', border:'none', color:'#64748b', fontWeight:'700', cursor:'pointer' }, 
   headerRight: { display:'flex', alignItems:'center', gap:'15px' }, 
   timerBox: { background:'#f8fafc', border:'1px solid #e2e8f0', padding:'5px 15px', borderRadius:'8px', textAlign:'center', minWidth: '120px' }, 
   timerLabel: { fontSize:'0.55rem', color:'#94a3b8', display:'block', fontWeight:'800' }, 
@@ -946,7 +1148,48 @@ const styles = {
   closeBtn: { position:'absolute', top:'-50px', right:0, background:'#fff', padding:'8px 20px', borderRadius:'8px', fontWeight:'800', cursor:'pointer', border:'none' },
   submittingOverlay: { position: 'fixed', inset: 0, background: 'rgba(255, 255, 255, 0.75)', backdropFilter: 'blur(10px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   spinnerCard: { background: '#ffffff', padding: '40px', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 20px 40px rgba(0,0,0,0.06)', width: '90%', maxWidth: '460px', textAlign: 'center' },
-  spinner: { width: '50px', height: '50px', border: '5px solid #f1f5f9', borderTop: '5px solid #6366f1', borderRadius: '50%', margin: '0 auto', animation: 'spin 1s linear infinite' }
+  spinner: { width: '50px', height: '50px', border: '5px solid #f1f5f9', borderTop: '5px solid #6366f1', borderRadius: '50%', margin: '0 auto', animation: 'spin 1s linear infinite' },
+
+  // --- 📱 MOBILE HEADER ---
+  mobileHeaderBar: { height: '60px', padding: '0 15px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', borderBottom: '1px solid #e2e8f0', flexShrink: 0 },
+  mobilePauseIcon: { width: '38px', height: '38px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0, cursor: 'pointer' },
+  mobileTitleBlock: { flex: 1, textAlign: 'center', overflow: 'hidden' },
+  mobileTimerText: { fontWeight: '800', fontSize: '1rem', color: '#1e293b' },
+  mobileTestName: { fontSize: '0.7rem', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  mobileHamburger: { width: '38px', height: '38px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0, cursor: 'pointer' },
+
+  // --- 📱 MOBILE PER-QUESTION INFO ROW ---
+  mobileQInfoRow: { padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 },
+  mobileQNumBadge: { width: '32px', height: '32px', borderRadius: '8px', background: '#6366f1', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '0.85rem', flexShrink: 0 },
+  mobileDivider: { width: '1px', height: '22px', background: '#e2e8f0' },
+  mobileStopwatch: { fontSize: '0.82rem', color: '#64748b', fontWeight: '700' },
+
+  // --- 📱 MOBILE QUESTION CONTENT OVERRIDES ---
+  qInnerFrameMobile: { padding: '20px 16px', maxWidth: '100%' },
+  qTextMobile: { fontSize: '1.05rem', marginBottom: '22px' },
+  optCardMobile: { padding: '14px' },
+
+  // --- 📱 MOBILE BOTTOM ACTION BAR ---
+  mobileBottomBar: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #e2e8f0', padding: '10px 15px', display: 'flex', gap: '10px', alignItems: 'center', zIndex: 60 },
+  mobileReviewBtn: { width: '48px', height: '48px', borderRadius: '12px', border: '2px solid #f59e0b', background: '#fff', color: '#f59e0b', fontWeight: '900', fontSize: '1.3rem', flexShrink: 0, cursor: 'pointer' },
+  mobileReviewBtnActive: { background: '#f59e0b', color: '#fff' },
+  mobileNextBtn: { flex: 1, height: '48px', borderRadius: '12px', background: '#6366f1', color: '#fff', border: 'none', fontWeight: '800', fontSize: '0.95rem', cursor: 'pointer' },
+
+  // --- 📱 TOAST ---
+  toastBox: { position: 'fixed', bottom: '78px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(15,23,42,0.92)', color: '#fff', padding: '8px 18px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '600', zIndex: 70, whiteSpace: 'nowrap' },
+
+  // --- 📱 MOBILE DRAWER ---
+  drawerOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 150 },
+  drawerPanel: { position: 'fixed', top: 0, right: 0, bottom: 0, width: '82vw', maxWidth: '340px', background: '#fff', zIndex: 151, display: 'flex', flexDirection: 'column', boxShadow: '-10px 0 30px rgba(0,0,0,0.15)' },
+  drawerHeader: { padding: '18px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 },
+  drawerTabsRow: { display: 'flex', gap: '8px', padding: '14px 16px', overflowX: 'auto', borderBottom: '1px solid #e2e8f0', flexShrink: 0 },
+  drawerSectionTitle: { padding: '14px 16px 6px', fontWeight: '800', fontSize: '0.92rem', color: '#1e293b', flexShrink: 0 },
+  drawerStatsBox: { margin: '8px 16px', border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', flexShrink: 0 },
+  drawerStatRow: { display: 'flex', justifyContent: 'space-between', padding: '10px 14px', fontSize: '0.85rem', fontWeight: '700', borderBottom: '1px solid #f1f5f9' },
+  drawerGridScroll: { flex: 1, padding: '14px 16px', display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: '8px', overflowY: 'auto', alignContent: 'start' },
+  drawerPNum: { aspectRatio: '1', borderRadius: '8px', border: '1px solid', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '0.78rem' },
+  drawerSubmitBar: { padding: '14px 16px', borderTop: '1px solid #e2e8f0', flexShrink: 0 },
+  drawerSubmitBtn: { width: '100%', padding: '14px', borderRadius: '10px', background: '#6366f1', color: '#fff', border: 'none', fontWeight: '800', fontSize: '0.95rem', cursor: 'pointer' }
 };
 
 export default TestPortal;
