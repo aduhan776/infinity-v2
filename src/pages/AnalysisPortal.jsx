@@ -326,6 +326,15 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
   return (
     <div style={{ ...styles.container, ...(isMobile ? styles.containerMobile : {}) }}>
 
+      {/* ================= TOP HEADER (title, subtitle, back button) — always visible on mobile, above tabs ================= */}
+      {isMobile && (
+        <div style={styles.topHeaderMobile}>
+          <h1 style={{margin:0, color:'#1e293b', fontSize:'1.15rem', wordBreak:'break-word'}}>Test Results: {title}</h1>
+          <p style={{color:'#64748b', margin:'5px 0 0 0', fontSize:'0.8rem'}}>Here's your final analysis report:</p>
+          <button onClick={onBackToDashboard} style={{ ...styles.homeBtn, ...styles.homeBtnMobile, marginTop: '10px' }}>Back to Dashboard</button>
+        </div>
+      )}
+
       {/* ================= MOBILE-ONLY TAB BAR ================= */}
       {isMobile && (
         <div style={styles.tabBarMobile}>
@@ -353,13 +362,18 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
       {/* ================= SECTION 1: TEST SUMMARY ================= */}
       {(!isMobile || activeTab === 'analysis') && (
       <div style={{ ...styles.summaryHeader, ...(isMobile ? styles.summaryHeaderMobile : {}) }}>
-        <div style={{ ...styles.summaryHeaderMain, ...(isMobile ? styles.summaryHeaderMainMobile : {}) }}>
-           <div style={isMobile ? { width: '100%' } : {}}>
-             <h1 style={{margin:0, color:'#1e293b', fontSize: isMobile ? '1.15rem' : '1.5rem', wordBreak: 'break-word'}}>Test Results: {title}</h1>
-             <p style={{color:'#64748b', margin:'5px 0 0 0', fontSize: isMobile ? '0.8rem' : '1rem'}}>Bhai, ye raha tera final analysis report:</p>
+        {/* On desktop, title/subtitle/back-button live here (unchanged layout).
+            On mobile, this same block is rendered once above the tabs instead —
+            see topHeaderMobile above — so it doesn't disappear when switching tabs. */}
+        {!isMobile && (
+        <div style={styles.summaryHeaderMain}>
+           <div>
+             <h1 style={{margin:0, color:'#1e293b', fontSize:'1.5rem'}}>Test Results: {title}</h1>
+             <p style={{color:'#64748b', margin:'5px 0 0 0', fontSize:'1rem'}}>Here's your final analysis report:</p>
            </div>
-           <button onClick={onBackToDashboard} style={{ ...styles.homeBtn, ...(isMobile ? styles.homeBtnMobile : {}) }}>Back to Dashboard</button>
+           <button onClick={onBackToDashboard} style={styles.homeBtn}>Back to Dashboard</button>
         </div>
+        )}
 
         {/* Stat cards — compact 2-per-row grid on mobile, 5-across row on desktop */}
         <div style={{ ...styles.mainStatsGrid, ...(isMobile ? styles.mainStatsGridMobile : {}) }}>
@@ -638,6 +652,17 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 const styles = {
   container: { padding: '30px', background: '#f8fafc', minHeight: '100vh', width: '100%', boxSizing: 'border-box' },
   containerMobile: { padding: '8px', overflowX: 'hidden' },
+
+  // ---------- MOBILE TOP HEADER (title/subtitle/back button, shown once above tabs) ----------
+  topHeaderMobile: {
+    background: '#fff',
+    padding: '14px',
+    borderRadius: '12px',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+    marginBottom: '10px',
+    width: '100%',
+    boxSizing: 'border-box',
+  },
 
   // ---------- MOBILE TAB BAR (Analysis / Solutions) ----------
   tabBarMobile: {
