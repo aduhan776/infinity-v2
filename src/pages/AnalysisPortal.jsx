@@ -297,116 +297,125 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
   return (
     <div style={{ ...styles.container, ...(isMobile ? styles.containerMobile : {}) }}>
+
+      {/* ================= SECTION 1: TEST SUMMARY ================= */}
       <div style={{ ...styles.summaryHeader, ...(isMobile ? styles.summaryHeaderMobile : {}) }}>
         <div style={{ ...styles.summaryHeaderMain, ...(isMobile ? styles.summaryHeaderMainMobile : {}) }}>
-           <div>
-             <h1 style={{margin:0, color:'#1e293b', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>Test Results: {title}</h1>
+           <div style={isMobile ? { width: '100%' } : {}}>
+             <h1 style={{margin:0, color:'#1e293b', fontSize: isMobile ? '1.15rem' : '1.5rem', wordBreak: 'break-word'}}>Test Results: {title}</h1>
              <p style={{color:'#64748b', margin:'5px 0 0 0', fontSize: isMobile ? '0.8rem' : '1rem'}}>Bhai, ye raha tera final analysis report:</p>
            </div>
            <button onClick={onBackToDashboard} style={{ ...styles.homeBtn, ...(isMobile ? styles.homeBtnMobile : {}) }}>Back to Dashboard</button>
         </div>
+
+        {/* Stat cards — full-width stacked on mobile, grid row on desktop */}
         <div style={{ ...styles.mainStatsGrid, ...(isMobile ? styles.mainStatsGridMobile : {}) }}>
-          <div style={styles.mainStatCard}>
+          <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
              <span style={styles.mainStatLabel}>FINAL SCORE</span>
-             <span style={{...styles.mainStatValue, color:'#6366f1', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>{totalScore.toFixed(2)}</span>
+             <span style={{...styles.mainStatValue, color:'#6366f1', fontSize: isMobile ? '1.8rem' : '1.5rem'}}>{totalScore.toFixed(2)}</span>
           </div>
-          <div style={styles.mainStatCard}>
+          <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
              <span style={styles.mainStatLabel}>ACCURACY</span>
-             <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>{accuracy}%</span>
+             <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.8rem' : '1.5rem'}}>{accuracy}%</span>
           </div>
-          <div style={styles.mainStatCard}>
+          <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
              <span style={styles.mainStatLabel}>CORRECT (MCQ)</span>
-             <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>{correctCount}</span>
+             <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.8rem' : '1.5rem'}}>{correctCount}</span>
           </div>
-          <div style={styles.mainStatCard}>
+          <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
              <span style={styles.mainStatLabel}>INCORRECT (MCQ)</span>
-             <span style={{...styles.mainStatValue, color:'#ef4444', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>{incorrectCount}</span>
+             <span style={{...styles.mainStatValue, color:'#ef4444', fontSize: isMobile ? '1.8rem' : '1.5rem'}}>{incorrectCount}</span>
           </div>
-          <div style={styles.mainStatCard}>
+          <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
              <span style={styles.mainStatLabel}>UNATTEMPTED</span>
-             <span style={{...styles.mainStatValue, color:'#94a3b8', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>{unattemptedCount}</span>
+             <span style={{...styles.mainStatValue, color:'#94a3b8', fontSize: isMobile ? '1.8rem' : '1.5rem'}}>{unattemptedCount}</span>
           </div>
+        </div>
+
+        <div style={{ ...styles.topicSection, ...(isMobile ? styles.topicSectionMobile : {}) }}>
+          <div style={{...styles.topicBadge, ...(isMobile ? styles.topicBadgeMobile : {})}}>Total Questions: {totalQ}</div>
+          <div style={{...styles.topicBadge, ...(isMobile ? styles.topicBadgeMobile : {})}}>Negative Marks Penalty: {totalNegativePenalty.toFixed(2)}</div>
+          <div style={{...styles.topicBadge, ...(isMobile ? styles.topicBadgeMobile : {})}}>Time Remaining: {formatTime(timeLeft)}</div>
         </div>
       </div>
 
-      <div style={{ ...styles.topicSection, ...(isMobile ? styles.horizontalScrollMobile : {}) }}>
-        <div style={{...styles.topicBadge, ...(isMobile ? styles.noWrapMobile : {})}}>Total Questions: {totalQ}</div>
-        <div style={{...styles.topicBadge, ...(isMobile ? styles.noWrapMobile : {})}}>Negative Marks Penalty: {totalNegativePenalty.toFixed(2)}</div>
-        <div style={{...styles.topicBadge, ...(isMobile ? styles.noWrapMobile : {})}}>Time Remaining: {formatTime(timeLeft)}</div>
-      </div>
+      {/* ================= SECTION 2: SOLUTIONS / QUESTIONS LIST ================= */}
+      <div style={{ ...styles.solutionsSection, ...(isMobile ? styles.solutionsSectionMobile : {}) }}>
+        <h2 style={{ ...styles.solutionsSectionTitle, ...(isMobile ? styles.solutionsSectionTitleMobile : {}) }}>Solutions</h2>
 
-      {/* --- 🗂️ SECTION NAV (only shown for multi-section papers) --- */}
-      {hasSections && (
-        <div style={{ ...styles.sectionNavBar, ...(isMobile ? styles.horizontalScrollMobile : {}) }}>
-          {sectionList.map(secName => (
-            <button
-              key={secName}
-              onClick={() => scrollToSection(secName)}
-              style={{ ...styles.sectionNavBtn, ...(isMobile ? styles.noWrapMobile : {}) }}
-            >
-              {secName}
+        {/* Section nav — only shown for multi-section papers */}
+        {hasSections && (
+          <div style={{ ...styles.sectionNavBar, ...(isMobile ? styles.horizontalScrollMobile : {}) }}>
+            {sectionList.map(secName => (
+              <button
+                key={secName}
+                onClick={() => scrollToSection(secName)}
+                style={{ ...styles.sectionNavBtn, ...(isMobile ? styles.noWrapMobile : {}) }}
+              >
+                {secName}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div style={{ ...styles.filterBar, ...(isMobile ? styles.horizontalScrollMobile : {}) }}>
+          {['all', 'attempted', 'unattempted', 'incorrect'].map(f => (
+            <button key={f} 
+               style={{
+                 ...(activeFilter === f ? styles.activeFilter : styles.filterBtn),
+                 ...(isMobile ? styles.noWrapMobile : {})
+               }}
+               onClick={() => setActiveFilter(f)}>
+              {f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
         </div>
-      )}
 
-      <div style={{ ...styles.filterBar, ...(isMobile ? styles.horizontalScrollMobile : {}) }}>
-        {['all', 'attempted', 'unattempted', 'incorrect'].map(f => (
-          <button key={f} 
-             style={{
-               ...(activeFilter === f ? styles.activeFilter : styles.filterBtn),
-               ...(isMobile ? styles.noWrapMobile : {})
-             }}
-             onClick={() => setActiveFilter(f)}>
-            {f.charAt(0).toUpperCase() + f.slice(1)}
-          </button>
-        ))}
-      </div>
+        <div style={{ ...styles.listGrid, ...(isMobile ? styles.listGridMobile : {}) }}>
+          {filteredIndices.map(idx => {
+            if (!questions[idx]) return null;
+            const status = getQStatus(idx);
+            const isIncorrect = status === 'incorrect';
+            const bgColor = status === 'correct' ? '#f0fdf4' : isIncorrect ? '#fef2f2' : '#fff';
+            const borderColor = status === 'correct' ? '#22c55e' : isIncorrect ? '#ef4444' : '#e2e8f0';
+            const isQuestionSaved = !!savedStatus[questions[idx].question];
+            const secName = questions[idx][SECTION_KEY];
 
-      <div style={{ ...styles.listGrid, ...(isMobile ? styles.listGridMobile : {}) }}>
-        {filteredIndices.map(idx => {
-          if (!questions[idx]) return null;
-          const status = getQStatus(idx);
-          const isIncorrect = status === 'incorrect';
-          const bgColor = status === 'correct' ? '#f0fdf4' : isIncorrect ? '#fef2f2' : '#fff';
-          const borderColor = status === 'correct' ? '#22c55e' : isIncorrect ? '#ef4444' : '#e2e8f0';
-          const isQuestionSaved = !!savedStatus[questions[idx].question];
-          const secName = questions[idx][SECTION_KEY];
+            // Attach a ref to the first card of each new section, so the
+            // section nav bar can scroll to it.
+            const isFirstOfSection = hasSections && secName && questions[idx - 1]?.[SECTION_KEY] !== secName;
 
-          // Attach a ref to the first card of each new section, so the
-          // section nav bar can scroll to it.
-          const isFirstOfSection = hasSections && secName && questions[idx - 1]?.[SECTION_KEY] !== secName;
-
-          return (
-            <div
-              key={idx}
-              ref={isFirstOfSection ? (node) => { sectionRefs.current[secName] = node; } : null}
-              style={{ ...styles.qCardSmall, background: bgColor, borderColor: borderColor, ...(isMobile ? styles.qCardSmallMobile : {}) }}
-              onClick={() => { setSelectedQIdx(idx); setShowExplanation(false); }}
-            >
-              <div style={styles.cardHeader}>
-                <span style={styles.qNum}>Question {idx + 1} ({questions[idx].type})</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button 
-                    onClick={(e) => handleSaveQuestion(e, questions[idx])}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.05rem', padding: '2px', opacity: isQuestionSaved ? 1 : 0.35, transition: '0.15s ease' }}
-                    title="Bookmark Question"
-                  >
-                    🔖
-                  </button>
-                  <span style={{ fontWeight: '800', color: isIncorrect ? '#ef4444' : '#22c55e' }}>
-                     {/* 🚨 FIXED TARGET MAPPING KEY FROM selectedQIdx TO NATIVE LOOP INDEX */}
-                     {questions[idx]?.type === 'Subjective' 
-                       ? `${(questions[idx].score_given || 0).toFixed(1)} / ${parseFloat(String(questions[idx].marks || '10')).toFixed(1)}`
-                       : (isIncorrect ? questions[idx].neg : (status === 'unattempted' ? '0.0' : questions[idx].marks))}
-                  </span>
+            return (
+              <div
+                key={idx}
+                ref={isFirstOfSection ? (node) => { sectionRefs.current[secName] = node; } : null}
+                style={{ ...styles.qCardSmall, background: bgColor, borderColor: borderColor, ...(isMobile ? styles.qCardSmallMobile : {}) }}
+                onClick={() => { setSelectedQIdx(idx); setShowExplanation(false); }}
+              >
+                <div style={styles.cardHeader}>
+                  <span style={styles.qNum}>Question {idx + 1} ({questions[idx].type})</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button 
+                      onClick={(e) => handleSaveQuestion(e, questions[idx])}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.05rem', padding: '2px', opacity: isQuestionSaved ? 1 : 0.35, transition: '0.15s ease' }}
+                      title="Bookmark Question"
+                    >
+                      🔖
+                    </button>
+                    <span style={{ fontWeight: '800', color: isIncorrect ? '#ef4444' : '#22c55e' }}>
+                       {/* 🚨 FIXED TARGET MAPPING KEY FROM selectedQIdx TO NATIVE LOOP INDEX */}
+                       {questions[idx]?.type === 'Subjective' 
+                         ? `${(questions[idx].score_given || 0).toFixed(1)} / ${parseFloat(String(questions[idx].marks || '10')).toFixed(1)}`
+                         : (isIncorrect ? questions[idx].neg : (status === 'unattempted' ? '0.0' : questions[idx].marks))}
+                    </span>
+                  </div>
                 </div>
+                <p style={styles.qTruncated}>{questions[idx].question}</p>
+                <div style={styles.smallTime}>⏱️ Time Taken: {formatTime(timeTracker[idx])}</div>
               </div>
-              <p style={styles.qTruncated}>{questions[idx].question}</p>
-              <div style={styles.smallTime}>⏱️ Time Taken: {formatTime(timeTracker[idx])}</div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {selectedQIdx !== null && questions[selectedQIdx] && (
@@ -569,53 +578,67 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 };
 
 const styles = {
-  container: { padding: '30px', background: '#f8fafc', minHeight: '100vh' },
-  containerMobile: { padding: '12px' },
+  container: { padding: '30px', background: '#f8fafc', minHeight: '100vh', width: '100%', boxSizing: 'border-box' },
+  containerMobile: { padding: '10px', overflowX: 'hidden' },
 
-  summaryHeader: { background: '#fff', padding: '30px', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginBottom: '30px' },
-  summaryHeaderMobile: { padding: '16px', borderRadius: '14px', marginBottom: '16px' },
+  // ---------- SECTION 1: SUMMARY ----------
+  summaryHeader: { background: '#fff', padding: '30px', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginBottom: '30px', width: '100%', boxSizing: 'border-box' },
+  summaryHeaderMobile: { padding: '14px', borderRadius: '14px', marginBottom: '14px' },
 
   summaryHeaderMain: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' },
-  summaryHeaderMainMobile: { flexDirection: 'column', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' },
+  summaryHeaderMainMobile: { flexDirection: 'column', alignItems: 'stretch', gap: '10px', marginBottom: '14px' },
 
   homeBtn: { background: '#1e293b', color: '#fff', border: 'none', padding: '12px 25px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' },
-  homeBtnMobile: { padding: '10px 18px', fontSize: '0.85rem', width: '100%' },
+  homeBtnMobile: { padding: '12px', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' },
 
-  mainStatsGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px' },
-  mainStatsGridMobile: { gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' },
+  // Desktop: 5-across grid. Mobile: single column, one full-width card per row.
+  mainStatsGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px', width: '100%', boxSizing: 'border-box' },
+  mainStatsGridMobile: { gridTemplateColumns: '1fr', gap: '10px' },
 
-  mainStatCard: { padding: '15px', background: '#f8fafc', borderRadius: '15px', textAlign: 'center', border: '1px solid #e2e8f0' },
-  mainStatLabel: { display: 'block', fontSize: '0.65rem', fontWeight: '900', color: '#94a3b8', marginBottom: '5px' },
+  mainStatCard: { padding: '15px', background: '#f8fafc', borderRadius: '15px', textAlign: 'center', border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' },
+  mainStatCardMobile: { padding: '18px' },
+
+  mainStatLabel: { display: 'block', fontSize: '0.7rem', fontWeight: '900', color: '#94a3b8', marginBottom: '8px', letterSpacing: '0.5px' },
   mainStatValue: { fontSize: '1.5rem', fontWeight: '900', color: '#1e293b' },
 
-  topicSection: { display: 'flex', gap: '10px', marginBottom: '25px' },
-  topicBadge: { background: '#f1f5f9', padding: '6px 15px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', color: '#475569' },
+  topicSection: { display: 'flex', gap: '10px', marginTop: '20px' },
+  topicSectionMobile: { flexDirection: 'column', gap: '8px', marginTop: '14px' },
 
-  sectionNavBar: { display: 'flex', gap: '8px', marginBottom: '18px' },
+  topicBadge: { background: '#f1f5f9', padding: '6px 15px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', color: '#475569', boxSizing: 'border-box' },
+  topicBadgeMobile: { width: '100%', textAlign: 'center' },
+
+  // ---------- SECTION 2: SOLUTIONS ----------
+  solutionsSection: { background: '#fff', padding: '30px', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', width: '100%', boxSizing: 'border-box' },
+  solutionsSectionMobile: { padding: '14px', borderRadius: '14px' },
+
+  solutionsSectionTitle: { margin: '0 0 20px 0', fontSize: '1.3rem', fontWeight: '900', color: '#1e293b' },
+  solutionsSectionTitleMobile: { fontSize: '1.05rem', marginBottom: '14px' },
+
+  sectionNavBar: { display: 'flex', gap: '8px', marginBottom: '18px', width: '100%', boxSizing: 'border-box' },
   sectionNavBtn: { background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', padding: '8px 16px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '800', cursor: 'pointer' },
 
-  filterBar: { display: 'flex', gap: '10px', marginBottom: '25px' },
+  filterBar: { display: 'flex', gap: '10px', marginBottom: '25px', width: '100%', boxSizing: 'border-box' },
   filterBtn: { padding: '8px 18px', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: '0.85rem' },
   activeFilter: { padding: '8px 18px', borderRadius: '20px', border: 'none', background: '#6366f1', color: '#fff', fontWeight: 'bold', fontSize: '0.85rem' },
 
-  // Shared pattern for horizontally-scrolling rows on mobile (topic badges, section nav, filter bar)
-  horizontalScrollMobile: { overflowX: 'auto', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch', paddingBottom: '4px', marginLeft: '-2px', marginRight: '-2px' },
+  // Shared pattern for horizontally-scrolling rows on mobile (section nav, filter bar)
+  horizontalScrollMobile: { overflowX: 'auto', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch', paddingBottom: '4px' },
   noWrapMobile: { flexShrink: 0, whiteSpace: 'nowrap' },
 
-  listGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' },
+  listGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px', width: '100%', boxSizing: 'border-box' },
   listGridMobile: { gridTemplateColumns: '1fr', gap: '10px' },
 
-  qCardSmall: { padding: '15px', borderRadius: '12px', border: '2px solid', cursor: 'pointer', transition: '0.3s' },
-  qCardSmallMobile: { padding: '12px' },
+  qCardSmall: { padding: '15px', borderRadius: '12px', border: '2px solid', cursor: 'pointer', transition: '0.3s', width: '100%', boxSizing: 'border-box' },
+  qCardSmallMobile: { padding: '14px' },
 
-  cardHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px' },
+  cardHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px', gap: '8px' },
   qNum: { fontWeight: '800', color: '#64748b', fontSize: '0.75rem' },
   qTruncated: { fontSize: '0.9rem', fontWeight: '600', margin: '0 0 10px 0', height: '2.4em', overflow: 'hidden' },
   smallTime: { fontSize: '0.7rem', color: '#94a3b8', fontWeight: '700' },
 
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' },
 
-  detailContainer: { background: '#fff', width: '100%', maxWidth: '1100px', height: '85vh', borderRadius: '20px', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  detailContainer: { background: '#fff', width: '100%', maxWidth: '1100px', height: '85vh', borderRadius: '20px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' },
   detailContainerMobile: { height: '100vh', maxHeight: '100vh', width: '100vw', maxWidth: '100vw', borderRadius: 0 },
 
   detailHeader: { padding: '20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fcfdfe' },
@@ -632,28 +655,28 @@ const styles = {
   detailLeft: { flex: 1.2, display: 'flex', flexDirection: 'column', background: '#fff', borderRight: '1px solid #e2e8f0', overflow: 'hidden' },
   detailLeftMobile: { flex: 1, borderRight: 'none', width: '100%' },
 
-  detailLeftScrollArea: { flex: 1, overflowY: 'auto', padding: '30px' },
+  detailLeftScrollArea: { flex: 1, overflowY: 'auto', padding: '30px', boxSizing: 'border-box' },
   detailLeftScrollAreaMobile: { padding: '16px' },
 
-  detailFixedNavRow: { padding: '20px 30px', background: '#fff', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '10px', flexShrink: 0 },
+  detailFixedNavRow: { padding: '20px 30px', background: '#fff', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '10px', flexShrink: 0, boxSizing: 'border-box' },
   detailFixedNavRowMobile: { padding: '12px 14px', gap: '8px' },
 
   detailRight: { flex: 0.8, padding: '30px', background: '#f8fafc', overflowY: 'auto' },
   explanationTitle: { margin: '0 0 15px 0', color: '#1e293b', fontSize: '1.05rem', fontWeight: '800' },
   explanationText: { color: '#475569', fontSize: '0.95rem', lineHeight: '1.6', fontWeight: '500' },
 
-  metaRow: { display: 'flex', gap: '20px', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' },
+  metaRow: { display: 'flex', gap: '20px', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px', flexWrap: 'wrap' },
   metaItem: { fontSize: '0.8rem', color: '#475569' },
   detailText: { fontSize: '1.2rem', fontWeight: '600', marginBottom: '25px', lineHeight: '1.5' },
 
-  detailOptions: { display: 'grid', gap: '10px' },
-  detailOpt: { padding: '15px', borderRadius: '10px', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  detailOptions: { display: 'grid', gap: '10px', boxSizing: 'border-box' },
+  detailOpt: { padding: '15px', borderRadius: '10px', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box' },
   detailOptMobile: { padding: '12px', flexDirection: 'column', alignItems: 'flex-start', gap: '6px', fontSize: '0.85rem' },
 
   navBtn: { flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', fontWeight: 'bold', cursor: 'pointer' },
   doubtBtn: { flex: 1.5, background: '#1e293b', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s ease' },
 
-  subAnalysis: { background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '12px' },
+  subAnalysis: { background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '12px', boxSizing: 'border-box' },
   subPreview: { display: 'flex', flexDirection: 'column', gap: '10px' },
   thumbGrid: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' },
   prevImg: { width: '80px', height: '100px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1' },
@@ -665,7 +688,8 @@ const styles = {
     borderLeft: '5px solid #0284c7',
     boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
     textAlign: 'left',
-    animation: 'fadeIn 0.2s ease'
+    animation: 'fadeIn 0.2s ease',
+    boxSizing: 'border-box'
   }
 };
 
