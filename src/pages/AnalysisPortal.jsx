@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; 
 import LatexText from '../components/LatexText'; 
 
@@ -44,11 +44,29 @@ const saveToLocalStore = async (storeName, payload) => {
   });
 };
 
+// 🚨 SECTION FIELD KEY — change this in ONE place if your question objects
+// use a different key name (e.g. 'sectionName', 'topic') instead of 'section'.
+const SECTION_KEY = 'section';
+
 const AnalysisPortal = ({ results, onBackToDashboard }) => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedQIdx, setSelectedQIdx] = useState(null);
   const [showExplanation, setShowExplanation] = useState(false); 
   const [savedStatus, setSavedStatus] = useState({}); 
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  // Refs for swipe detection (mobile touch only) and section scroll targets
+  const touchStartXRef = useRef(null);
+  const touchStartYRef = useRef(null);
+  const sectionRefs = useRef({});
+  const detailScrollRef = useRef(null);
+
+  // --- 📱 MOBILE DETECTION (JS-based, matches rest of codebase) ---
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // --- DATA EXTRACTION ---
   const { 
@@ -217,57 +235,135 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
     return true;
   }) : [];
 
+  // --- 🗂️ SECTION LIST (derived from questions[].section) ---
+  // Preserves first-seen order of sections instead of alphabetical sort.
+  const sectionList = [];
+  questions.forEach(q => {
+    const secName = q && q[SECTION_KEY] ? q[SECTION_KEY] : null;
+    if (secName && !sectionList.includes(secName)) sectionList.push(secName);
+  });
+  const hasSections = sectionList.length > 1;
+
+  const scrollToSection = (secName) => {
+    const node = sectionRefs.current[secName];
+    if (node && node.scrollIntoView) {
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // --- 👉👈 SWIPE NAVIGATION (mobile touch only) ---
+  // Navigates within filteredIndices so it respects whichever filter
+  // (all / attempted / unattempted / incorrect) is currently active —
+  // same navigable set used by the Previous/Next buttons.
+  const goToAdjacentQuestion = (direction) => {
+    if (selectedQIdx === null) return;
+    const posInFiltered = filteredIndices.indexOf(selectedQIdx);
+    if (posInFiltered === -1) return;
+    const nextPos = posInFiltered + direction;
+    if (nextPos < 0 || nextPos >= filteredIndices.length) return;
+    setSelectedQIdx(filteredIndices[nextPos]);
+    setShowExplanation(false);
+    if (detailScrollRef.current) detailScrollRef.current.scrollTop = 0;
+  };
+
+  const handleTouchStart = (e) => {
+    if (!isMobile) return;
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!isMobile || touchStartXRef.current === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaX = touchEndX - touchStartXRef.current;
+    const deltaY = touchEndY - touchStartYRef.current;
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+
+    // Ignore mostly-vertical swipes (user is scrolling, not navigating)
+    if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+    const SWIPE_THRESHOLD = 50;
+    if (deltaX > SWIPE_THRESHOLD) {
+      goToAdjacentQuestion(-1); // swipe right → previous
+    } else if (deltaX < -SWIPE_THRESHOLD) {
+      goToAdjacentQuestion(1); // swipe left → next
+    }
+  };
+
+  const currentPosInFiltered = selectedQIdx !== null ? filteredIndices.indexOf(selectedQIdx) : -1;
+  const isFirstInFiltered = currentPosInFiltered <= 0;
+  const isLastInFiltered = currentPosInFiltered === filteredIndices.length - 1;
+
   return (
-    <div style={styles.container}>
-      <div style={styles.summaryHeader}>
-        <div style={styles.summaryHeaderMain}>
+    <div style={{ ...styles.container, ...(isMobile ? styles.containerMobile : {}) }}>
+      <div style={{ ...styles.summaryHeader, ...(isMobile ? styles.summaryHeaderMobile : {}) }}>
+        <div style={{ ...styles.summaryHeaderMain, ...(isMobile ? styles.summaryHeaderMainMobile : {}) }}>
            <div>
-             <h1 style={{margin:0, color:'#1e293b'}}>Test Results: {title}</h1>
-             <p style={{color:'#64748b', margin:'5px 0 0 0'}}>Bhai, ye raha tera final analysis report:</p>
+             <h1 style={{margin:0, color:'#1e293b', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>Test Results: {title}</h1>
+             <p style={{color:'#64748b', margin:'5px 0 0 0', fontSize: isMobile ? '0.8rem' : '1rem'}}>Bhai, ye raha tera final analysis report:</p>
            </div>
-           <button onClick={onBackToDashboard} style={styles.homeBtn}>Back to Dashboard</button>
+           <button onClick={onBackToDashboard} style={{ ...styles.homeBtn, ...(isMobile ? styles.homeBtnMobile : {}) }}>Back to Dashboard</button>
         </div>
-        <div style={styles.mainStatsGrid}>
+        <div style={{ ...styles.mainStatsGrid, ...(isMobile ? styles.mainStatsGridMobile : {}) }}>
           <div style={styles.mainStatCard}>
              <span style={styles.mainStatLabel}>FINAL SCORE</span>
-             <span style={{...styles.mainStatValue, color:'#6366f1'}}>{totalScore.toFixed(2)}</span>
+             <span style={{...styles.mainStatValue, color:'#6366f1', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>{totalScore.toFixed(2)}</span>
           </div>
           <div style={styles.mainStatCard}>
              <span style={styles.mainStatLabel}>ACCURACY</span>
-             <span style={{...styles.mainStatValue, color:'#22c55e'}}>{accuracy}%</span>
+             <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>{accuracy}%</span>
           </div>
           <div style={styles.mainStatCard}>
              <span style={styles.mainStatLabel}>CORRECT (MCQ)</span>
-             <span style={{...styles.mainStatValue, color:'#22c55e'}}>{correctCount}</span>
+             <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>{correctCount}</span>
           </div>
           <div style={styles.mainStatCard}>
              <span style={styles.mainStatLabel}>INCORRECT (MCQ)</span>
-             <span style={{...styles.mainStatValue, color:'#ef4444'}}>{incorrectCount}</span>
+             <span style={{...styles.mainStatValue, color:'#ef4444', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>{incorrectCount}</span>
           </div>
           <div style={styles.mainStatCard}>
              <span style={styles.mainStatLabel}>UNATTEMPTED</span>
-             <span style={{...styles.mainStatValue, color:'#94a3b8'}}>{unattemptedCount}</span>
+             <span style={{...styles.mainStatValue, color:'#94a3b8', fontSize: isMobile ? '1.15rem' : '1.5rem'}}>{unattemptedCount}</span>
           </div>
         </div>
       </div>
 
-      <div style={styles.topicSection}>
-        <div style={styles.topicBadge}>Total Questions: {totalQ}</div>
-        <div style={styles.topicBadge}>Negative Marks Penalty: {totalNegativePenalty.toFixed(2)}</div>
-        <div style={styles.topicBadge}>Time Remaining: {formatTime(timeLeft)}</div>
+      <div style={{ ...styles.topicSection, ...(isMobile ? styles.horizontalScrollMobile : {}) }}>
+        <div style={{...styles.topicBadge, ...(isMobile ? styles.noWrapMobile : {})}}>Total Questions: {totalQ}</div>
+        <div style={{...styles.topicBadge, ...(isMobile ? styles.noWrapMobile : {})}}>Negative Marks Penalty: {totalNegativePenalty.toFixed(2)}</div>
+        <div style={{...styles.topicBadge, ...(isMobile ? styles.noWrapMobile : {})}}>Time Remaining: {formatTime(timeLeft)}</div>
       </div>
 
-      <div style={styles.filterBar}>
+      {/* --- 🗂️ SECTION NAV (only shown for multi-section papers) --- */}
+      {hasSections && (
+        <div style={{ ...styles.sectionNavBar, ...(isMobile ? styles.horizontalScrollMobile : {}) }}>
+          {sectionList.map(secName => (
+            <button
+              key={secName}
+              onClick={() => scrollToSection(secName)}
+              style={{ ...styles.sectionNavBtn, ...(isMobile ? styles.noWrapMobile : {}) }}
+            >
+              {secName}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ ...styles.filterBar, ...(isMobile ? styles.horizontalScrollMobile : {}) }}>
         {['all', 'attempted', 'unattempted', 'incorrect'].map(f => (
           <button key={f} 
-             style={activeFilter === f ? styles.activeFilter : styles.filterBtn}
+             style={{
+               ...(activeFilter === f ? styles.activeFilter : styles.filterBtn),
+               ...(isMobile ? styles.noWrapMobile : {})
+             }}
              onClick={() => setActiveFilter(f)}>
             {f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
         ))}
       </div>
 
-      <div style={styles.listGrid}>
+      <div style={{ ...styles.listGrid, ...(isMobile ? styles.listGridMobile : {}) }}>
         {filteredIndices.map(idx => {
           if (!questions[idx]) return null;
           const status = getQStatus(idx);
@@ -275,9 +371,17 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
           const bgColor = status === 'correct' ? '#f0fdf4' : isIncorrect ? '#fef2f2' : '#fff';
           const borderColor = status === 'correct' ? '#22c55e' : isIncorrect ? '#ef4444' : '#e2e8f0';
           const isQuestionSaved = !!savedStatus[questions[idx].question];
+          const secName = questions[idx][SECTION_KEY];
+
+          // Attach a ref to the first card of each new section, so the
+          // section nav bar can scroll to it.
+          const isFirstOfSection = hasSections && secName && questions[idx - 1]?.[SECTION_KEY] !== secName;
+
           return (
-            <div key={idx} 
-               style={{ ...styles.qCardSmall, background: bgColor, borderColor: borderColor }}
+            <div
+              key={idx}
+              ref={isFirstOfSection ? (node) => { sectionRefs.current[secName] = node; } : null}
+              style={{ ...styles.qCardSmall, background: bgColor, borderColor: borderColor, ...(isMobile ? styles.qCardSmallMobile : {}) }}
               onClick={() => { setSelectedQIdx(idx); setShowExplanation(false); }}
             >
               <div style={styles.cardHeader}>
@@ -307,23 +411,32 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
       {selectedQIdx !== null && questions[selectedQIdx] && (
         <div style={styles.overlay}>
-          <div style={styles.detailContainer}>
-            <div style={styles.detailHeader}>
+          <div
+            style={{ ...styles.detailContainer, ...(isMobile ? styles.detailContainerMobile : {}) }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            <div style={{ ...styles.detailHeader, ...(isMobile ? styles.detailHeaderMobile : {}) }}>
               <div style={{display:'flex', gap:'15px', alignItems:'center'}}>
-                <h3 style={{margin:0}}>Q. {selectedQIdx + 1} Detailed Review</h3>
-                <span style={styles.topicTag}>#EXAM_ANALYSIS</span>
+                <h3 style={{margin:0, fontSize: isMobile ? '1rem' : '1.17rem'}}>Q. {selectedQIdx + 1} Detailed Review</h3>
+                {!isMobile && <span style={styles.topicTag}>#EXAM_ANALYSIS</span>}
               </div>
               <button onClick={() => { setSelectedQIdx(null); setShowExplanation(false); }} style={styles.closeBtn}>❌ Close</button>
             </div>
-            <div style={styles.detailBody}>
+
+            {isMobile && (
+              <div style={styles.swipeHint}>← Swipe to navigate questions →</div>
+            )}
+
+            <div style={{ ...styles.detailBody, ...(isMobile ? styles.detailBodyMobile : {}) }}>
                
-              <div style={styles.detailLeft}>
-                <div style={styles.detailLeftScrollArea}>
+              <div style={{ ...styles.detailLeft, ...(isMobile ? styles.detailLeftMobile : {}) }}>
+                <div ref={detailScrollRef} style={{ ...styles.detailLeftScrollArea, ...(isMobile ? styles.detailLeftScrollAreaMobile : {}) }}>
                   <div style={styles.metaRow}>
                     <span style={styles.metaItem}>⏱️ <strong>Your Time:</strong> {formatTime(timeTracker[selectedQIdx])}</span>
                     <span style={styles.metaItem}>📈 <strong>Score Given:</strong> {questions[selectedQIdx].type === 'Subjective' ? `${questions[selectedQIdx].score_given || 0} Marks` : ''}</span>
                   </div>
-                  <p style={styles.detailText}><LatexText text={questions[selectedQIdx].question} /> </p>
+                  <p style={{...styles.detailText, fontSize: isMobile ? '1rem' : '1.2rem'}}><LatexText text={questions[selectedQIdx].question} /> </p>
                    
                   {questions[selectedQIdx].type === 'Objective' ? (
                     <div style={styles.detailOptions}>
@@ -344,6 +457,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                         return (
                           <div key={oIdx} style={{
                             ...styles.detailOpt,
+                            ...(isMobile ? styles.detailOptMobile : {}),
                             border: borderStyle,
                             background: bgStyle
                           }}>
@@ -394,7 +508,9 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                     </div>
                   )}
 
-                  {showExplanation && (
+                  {/* On mobile, AI explanation is stacked inline below the question
+                      instead of living in a separate side panel (see detailRight). */}
+                  {(showExplanation || isMobile) && (
                     <div style={styles.inlineExplanationCard}>
                       <strong style={{ color: '#6366f1', display: 'block', marginBottom: '6px', fontSize: '0.95rem' }}>
                          {questions[selectedQIdx].type === 'Subjective' ? '🎯 Scope of Improvement Summary:' : '💡 AI Quick Resolution:'}
@@ -409,33 +525,41 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                   )}
                 </div>
 
-                <div style={styles.detailFixedNavRow}>
-                  <button onClick={() => { setSelectedQIdx(prev => Math.max(0, prev - 1)); setShowExplanation(false); }} disabled={selectedQIdx === 0} style={styles.navBtn}>Previous</button>
-                  <button onClick={() => setShowExplanation(!showExplanation)} style={{ ...styles.doubtBtn, background: showExplanation ? '#ef4444' : '#1e293b' }}>
-                    {showExplanation ? "📖 Hide Explanation" : "💡 Show Explanation"}
+                <div style={{ ...styles.detailFixedNavRow, ...(isMobile ? styles.detailFixedNavRowMobile : {}) }}>
+                  <button onClick={() => goToAdjacentQuestion(-1)} disabled={isFirstInFiltered} style={styles.navBtn}>
+                    {isMobile ? '◀' : 'Previous'}
                   </button>
+                  {!isMobile && (
+                    <button onClick={() => setShowExplanation(!showExplanation)} style={{ ...styles.doubtBtn, background: showExplanation ? '#ef4444' : '#1e293b' }}>
+                      {showExplanation ? "📖 Hide Explanation" : "💡 Show Explanation"}
+                    </button>
+                  )}
                   <button 
                     onClick={(e) => handleSaveQuestion(e, questions[selectedQIdx])}
                     disabled={!!savedStatus[questions[selectedQIdx].question]}
                     style={{ ...styles.doubtBtn, background: savedStatus[questions[selectedQIdx].question] ? '#10b981' : '#6366f1', color: '#fff', border: 'none' }}
                   >
-                    {savedStatus[questions[selectedQIdx].question] ? "📁 Question Saved" : "🔖 Save to Library"}
+                    {savedStatus[questions[selectedQIdx].question] ? (isMobile ? "📁 Saved" : "📁 Question Saved") : (isMobile ? "🔖 Save" : "🔖 Save to Library")}
                   </button>
-                  <button onClick={() => { setSelectedQIdx(prev => Math.min(questions.length - 1, prev + 1)); setShowExplanation(false); }} disabled={selectedQIdx === questions.length - 1} style={styles.navBtn}>Next</button>
+                  <button onClick={() => goToAdjacentQuestion(1)} disabled={isLastInFiltered} style={styles.navBtn}>
+                    {isMobile ? '▶' : 'Next'}
+                  </button>
                 </div>
               </div>
 
-              <div style={styles.detailRight}>
-                <h4 style={styles.explanationTitle}>
-                  {questions[selectedQIdx].type === 'Subjective' ? '🎯 AI Feedback Matrix:' : '🧠 AI Explanation & Analytical Working:'}
-                </h4>
-                <div style={styles.explanationText}>
-                 {questions[selectedQIdx].type === 'Subjective'
-                    ? <LatexText text={questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "Bhai, is question ko evaluate nahi kiya gaya."} />
-                    : <LatexText text={questions[selectedQIdx].explanation || "Bhai, is question ke liye koi detailed explanation store nahi hai."} />
-                  }
+              {!isMobile && (
+                <div style={styles.detailRight}>
+                  <h4 style={styles.explanationTitle}>
+                    {questions[selectedQIdx].type === 'Subjective' ? '🎯 AI Feedback Matrix:' : '🧠 AI Explanation & Analytical Working:'}
+                  </h4>
+                  <div style={styles.explanationText}>
+                   {questions[selectedQIdx].type === 'Subjective'
+                      ? <LatexText text={questions[selectedQIdx].ai_evaluation?.scope_of_improvement || "Bhai, is question ko evaluate nahi kiya gaya."} />
+                      : <LatexText text={questions[selectedQIdx].explanation || "Bhai, is question ke liye koi detailed explanation store nahi hai."} />
+                    }
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -446,43 +570,89 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
 const styles = {
   container: { padding: '30px', background: '#f8fafc', minHeight: '100vh' },
+  containerMobile: { padding: '12px' },
+
   summaryHeader: { background: '#fff', padding: '30px', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginBottom: '30px' },
+  summaryHeaderMobile: { padding: '16px', borderRadius: '14px', marginBottom: '16px' },
+
   summaryHeaderMain: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' },
+  summaryHeaderMainMobile: { flexDirection: 'column', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' },
+
   homeBtn: { background: '#1e293b', color: '#fff', border: 'none', padding: '12px 25px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' },
+  homeBtnMobile: { padding: '10px 18px', fontSize: '0.85rem', width: '100%' },
+
   mainStatsGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px' },
+  mainStatsGridMobile: { gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' },
+
   mainStatCard: { padding: '15px', background: '#f8fafc', borderRadius: '15px', textAlign: 'center', border: '1px solid #e2e8f0' },
   mainStatLabel: { display: 'block', fontSize: '0.65rem', fontWeight: '900', color: '#94a3b8', marginBottom: '5px' },
   mainStatValue: { fontSize: '1.5rem', fontWeight: '900', color: '#1e293b' },
+
   topicSection: { display: 'flex', gap: '10px', marginBottom: '25px' },
   topicBadge: { background: '#f1f5f9', padding: '6px 15px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', color: '#475569' },
+
+  sectionNavBar: { display: 'flex', gap: '8px', marginBottom: '18px' },
+  sectionNavBtn: { background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', padding: '8px 16px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '800', cursor: 'pointer' },
+
   filterBar: { display: 'flex', gap: '10px', marginBottom: '25px' },
   filterBtn: { padding: '8px 18px', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: '0.85rem' },
   activeFilter: { padding: '8px 18px', borderRadius: '20px', border: 'none', background: '#6366f1', color: '#fff', fontWeight: 'bold', fontSize: '0.85rem' },
+
+  // Shared pattern for horizontally-scrolling rows on mobile (topic badges, section nav, filter bar)
+  horizontalScrollMobile: { overflowX: 'auto', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch', paddingBottom: '4px', marginLeft: '-2px', marginRight: '-2px' },
+  noWrapMobile: { flexShrink: 0, whiteSpace: 'nowrap' },
+
   listGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' },
+  listGridMobile: { gridTemplateColumns: '1fr', gap: '10px' },
+
   qCardSmall: { padding: '15px', borderRadius: '12px', border: '2px solid', cursor: 'pointer', transition: '0.3s' },
+  qCardSmallMobile: { padding: '12px' },
+
   cardHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px' },
   qNum: { fontWeight: '800', color: '#64748b', fontSize: '0.75rem' },
   qTruncated: { fontSize: '0.9rem', fontWeight: '600', margin: '0 0 10px 0', height: '2.4em', overflow: 'hidden' },
   smallTime: { fontSize: '0.7rem', color: '#94a3b8', fontWeight: '700' },
+
   overlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' },
+
   detailContainer: { background: '#fff', width: '100%', maxWidth: '1100px', height: '85vh', borderRadius: '20px', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  detailContainerMobile: { height: '100vh', maxHeight: '100vh', width: '100vw', maxWidth: '100vw', borderRadius: 0 },
+
   detailHeader: { padding: '20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fcfdfe' },
+  detailHeaderMobile: { padding: '14px 16px' },
+
+  swipeHint: { textAlign: 'center', fontSize: '0.7rem', color: '#94a3b8', padding: '4px 0', background: '#fcfdfe', borderBottom: '1px solid #f1f5f9' },
+
   topicTag: { fontSize: '0.7rem', background: '#e0e7ff', color: '#4338ca', padding: '4px 12px', borderRadius: '15px', fontWeight: 'bold' },
   closeBtn: { background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer' },
+
   detailBody: { display: 'flex', flex: 1, overflow: 'hidden' },
+  detailBodyMobile: { flexDirection: 'column' },
+
   detailLeft: { flex: 1.2, display: 'flex', flexDirection: 'column', background: '#fff', borderRight: '1px solid #e2e8f0', overflow: 'hidden' },
+  detailLeftMobile: { flex: 1, borderRight: 'none', width: '100%' },
+
   detailLeftScrollArea: { flex: 1, overflowY: 'auto', padding: '30px' },
+  detailLeftScrollAreaMobile: { padding: '16px' },
+
   detailFixedNavRow: { padding: '20px 30px', background: '#fff', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '10px', flexShrink: 0 },
+  detailFixedNavRowMobile: { padding: '12px 14px', gap: '8px' },
+
   detailRight: { flex: 0.8, padding: '30px', background: '#f8fafc', overflowY: 'auto' },
   explanationTitle: { margin: '0 0 15px 0', color: '#1e293b', fontSize: '1.05rem', fontWeight: '800' },
   explanationText: { color: '#475569', fontSize: '0.95rem', lineHeight: '1.6', fontWeight: '500' },
+
   metaRow: { display: 'flex', gap: '20px', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' },
   metaItem: { fontSize: '0.8rem', color: '#475569' },
   detailText: { fontSize: '1.2rem', fontWeight: '600', marginBottom: '25px', lineHeight: '1.5' },
+
   detailOptions: { display: 'grid', gap: '10px' },
   detailOpt: { padding: '15px', borderRadius: '10px', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  detailOptMobile: { padding: '12px', flexDirection: 'column', alignItems: 'flex-start', gap: '6px', fontSize: '0.85rem' },
+
   navBtn: { flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', fontWeight: 'bold', cursor: 'pointer' },
   doubtBtn: { flex: 1.5, background: '#1e293b', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s ease' },
+
   subAnalysis: { background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '12px' },
   subPreview: { display: 'flex', flexDirection: 'column', gap: '10px' },
   thumbGrid: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' },
