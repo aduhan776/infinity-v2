@@ -8,6 +8,9 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  // 📱 "View All" overlay — shows every series in a category as a modal grid,
+  // for when the horizontal scroller only shows 2-3 cards on small screens.
+  const [viewAllCategory, setViewAllCategory] = useState(null);
 
   // 📱 MOBILE DETECTION — same window.innerWidth-based approach used on
   // Dashboard/BrainFeed/AiTests, so layout doesn't depend on CSS media-query
@@ -318,10 +321,18 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         <style>{`
           @media (max-width: 768px) {
             .content-view { padding-left: 0 !important; padding-right: 0 !important; overflow-x: hidden !important; }
-            .ts-container { width: 100% !important; max-width: 100vw !important; overflow-x: hidden !important; box-sizing: border-box !important; padding-left: 10px !important; padding-right: 10px !important; }
+            .ts-container { width: 100% !important; max-width: 100vw !important; overflow-x: hidden !important; box-sizing: border-box !important; padding-left: 6px !important; padding-right: 6px !important; }
             .ts-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; margin-bottom: 22px !important; }
-            .ts-category-row { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; margin: 0 !important; }
-            .ts-descriptor-block { width: 100% !important; }
+            .ts-category-row { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; margin: 0 !important; padding: 10px !important; }
+            .ts-descriptor-block {
+              width: 100% !important;
+              padding-top: 0 !important;
+              padding-bottom: 8px !important;
+              justify-content: flex-start !important;
+            }
+            .ts-descriptor-top-row { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; }
+            .ts-descriptor-meta-line { margin-bottom: 0 !important; }
+            .ts-view-all-btn { display: inline-block !important; }
             .ts-series-scroller-wrap {
               width: 100% !important;
               max-width: 100% !important;
@@ -330,14 +341,18 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
               scroll-snap-type: x proximity !important;
               box-sizing: border-box !important;
             }
-            .ts-series-scroller { gap: 10px !important; padding-bottom: 4px !important; }
+            .ts-series-scroller { gap: 8px !important; padding-bottom: 4px !important; }
             .ts-series-card {
-              width: 148px !important;
+              width: 42vw !important;
+              max-width: 165px !important;
               flex-shrink: 0 !important;
               scroll-snap-align: start !important;
-              padding: 12px !important;
+              padding: 10px !important;
               border-radius: 14px !important;
             }
+            .ts-viewall-overlay { padding: 16px 10px !important; align-items: flex-start !important; }
+            .ts-viewall-card { width: 100% !important; max-width: 480px !important; max-height: 82vh !important; padding: 18px !important; border-radius: 20px !important; }
+            .ts-viewall-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
           }
         `}</style>
         <header style={headerPanelRow} className="ts-header">
@@ -385,12 +400,25 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                     paddingBottom: isMobile ? '10px' : 0
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <h3 style={{ ...categoryHeadingText, fontSize: isMobile ? '1.05rem' : categoryHeadingText.fontSize }}>{catName}</h3>
-                    {/* 🛡️ Admin Verification Wrapper */}
-                    {isAdmin && <button onClick={(e) => handleDeleteCategoryPath(e, catName)} style={deleteMinimalCrossLink}>✕</button>}
+                  <div className="ts-descriptor-top-row" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <h3 style={{ ...categoryHeadingText, fontSize: isMobile ? '1.05rem' : categoryHeadingText.fontSize, margin: isMobile ? 0 : categoryHeadingText.margin }}>{catName}</h3>
+                      {/* 🛡️ Admin Verification Wrapper */}
+                      {isAdmin && <button onClick={(e) => handleDeleteCategoryPath(e, catName)} style={deleteMinimalCrossLink}>✕</button>}
+                    </div>
+                    {/* 📱 "View All" — only rendered on mobile, opens the modal grid of every series in this category */}
+                    {isMobile && seriesList.length > 0 && (
+                      <button
+                        type="button"
+                        className="ts-view-all-btn"
+                        onClick={() => setViewAllCategory(catName)}
+                        style={viewAllTriggerBtn}
+                      >
+                        View All →
+                      </button>
+                    )}
                   </div>
-                  <p style={{ ...subLabelMetaDataText, fontSize: isMobile ? '0.66rem' : subLabelMetaDataText.fontSize, marginBottom: isMobile ? '10px' : subLabelMetaDataText.marginBottom }}>{seriesList.length} Series Total</p>
+                  <p className="ts-descriptor-meta-line" style={{ ...subLabelMetaDataText, fontSize: isMobile ? '0.66rem' : subLabelMetaDataText.fontSize, marginBottom: isMobile ? '8px' : subLabelMetaDataText.marginBottom, marginTop: isMobile ? '4px' : subLabelMetaDataText.marginTop }}>{seriesList.length} Series Total</p>
                   {/* 🛡️ Admin Verification Wrapper */}
                   {isAdmin && (
                     <button onClick={() => handleAddTestSeries(catName)} style={smallMonochromeOutlineWidgetBtn}>
@@ -490,6 +518,54 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
             </div>
           </div>
         )}
+
+        {/* 📱 VIEW ALL OVERLAY — full list of series in a category, for mobile
+            where the horizontal scroller can only show 2-3 cards at a time. */}
+        {viewAllCategory && (
+          <div className="ts-viewall-overlay" style={modalOverlayStyle} onClick={() => setViewAllCategory(null)}>
+            <div className="ts-viewall-card" style={viewAllCardStyle} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, fontWeight: '900', color: '#0f172a', fontSize: '1.15rem' }}>{viewAllCategory} — All Series</h3>
+                <button onClick={() => setViewAllCategory(null)} style={{ background: 'none', border: 'none', fontSize: '1.3rem', fontWeight: '700', color: '#94a3b8', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+              </div>
+              <div className="ts-viewall-grid" style={viewAllGridStyle}>
+                {getSeriesForCategory(viewAllCategory).map((seriesName) => {
+                  const totalTestCount = allMockTests.filter(t => t.category_name === viewAllCategory && t.series_name === seriesName && t.title).length;
+                  const isEnrolled = subscribedExams.includes(seriesName);
+                  return (
+                    <div key={seriesName} style={{ ...seriesChronologicalCardBox, width: '100%' }}>
+                      <h4 style={seriesThemeTitleCardHeader}>{seriesName}</h4>
+                      <p style={totalTestCountFooterText}>{totalTestCount} Mock Tests</p>
+                      <div style={seriesCardActionContainerLayout}>
+                        <button
+                          type="button"
+                          onClick={() => toggleEnrollSeries(seriesName)}
+                          style={{ ...seriesActionBtnStyle, background: isEnrolled ? '#475569' : '#000000', color: '#ffffff', border: 'none' }}
+                        >
+                          {isEnrolled ? "Enrolled ✓" : "Enroll in Series"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveCategory(viewAllCategory);
+                            setActiveSeries(seriesName);
+                            const currentSections = getSectionsForSeries(viewAllCategory, seriesName);
+                            setActiveSubSection(currentSections.length > 0 ? currentSections[0] : '');
+                            setViewAllCategory(null);
+                            setView('series-detail');
+                          }}
+                          style={{ ...seriesActionBtnStyle, background: '#ffffff', color: '#000000', border: '1px solid #000000' }}
+                        >
+                          Explore Test Series
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -508,6 +584,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
             .ts-breadcrumb { font-size: 0.62rem !important; }
             .ts-workspace-title { font-size: 1.15rem !important; }
             .ts-back-btn { padding: 6px 10px !important; font-size: 0.68rem !important; }
+            .ts-workspace-actions { width: 100% !important; }
+            .ts-workspace-actions button { flex: 1 !important; padding: 9px 6px !important; font-size: 0.72rem !important; }
             .ts-tab-row { gap: 14px !important; margin-bottom: 14px !important; }
             .ts-tab-btn { padding: 8px 2px !important; font-size: 0.7rem !important; }
             .ts-item-row { padding: 12px !important; border-radius: 14px !important; }
@@ -534,12 +612,26 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                 {activeSeries} Workspace
               </h2>
             </div>
-            {/* 🛡️ Admin Verification Wrapper */}
-            {isAdmin && (
-              <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }} className="ts-workspace-actions">
+              {/* 📱 Enroll button available right inside the series workspace too,
+                  so the student doesn't have to leave and re-find the card on the hub. */}
+              <button
+                type="button"
+                onClick={() => toggleEnrollSeries(activeSeries)}
+                style={{
+                  ...secondaryActionBtn,
+                  background: subscribedExams.includes(activeSeries) ? '#475569' : '#000000',
+                  color: '#ffffff',
+                  border: 'none'
+                }}
+              >
+                {subscribedExams.includes(activeSeries) ? "Enrolled ✓" : "Enroll in Series"}
+              </button>
+              {/* 🛡️ Admin Verification Wrapper */}
+              {isAdmin && (
                 <button onClick={() => setShowAddSectionModal(true)} style={secondaryActionBtn}>+ Add Section Tab</button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </header>
 
@@ -668,5 +760,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
 // --- STYLES ARCHITECTURE SCHEMAS MAP ---
 const containerStyle = { padding: '20px 10px', maxWidth: '1200px', margin: '0 auto' }; const headerPanelRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }; const monochromeSolidDarkActionBtn = { background: '#000000', color: '#ffffff', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer' }; const horizontalStackColumnLayout = { display: 'flex', flexDirection: 'column', gap: '28px' }; const horizontalCategorySpaceRow = { display: 'flex', flexDirection: 'row', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '24px', padding: '24px', alignItems: 'stretch', gap: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.005)' }; const categoryLeftDescriptorBlock = { width: '220px', flexShrink: 0, borderRight: '1px solid #f1f5f9', paddingRight: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }; const categoryHeadingText = { margin: '0 0 2px 0', fontSize: '1.4rem', fontWeight: '900', color: '#0f172a', letterSpacing: '-0.3px' }; const deleteMinimalCrossLink = { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }; const subLabelMetaDataText = { margin: '0 0 16px 0', fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }; const smallMonochromeOutlineWidgetBtn = { background: '#ffffff', border: '1px solid #000000', color: '#000000', padding: '8px 12px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', textAlign: 'center' }; const seriesHorizontalFlexScroller = { display: 'flex', flexDirection: 'row', gap: '16px', width: 'max-content', alignItems: 'center' }; const seriesChronologicalCardBox = { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '22px', width: '210px', flexShrink: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }; const seriesThemeTitleCardHeader = { margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: '900', color: '#0f172a', lineHeight: '1.3' }; const totalTestCountFooterText = { margin: '0 0 20px 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }; const seriesCardActionContainerLayout = { display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', marginTop: 'auto' }; const seriesActionBtnStyle = { width: '100%', padding: '10px', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '800', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s ease', boxSizing: 'border-box' }; const backDirectoryLinkBtn = { background: '#ffffff', border: '1px solid #000000', color: '#000000', padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer' }; const breadcrumbTrailRow = { fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }; const tabMenuBarRow = { display: 'flex', gap: '30px', borderBottom: '1px solid #e2e8f0', marginBottom: '25px' }; const tabElementBtn = { background: 'none', border: 'none', padding: '12px 6px', fontWeight: '800', cursor: 'pointer', fontSize: '0.88rem', letterSpacing: '0.3px' }; const testItemInstanceRow = { background: '#ffffff', padding: '20px 24px', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }; const testTitleHeaderStyle = { margin: 0, fontSize: '1.1rem', color: '#0f172a', fontWeight: '800' }; const statBadge = { fontSize: '0.8rem', color: '#475569', background: '#f1f5f9', padding: '4px 10px', borderRadius: '6px', fontWeight: '700' }; const secondaryActionBtn = { background: '#ffffff', border: '1px solid #cbd5e1', padding: '10px 18px', borderRadius: '10px', color: '#475569', fontWeight: '700', cursor: 'pointer', fontSize: '0.82rem' }; const monochromeLaunchTestBtn = { background: '#000000', color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: '800', fontSize: '0.82rem' }; const nestedAttemptsScrollerContainer = { background: '#f8fafc', padding: '16px', borderRadius: '14px', border: '1px dashed #000000', marginTop: '16px' }; const attemptHistoryItemLine = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }; const emptyStateTextPlaceholder = { textAlign: 'center', color: '#94a3b8', padding: '40px 0', fontSize: '0.88rem', fontWeight: '600', fontStyle: 'italic' }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }; const modalContentCardStyle = { background: '#ffffff', padding: '30px', borderRadius: '24px', width: '90%', maxWidth: '400px', border: '1px solid #e2e8f0' }; const inputStyle = { width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', marginBottom: '14px', fontWeight: '600' }; const modalConfirmBtn = { flex: 1.3, padding: '12px', background: '#000000', color: '#ffffff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const modalCancelBtn = { flex: 1, padding: '12px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const emptySeriesHorizontalPlaceholder = { color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic', fontWeight: '500', paddingLeft: '10px' };
 const scrollArrowBtnStyle = { flexShrink: 0, width: '28px', height: '28px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', fontSize: '1.1rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 };
+const viewAllTriggerBtn = { background: 'none', border: '1px solid #000000', color: '#000000', padding: '4px 10px', borderRadius: '20px', fontSize: '0.68rem', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 };
+const viewAllCardStyle = { background: '#ffffff', borderRadius: '24px', padding: '24px', width: '90%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto', border: '1px solid #e2e8f0', boxSizing: 'border-box' };
+const viewAllGridStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' };
 
 export default TestSeries;
