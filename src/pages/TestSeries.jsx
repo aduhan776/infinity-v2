@@ -323,7 +323,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
             .content-view { padding-left: 0 !important; padding-right: 0 !important; overflow-x: hidden !important; }
             .ts-container { width: 100% !important; max-width: 100vw !important; overflow-x: hidden !important; box-sizing: border-box !important; padding-left: 6px !important; padding-right: 6px !important; }
             .ts-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; margin-bottom: 22px !important; }
-            .ts-category-row { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; margin: 0 !important; padding: 10px !important; }
+            .ts-category-row { width: 100% !important; max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; margin: 0 !important; padding: 10px !important; overflow: hidden !important; }
             .ts-descriptor-block {
               width: 100% !important;
               padding-top: 0 !important;
@@ -340,6 +340,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
               padding: 8px 16px !important;
             }
             .ts-series-scroller-wrap {
+              flex: 1 1 0% !important;
+              min-width: 0 !important;
               width: 100% !important;
               max-width: 100% !important;
               overflow-x: auto !important;
