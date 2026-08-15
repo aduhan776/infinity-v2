@@ -54,10 +54,13 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
   const [showExplanation, setShowExplanation] = useState(false); 
   const [savedStatus, setSavedStatus] = useState({}); 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [activeTab, setActiveTab] = useState('analysis'); // mobile only: 'analysis' | 'solutions'
 
   // Refs for swipe detection (mobile touch only) and section scroll targets
   const touchStartXRef = useRef(null);
   const touchStartYRef = useRef(null);
+  const tabTouchStartXRef = useRef(null);
+  const tabTouchStartYRef = useRef(null);
   const sectionRefs = useRef({});
   const detailScrollRef = useRef(null);
 
@@ -295,10 +298,60 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
   const isFirstInFiltered = currentPosInFiltered <= 0;
   const isLastInFiltered = currentPosInFiltered === filteredIndices.length - 1;
 
+  // --- 👉👈 SWIPE BETWEEN TABS (mobile only, top-level Analysis/Solutions) ---
+  const handleTabTouchStart = (e) => {
+    if (!isMobile) return;
+    tabTouchStartXRef.current = e.touches[0].clientX;
+    tabTouchStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleTabTouchEnd = (e) => {
+    if (!isMobile || tabTouchStartXRef.current === null) return;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const deltaX = endX - tabTouchStartXRef.current;
+    const deltaY = endY - tabTouchStartYRef.current;
+    tabTouchStartXRef.current = null;
+    tabTouchStartYRef.current = null;
+
+    if (Math.abs(deltaY) > Math.abs(deltaX)) return; // vertical scroll, ignore
+    const SWIPE_THRESHOLD = 50;
+    if (deltaX < -SWIPE_THRESHOLD && activeTab === 'analysis') {
+      setActiveTab('solutions'); // swipe left → next tab
+    } else if (deltaX > SWIPE_THRESHOLD && activeTab === 'solutions') {
+      setActiveTab('analysis'); // swipe right → previous tab
+    }
+  };
+
   return (
     <div style={{ ...styles.container, ...(isMobile ? styles.containerMobile : {}) }}>
 
+      {/* ================= MOBILE-ONLY TAB BAR ================= */}
+      {isMobile && (
+        <div style={styles.tabBarMobile}>
+          <button
+            onClick={() => setActiveTab('analysis')}
+            style={{ ...styles.tabBtnMobile, ...(activeTab === 'analysis' ? styles.tabBtnActiveMobile : {}) }}
+          >
+            Test Analysis
+          </button>
+          <button
+            onClick={() => setActiveTab('solutions')}
+            style={{ ...styles.tabBtnMobile, ...(activeTab === 'solutions' ? styles.tabBtnActiveMobile : {}) }}
+          >
+            Solutions
+          </button>
+        </div>
+      )}
+
+      <div
+        style={isMobile ? { width: '100%' } : { display: 'contents' }}
+        onTouchStart={isMobile ? handleTabTouchStart : undefined}
+        onTouchEnd={isMobile ? handleTabTouchEnd : undefined}
+      >
+
       {/* ================= SECTION 1: TEST SUMMARY ================= */}
+      {(!isMobile || activeTab === 'analysis') && (
       <div style={{ ...styles.summaryHeader, ...(isMobile ? styles.summaryHeaderMobile : {}) }}>
         <div style={{ ...styles.summaryHeaderMain, ...(isMobile ? styles.summaryHeaderMainMobile : {}) }}>
            <div style={isMobile ? { width: '100%' } : {}}>
@@ -308,27 +361,27 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
            <button onClick={onBackToDashboard} style={{ ...styles.homeBtn, ...(isMobile ? styles.homeBtnMobile : {}) }}>Back to Dashboard</button>
         </div>
 
-        {/* Stat cards — full-width stacked on mobile, grid row on desktop */}
+        {/* Stat cards — compact 2-per-row grid on mobile, 5-across row on desktop */}
         <div style={{ ...styles.mainStatsGrid, ...(isMobile ? styles.mainStatsGridMobile : {}) }}>
           <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
-             <span style={styles.mainStatLabel}>FINAL SCORE</span>
-             <span style={{...styles.mainStatValue, color:'#6366f1', fontSize: isMobile ? '1.8rem' : '1.5rem'}}>{totalScore.toFixed(2)}</span>
+             <span style={{...styles.mainStatLabel, ...(isMobile ? styles.mainStatLabelMobile : {})}}>FINAL SCORE</span>
+             <span style={{...styles.mainStatValue, color:'#6366f1', fontSize: isMobile ? '1.1rem' : '1.5rem'}}>{totalScore.toFixed(2)}</span>
           </div>
           <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
-             <span style={styles.mainStatLabel}>ACCURACY</span>
-             <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.8rem' : '1.5rem'}}>{accuracy}%</span>
+             <span style={{...styles.mainStatLabel, ...(isMobile ? styles.mainStatLabelMobile : {})}}>ACCURACY</span>
+             <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.1rem' : '1.5rem'}}>{accuracy}%</span>
           </div>
           <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
-             <span style={styles.mainStatLabel}>CORRECT (MCQ)</span>
-             <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.8rem' : '1.5rem'}}>{correctCount}</span>
+             <span style={{...styles.mainStatLabel, ...(isMobile ? styles.mainStatLabelMobile : {})}}>CORRECT (MCQ)</span>
+             <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.1rem' : '1.5rem'}}>{correctCount}</span>
           </div>
           <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
-             <span style={styles.mainStatLabel}>INCORRECT (MCQ)</span>
-             <span style={{...styles.mainStatValue, color:'#ef4444', fontSize: isMobile ? '1.8rem' : '1.5rem'}}>{incorrectCount}</span>
+             <span style={{...styles.mainStatLabel, ...(isMobile ? styles.mainStatLabelMobile : {})}}>INCORRECT (MCQ)</span>
+             <span style={{...styles.mainStatValue, color:'#ef4444', fontSize: isMobile ? '1.1rem' : '1.5rem'}}>{incorrectCount}</span>
           </div>
-          <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
-             <span style={styles.mainStatLabel}>UNATTEMPTED</span>
-             <span style={{...styles.mainStatValue, color:'#94a3b8', fontSize: isMobile ? '1.8rem' : '1.5rem'}}>{unattemptedCount}</span>
+          <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardFullRowMobile : {}) }}>
+             <span style={{...styles.mainStatLabel, ...(isMobile ? styles.mainStatLabelMobile : {})}}>UNATTEMPTED</span>
+             <span style={{...styles.mainStatValue, color:'#94a3b8', fontSize: isMobile ? '1.1rem' : '1.5rem'}}>{unattemptedCount}</span>
           </div>
         </div>
 
@@ -338,8 +391,10 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
           <div style={{...styles.topicBadge, ...(isMobile ? styles.topicBadgeMobile : {})}}>Time Remaining: {formatTime(timeLeft)}</div>
         </div>
       </div>
+      )}
 
       {/* ================= SECTION 2: SOLUTIONS / QUESTIONS LIST ================= */}
+      {(!isMobile || activeTab === 'solutions') && (
       <div style={{ ...styles.solutionsSection, ...(isMobile ? styles.solutionsSectionMobile : {}) }}>
         <h2 style={{ ...styles.solutionsSectionTitle, ...(isMobile ? styles.solutionsSectionTitleMobile : {}) }}>Solutions</h2>
 
@@ -416,6 +471,9 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
             );
           })}
         </div>
+      </div>
+      )}
+
       </div>
 
       {selectedQIdx !== null && questions[selectedQIdx] && (
@@ -579,40 +637,71 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
 const styles = {
   container: { padding: '30px', background: '#f8fafc', minHeight: '100vh', width: '100%', boxSizing: 'border-box' },
-  containerMobile: { padding: '10px', overflowX: 'hidden' },
+  containerMobile: { padding: '8px', overflowX: 'hidden' },
+
+  // ---------- MOBILE TAB BAR (Analysis / Solutions) ----------
+  tabBarMobile: {
+    display: 'flex',
+    width: '100%',
+    boxSizing: 'border-box',
+    background: '#eef0f4',
+    borderRadius: '10px',
+    padding: '3px',
+    gap: '3px',
+    marginBottom: '10px',
+  },
+  tabBtnMobile: {
+    flex: 1,
+    padding: '9px 4px',
+    borderRadius: '8px',
+    border: 'none',
+    background: 'transparent',
+    color: '#64748b',
+    fontWeight: '700',
+    fontSize: '0.78rem',
+    cursor: 'pointer',
+    textAlign: 'center',
+  },
+  tabBtnActiveMobile: {
+    background: '#fff',
+    color: '#1e293b',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+  },
 
   // ---------- SECTION 1: SUMMARY ----------
   summaryHeader: { background: '#fff', padding: '30px', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginBottom: '30px', width: '100%', boxSizing: 'border-box' },
-  summaryHeaderMobile: { padding: '14px', borderRadius: '14px', marginBottom: '14px' },
+  summaryHeaderMobile: { padding: '12px', borderRadius: '12px', marginBottom: '0' },
 
   summaryHeaderMain: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' },
-  summaryHeaderMainMobile: { flexDirection: 'column', alignItems: 'stretch', gap: '10px', marginBottom: '14px' },
+  summaryHeaderMainMobile: { flexDirection: 'column', alignItems: 'stretch', gap: '8px', marginBottom: '10px' },
 
   homeBtn: { background: '#1e293b', color: '#fff', border: 'none', padding: '12px 25px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' },
-  homeBtnMobile: { padding: '12px', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' },
+  homeBtnMobile: { padding: '9px', fontSize: '0.78rem', width: '100%', boxSizing: 'border-box' },
 
-  // Desktop: 5-across grid. Mobile: single column, one full-width card per row.
+  // Desktop: 5-across grid. Mobile: compact 2-per-row grid (last card spans full row).
   mainStatsGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px', width: '100%', boxSizing: 'border-box' },
-  mainStatsGridMobile: { gridTemplateColumns: '1fr', gap: '10px' },
+  mainStatsGridMobile: { gridTemplateColumns: '1fr 1fr', gap: '8px' },
 
   mainStatCard: { padding: '15px', background: '#f8fafc', borderRadius: '15px', textAlign: 'center', border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' },
-  mainStatCardMobile: { padding: '18px' },
+  mainStatCardMobile: { padding: '10px 6px', borderRadius: '10px' },
+  mainStatCardFullRowMobile: { padding: '10px 6px', borderRadius: '10px', gridColumn: '1 / -1' },
 
   mainStatLabel: { display: 'block', fontSize: '0.7rem', fontWeight: '900', color: '#94a3b8', marginBottom: '8px', letterSpacing: '0.5px' },
+  mainStatLabelMobile: { fontSize: '0.6rem', marginBottom: '4px' },
   mainStatValue: { fontSize: '1.5rem', fontWeight: '900', color: '#1e293b' },
 
   topicSection: { display: 'flex', gap: '10px', marginTop: '20px' },
-  topicSectionMobile: { flexDirection: 'column', gap: '8px', marginTop: '14px' },
+  topicSectionMobile: { flexDirection: 'column', gap: '6px', marginTop: '10px' },
 
   topicBadge: { background: '#f1f5f9', padding: '6px 15px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', color: '#475569', boxSizing: 'border-box' },
-  topicBadgeMobile: { width: '100%', textAlign: 'center' },
+  topicBadgeMobile: { width: '100%', textAlign: 'center', fontSize: '0.72rem', padding: '7px 10px' },
 
   // ---------- SECTION 2: SOLUTIONS ----------
   solutionsSection: { background: '#fff', padding: '30px', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', width: '100%', boxSizing: 'border-box' },
-  solutionsSectionMobile: { padding: '14px', borderRadius: '14px' },
+  solutionsSectionMobile: { padding: '12px', borderRadius: '12px' },
 
   solutionsSectionTitle: { margin: '0 0 20px 0', fontSize: '1.3rem', fontWeight: '900', color: '#1e293b' },
-  solutionsSectionTitleMobile: { fontSize: '1.05rem', marginBottom: '14px' },
+  solutionsSectionTitleMobile: { fontSize: '0.95rem', marginBottom: '10px' },
 
   sectionNavBar: { display: 'flex', gap: '8px', marginBottom: '18px', width: '100%', boxSizing: 'border-box' },
   sectionNavBtn: { background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', padding: '8px 16px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '800', cursor: 'pointer' },
@@ -622,14 +711,14 @@ const styles = {
   activeFilter: { padding: '8px 18px', borderRadius: '20px', border: 'none', background: '#6366f1', color: '#fff', fontWeight: 'bold', fontSize: '0.85rem' },
 
   // Shared pattern for horizontally-scrolling rows on mobile (section nav, filter bar)
-  horizontalScrollMobile: { overflowX: 'auto', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch', paddingBottom: '4px' },
-  noWrapMobile: { flexShrink: 0, whiteSpace: 'nowrap' },
+  horizontalScrollMobile: { overflowX: 'auto', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch', paddingBottom: '4px', marginBottom: '12px' },
+  noWrapMobile: { flexShrink: 0, whiteSpace: 'nowrap', padding: '6px 12px', fontSize: '0.72rem' },
 
   listGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px', width: '100%', boxSizing: 'border-box' },
-  listGridMobile: { gridTemplateColumns: '1fr', gap: '10px' },
+  listGridMobile: { gridTemplateColumns: '1fr', gap: '8px' },
 
   qCardSmall: { padding: '15px', borderRadius: '12px', border: '2px solid', cursor: 'pointer', transition: '0.3s', width: '100%', boxSizing: 'border-box' },
-  qCardSmallMobile: { padding: '14px' },
+  qCardSmallMobile: { padding: '10px', borderRadius: '10px' },
 
   cardHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px', gap: '8px' },
   qNum: { fontWeight: '800', color: '#64748b', fontSize: '0.75rem' },
