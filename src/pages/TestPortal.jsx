@@ -715,6 +715,19 @@ const TestPortal = ({ testData, onExit }) => {
   };
 
   const attemptedCount = questions.filter((_, i) => isAttempted(i)).length;
+
+  // Single source of truth for a palette pellet's colors, used by both the
+  // desktop sidebar and the mobile drawer grid.
+  const getPelletColors = (i, isLocked) => {
+    const attempted = isAttempted(i);
+    const reviewed = markedForReview.includes(i);
+    if (currentQ === i) return { bg: '#1e293b', color: '#fff' };
+    if (isLocked) return { bg: '#e2e8f0', color: '#94a3b8' };
+    if (attempted && reviewed) return { bg: '#8b5cf6', color: '#fff' }; // purple: attempted + marked
+    if (attempted) return { bg: '#22c55e', color: '#fff' }; // green: attempted only
+    if (reviewed) return { bg: '#f59e0b', color: '#fff' }; // yellow: marked only
+    return { bg: '#fff', color: '#64748b' };
+  };
   const unattemptedCount = questions.length - attemptedCount;
   const reviewCount = markedForReview.length;
 
@@ -903,8 +916,8 @@ const TestPortal = ({ testData, onExit }) => {
                      }}
                      style={{
                        ...styles.pNum, 
-                       background: currentQ === i ? '#1e293b' : isLocked ? '#e2e8f0' : isAttempted(i) ? '#22c55e' : markedForReview.includes(i) ? '#f59e0b' : '#fff', 
-                       color: isLocked ? '#94a3b8' : (currentQ === i || isAttempted(i) || markedForReview.includes(i)) ? '#fff' : '#64748b', 
+                       background: getPelletColors(i, isLocked).bg,
+                       color: getPelletColors(i, isLocked).color,
                        borderColor: currentQ === i ? '#6366f1' : '#e2e8f0',
                        cursor: isLocked ? 'not-allowed' : 'pointer',
                        opacity: isLocked ? 0.6 : 1
@@ -923,14 +936,20 @@ const TestPortal = ({ testData, onExit }) => {
       {isMobile && (
         <div style={styles.mobileBottomBar}>
           <button
+            style={{...styles.mobilePrevBtn, ...(currentQ === 0 ? {opacity: 0.4, cursor: 'not-allowed'} : {})}}
+            disabled={currentQ === 0}
+            onClick={handlePrevNavigation}
+          >
+            ◀
+          </button>
+          <button
             style={{...styles.mobileReviewBtn, ...(markedForReview.includes(currentQ) ? styles.mobileReviewBtnActive : {})}}
             onClick={toggleMarkReview}
-            title="Mark for review"
           >
-            !
+            {markedForReview.includes(currentQ) ? 'Unmark Review' : 'Mark for Review'}
           </button>
           <button style={styles.mobileNextBtn} onClick={handleNextNavigation}>
-            {currentQ === questions.length - 1 ? "Finish Test 🏁" : "Save & Next"}
+            {currentQ === questions.length - 1 ? "Finish 🏁" : "Save & Next"}
           </button>
         </div>
       )}
@@ -1004,8 +1023,8 @@ const TestPortal = ({ testData, onExit }) => {
                      }}
                      style={{
                        ...styles.drawerPNum,
-                       background: currentQ === i ? '#1e293b' : isLocked ? '#e2e8f0' : isAttempted(i) ? '#22c55e' : markedForReview.includes(i) ? '#f59e0b' : '#fff',
-                       color: isLocked ? '#94a3b8' : (currentQ === i || isAttempted(i) || markedForReview.includes(i)) ? '#fff' : '#64748b',
+                       background: getPelletColors(i, isLocked).bg,
+                       color: getPelletColors(i, isLocked).color,
                        borderColor: currentQ === i ? '#6366f1' : '#e2e8f0',
                        cursor: isLocked ? 'not-allowed' : 'pointer',
                        opacity: isLocked ? 0.6 : 1
@@ -1170,10 +1189,11 @@ const styles = {
   optCardMobile: { padding: '14px' },
 
   // --- 📱 MOBILE BOTTOM ACTION BAR ---
-  mobileBottomBar: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #e2e8f0', padding: '10px 15px', display: 'flex', gap: '10px', alignItems: 'center', zIndex: 60 },
-  mobileReviewBtn: { width: '48px', height: '48px', borderRadius: '12px', border: '2px solid #f59e0b', background: '#fff', color: '#f59e0b', fontWeight: '900', fontSize: '1.3rem', flexShrink: 0, cursor: 'pointer' },
+  mobileBottomBar: { position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #e2e8f0', padding: '10px 12px', display: 'flex', gap: '8px', alignItems: 'center', zIndex: 60 },
+  mobilePrevBtn: { width: '44px', height: '46px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: '800', fontSize: '1rem', flexShrink: 0, cursor: 'pointer' },
+  mobileReviewBtn: { flex: '1 1 0', minWidth: 0, height: '46px', borderRadius: '12px', border: '2px solid #f59e0b', background: '#fff', color: '#f59e0b', fontWeight: '800', fontSize: '0.78rem', padding: '0 4px', cursor: 'pointer' },
   mobileReviewBtnActive: { background: '#f59e0b', color: '#fff' },
-  mobileNextBtn: { flex: 1, height: '48px', borderRadius: '12px', background: '#6366f1', color: '#fff', border: 'none', fontWeight: '800', fontSize: '0.95rem', cursor: 'pointer' },
+  mobileNextBtn: { flex: '1.3 1 0', minWidth: 0, height: '46px', borderRadius: '12px', background: '#6366f1', color: '#fff', border: 'none', fontWeight: '800', fontSize: '0.85rem', cursor: 'pointer' },
 
   // --- 📱 TOAST ---
   toastBox: { position: 'fixed', bottom: '78px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(15,23,42,0.92)', color: '#fff', padding: '8px 18px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '600', zIndex: 70, whiteSpace: 'nowrap' },
