@@ -314,10 +314,30 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
     const renderCategories = getUniqueCategories();
 
     return (
-      <div style={{ ...containerStyle, ...(isMobile ? { padding: '10px 6px' } : {}) }} className="ts-container">
+      <div style={{ ...containerStyle, ...(isMobile ? { padding: '10px 0' } : {}) }} className="ts-container">
         <style>{`
           @media (max-width: 768px) {
-            .content-view { padding-left: 0 !important; padding-right: 0 !important; }
+            .content-view { padding-left: 0 !important; padding-right: 0 !important; overflow-x: hidden !important; }
+            .ts-container { width: 100% !important; max-width: 100vw !important; overflow-x: hidden !important; box-sizing: border-box !important; padding-left: 10px !important; padding-right: 10px !important; }
+            .ts-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; margin-bottom: 22px !important; }
+            .ts-category-row { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; margin: 0 !important; }
+            .ts-descriptor-block { width: 100% !important; }
+            .ts-series-scroller-wrap {
+              width: 100% !important;
+              max-width: 100% !important;
+              overflow-x: auto !important;
+              -webkit-overflow-scrolling: touch !important;
+              scroll-snap-type: x proximity !important;
+              box-sizing: border-box !important;
+            }
+            .ts-series-scroller { gap: 10px !important; padding-bottom: 4px !important; }
+            .ts-series-card {
+              width: 148px !important;
+              flex-shrink: 0 !important;
+              scroll-snap-align: start !important;
+              padding: 12px !important;
+              border-radius: 14px !important;
+            }
           }
         `}</style>
         <header style={headerPanelRow} className="ts-header">
@@ -349,7 +369,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                   maxWidth: '100%',
                   boxSizing: 'border-box',
                   padding: isMobile ? '12px' : horizontalCategorySpaceRow.padding,
-                  gap: isMobile ? '12px' : horizontalCategorySpaceRow.gap
+                  gap: isMobile ? '10px' : horizontalCategorySpaceRow.gap
                 }}
               >
                 
@@ -370,7 +390,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                     {/* 🛡️ Admin Verification Wrapper */}
                     {isAdmin && <button onClick={(e) => handleDeleteCategoryPath(e, catName)} style={deleteMinimalCrossLink}>✕</button>}
                   </div>
-                  <p style={{ ...subLabelMetaDataText, fontSize: isMobile ? '0.66rem' : subLabelMetaDataText.fontSize }}>{seriesList.length} Series Total</p>
+                  <p style={{ ...subLabelMetaDataText, fontSize: isMobile ? '0.66rem' : subLabelMetaDataText.fontSize, marginBottom: isMobile ? '10px' : subLabelMetaDataText.marginBottom }}>{seriesList.length} Series Total</p>
                   {/* 🛡️ Admin Verification Wrapper */}
                   {isAdmin && (
                     <button onClick={() => handleAddTestSeries(catName)} style={smallMonochromeOutlineWidgetBtn}>
@@ -397,8 +417,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                           className="ts-series-card"
                           style={{
                             ...seriesChronologicalCardBox,
-                            width: isMobile ? '128px' : seriesChronologicalCardBox.width,
-                            padding: isMobile ? '10px' : seriesChronologicalCardBox.padding
+                            width: isMobile ? '148px' : seriesChronologicalCardBox.width,
+                            padding: isMobile ? '12px' : seriesChronologicalCardBox.padding
                           }}
                         >
                           <h4 style={{ ...seriesThemeTitleCardHeader, fontSize: isMobile ? '0.85rem' : seriesThemeTitleCardHeader.fontSize, marginBottom: isMobile ? '2px' : seriesThemeTitleCardHeader.marginBottom }}>{seriesName}</h4>
