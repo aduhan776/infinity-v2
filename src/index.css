@@ -21,10 +21,6 @@ html {
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  /* 🔒 Global safety net: the page itself can NEVER pan sideways, no matter
-     what. Only elements we've explicitly made scrollable (overflow-x: auto)
-     can still scroll within themselves — this doesn't block that. */
-  overflow-x: hidden;
   width: 100%;
 }
 
@@ -39,8 +35,6 @@ body {
   margin: 0;
   min-width: 100vw;
   min-height: 100vh;
-  /* 🔒 Same lock on body as a second layer of safety. */
-  overflow-x: hidden;
   max-width: 100vw;
   /* Ye ensure karega ki layout left se hi shuru ho */
   display: block; 

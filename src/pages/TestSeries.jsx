@@ -320,8 +320,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
       <div style={{ ...containerStyle, ...(isMobile ? { padding: '10px 0' } : {}) }} className="ts-container">
         <style>{`
           @media (max-width: 768px) {
-            .content-view { padding-left: 0 !important; padding-right: 0 !important; overflow-x: hidden !important; }
-            .ts-container { width: 100% !important; max-width: 100vw !important; overflow-x: hidden !important; box-sizing: border-box !important; padding-left: 6px !important; padding-right: 6px !important; }
+            .content-view { padding-left: 0 !important; padding-right: 0 !important; }
+            .ts-container { width: 100% !important; max-width: 100vw !important; box-sizing: border-box !important; padding-left: 6px !important; padding-right: 6px !important; }
             .ts-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; margin-bottom: 22px !important; }
             .ts-category-row { width: 100% !important; max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; margin: 0 !important; padding: 10px !important; overflow: hidden !important; }
             .ts-descriptor-block {
@@ -592,7 +592,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         <style>{`
           @media (max-width: 768px) {
             .content-view { padding-left: 0 !important; padding-right: 0 !important; }
-            .ts-container { padding: 10px 6px !important; overflow-x: hidden !important; }
+            .ts-container { padding: 10px 6px !important; }
             .ts-breadcrumb { font-size: 0.62rem !important; }
             .ts-workspace-title { font-size: 1.15rem !important; }
             .ts-back-btn { padding: 6px 10px !important; font-size: 0.68rem !important; }
