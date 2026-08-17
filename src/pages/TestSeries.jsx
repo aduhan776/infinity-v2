@@ -317,34 +317,57 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
     const renderCategories = getUniqueCategories();
 
     return (
-      <div
-        style={{
-          ...containerStyle,
-          ...(isMobile
-            ? { width: '100%', maxWidth: '100%', boxSizing: 'border-box', padding: '10px 6px' }
-            : {})
-        }}
-        className="ts-container"
-      >
-        {/* 📱 Only the parent-level override stays as real CSS (JS can't reach
-            outside this component's own tree). Everything that used to live in
-            an @media(max-width:768px) block below now runs off the same
-            window.innerWidth-based `isMobile` state as the rest of the app —
-            @media queries were found to not reliably match on some devices,
-            which is what was causing the desktop-width scroller cards to
-            overflow the viewport and force a browser auto-zoom-out here. */}
+      <div style={{ ...containerStyle, ...(isMobile ? { padding: '10px 0' } : {}) }} className="ts-container">
         <style>{`
-          .content-view { padding-left: ${isMobile ? '0' : ''} !important; padding-right: ${isMobile ? '0' : ''} !important; }
+          @media (max-width: 768px) {
+            .content-view { padding-left: 0 !important; padding-right: 0 !important; }
+            .ts-container { width: 100% !important; max-width: 100vw !important; box-sizing: border-box !important; padding-left: 6px !important; padding-right: 6px !important; }
+            .ts-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; margin-bottom: 22px !important; }
+            .ts-category-row { width: 100% !important; max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; margin: 0 !important; padding: 10px !important; overflow: hidden !important; }
+            .ts-descriptor-block {
+              width: 100% !important;
+              padding-top: 0 !important;
+              padding-bottom: 8px !important;
+              justify-content: flex-start !important;
+            }
+            .ts-descriptor-top-row { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; }
+            .ts-descriptor-meta-line { margin-bottom: 0 !important; }
+            .ts-view-all-btn {
+              display: inline-flex !important;
+              align-items: center !important;
+              justify-content: center !important;
+              font-size: 0.78rem !important;
+              padding: 8px 16px !important;
+            }
+            .ts-series-scroller-wrap {
+              flex: 1 1 0% !important;
+              min-width: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              overflow-x: auto !important;
+              -webkit-overflow-scrolling: touch !important;
+              scroll-snap-type: x proximity !important;
+              box-sizing: border-box !important;
+            }
+            .ts-series-scroller { gap: 8px !important; padding-bottom: 4px !important; }
+            .ts-series-card {
+              /* Derived from actual space: 100vw minus .ts-container padding (6px*2)
+                 minus .ts-category-row padding (10px*2) minus one scroller gap (8px),
+                 split across ~2.3 visible cards so the 3rd card's edge peeks in. */
+              width: calc((100vw - 40px) / 2.3) !important;
+              max-width: 165px !important;
+              flex-shrink: 0 !important;
+              scroll-snap-align: start !important;
+              padding: 10px !important;
+              border-radius: 14px !important;
+              box-sizing: border-box !important;
+            }
+            .ts-viewall-overlay { padding: 16px 10px !important; align-items: flex-start !important; }
+            .ts-viewall-card { width: 100% !important; max-width: 480px !important; max-height: 82vh !important; padding: 18px !important; border-radius: 20px !important; }
+            .ts-viewall-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+          }
         `}</style>
-        <header
-          style={{
-            ...headerPanelRow,
-            ...(isMobile
-              ? { flexDirection: 'column', alignItems: 'flex-start', gap: '10px', marginBottom: '22px' }
-              : {})
-          }}
-          className="ts-header"
-        >
+        <header style={headerPanelRow} className="ts-header">
           <div>
             <h1 style={{ fontSize: isMobile ? '1.3rem' : '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>Test Series Hub</h1>
             <p style={{ color: '#64748b', marginTop: '4px', fontWeight: '500', fontSize: isMobile ? '0.72rem' : '1rem' }}>Explore custom testing frameworks and enroll to track progress.</p>
@@ -371,12 +394,9 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                   flexDirection: isMobile ? 'column' : 'row',
                   width: '100%',
                   maxWidth: '100%',
-                  minWidth: isMobile ? 0 : undefined,
                   boxSizing: 'border-box',
-                  padding: isMobile ? '10px' : horizontalCategorySpaceRow.padding,
-                  gap: isMobile ? '10px' : horizontalCategorySpaceRow.gap,
-                  overflow: isMobile ? 'hidden' : horizontalCategorySpaceRow.overflow,
-                  margin: isMobile ? 0 : undefined
+                  padding: isMobile ? '12px' : horizontalCategorySpaceRow.padding,
+                  gap: isMobile ? '10px' : horizontalCategorySpaceRow.gap
                 }}
               >
                 
@@ -392,15 +412,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                     paddingBottom: isMobile ? '10px' : 0
                   }}
                 >
-                  <div
-                    className="ts-descriptor-top-row"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: isMobile ? 'space-between' : 'flex-start',
-                      gap: '8px'
-                    }}
-                  >
+                  <div className="ts-descriptor-top-row" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <h3 style={{ ...categoryHeadingText, fontSize: isMobile ? '1.05rem' : categoryHeadingText.fontSize, margin: isMobile ? 0 : categoryHeadingText.margin }}>{catName}</h3>
                       {/* 🛡️ Admin Verification Wrapper */}
@@ -412,11 +424,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                         type="button"
                         className="ts-view-all-btn"
                         onClick={() => setViewAllCategory(catName)}
-                        style={{
-                          ...viewAllTriggerBtn,
-                          fontSize: isMobile ? '0.78rem' : viewAllTriggerBtn.fontSize,
-                          padding: isMobile ? '8px 16px' : viewAllTriggerBtn.padding
-                        }}
+                        style={viewAllTriggerBtn}
                       >
                         View All →
                       </button>
@@ -435,26 +443,9 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                 <div
                   className="ts-series-scroller-wrap"
                   ref={(el) => { categoryScrollRefs.current[catName] = el; }}
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    width: '100%',
-                    maxWidth: '100%',
-                    overflowX: 'auto',
-                    WebkitOverflowScrolling: 'touch',
-                    scrollSnapType: isMobile ? 'x proximity' : undefined,
-                    boxSizing: 'border-box'
-                  }}
+                  style={{ flex: 1, minWidth: 0, width: '100%', maxWidth: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', boxSizing: 'border-box' }}
                 >
-                  <div
-                    style={{
-                      ...seriesHorizontalFlexScroller,
-                      width: 'max-content',
-                      gap: isMobile ? '8px' : seriesHorizontalFlexScroller.gap,
-                      paddingBottom: isMobile ? '4px' : 0
-                    }}
-                    className="ts-series-scroller"
-                  >
+                  <div style={{ ...seriesHorizontalFlexScroller, width: 'max-content' }} className="ts-series-scroller">
                   {seriesList.length > 0 ? (
                     seriesList.map((seriesName) => {
                       const totalTestCount = allMockTests.filter(t => t.category_name === catName && t.series_name === seriesName && t.title).length;
@@ -467,11 +458,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                           style={{
                             ...seriesChronologicalCardBox,
                             width: isMobile ? '148px' : seriesChronologicalCardBox.width,
-                            flexShrink: 0,
-                            padding: isMobile ? '10px' : seriesChronologicalCardBox.padding,
-                            borderRadius: isMobile ? '14px' : seriesChronologicalCardBox.borderRadius,
-                            boxSizing: 'border-box',
-                            scrollSnapAlign: isMobile ? 'start' : undefined
+                            padding: isMobile ? '12px' : seriesChronologicalCardBox.padding
                           }}
                         >
                           <h4 style={{ ...seriesThemeTitleCardHeader, fontSize: isMobile ? '0.85rem' : seriesThemeTitleCardHeader.fontSize, marginBottom: isMobile ? '2px' : seriesThemeTitleCardHeader.marginBottom }}>{seriesName}</h4>
@@ -547,35 +534,13 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         {/* 📱 VIEW ALL OVERLAY — full list of series in a category, for mobile
             where the horizontal scroller can only show 2-3 cards at a time. */}
         {viewAllCategory && (
-          <div
-            className="ts-viewall-overlay"
-            style={{
-              ...modalOverlayStyle,
-              ...(isMobile ? { padding: '16px 10px', alignItems: 'flex-start' } : {})
-            }}
-            onClick={() => setViewAllCategory(null)}
-          >
-            <div
-              className="ts-viewall-card"
-              style={{
-                ...viewAllCardStyle,
-                ...(isMobile
-                  ? { width: '100%', maxWidth: '480px', maxHeight: '82vh', padding: '18px', borderRadius: '20px' }
-                  : {})
-              }}
-              onClick={e => e.stopPropagation()}
-            >
+          <div className="ts-viewall-overlay" style={modalOverlayStyle} onClick={() => setViewAllCategory(null)}>
+            <div className="ts-viewall-card" style={viewAllCardStyle} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h3 style={{ margin: 0, fontWeight: '900', color: '#0f172a', fontSize: '1.15rem' }}>{viewAllCategory} — All Series</h3>
                 <button onClick={() => setViewAllCategory(null)} style={{ background: 'none', border: 'none', fontSize: '1.3rem', fontWeight: '700', color: '#94a3b8', cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
-              <div
-                className="ts-viewall-grid"
-                style={{
-                  ...viewAllGridStyle,
-                  ...(isMobile ? { gridTemplateColumns: '1fr 1fr', gap: '10px' } : {})
-                }}
-              >
+              <div className="ts-viewall-grid" style={viewAllGridStyle}>
                 {getSeriesForCategory(viewAllCategory).map((seriesName) => {
                   const totalTestCount = allMockTests.filter(t => t.category_name === viewAllCategory && t.series_name === seriesName && t.title).length;
                   const isEnrolled = subscribedExams.includes(seriesName);
