@@ -351,11 +351,11 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
             }
             .ts-series-scroller { gap: 8px !important; padding-bottom: 4px !important; }
             .ts-series-card {
-              /* Derived from actual space: 100vw minus .ts-container padding (6px*2)
-                 minus .ts-category-row padding (10px*2) minus one scroller gap (8px),
-                 split across ~2.3 visible cards so the 3rd card's edge peeks in. */
-              width: calc((100vw - 40px) / 2.3) !important;
-              max-width: 165px !important;
+              /* Width comes from the inline 148px set on this element (see
+                 seriesChronologicalCardBox override below) — fixed px avoids
+                 the layout blowout a vw-based calc caused here, since vw
+                 ignores this row's own padding/parent .content-view overrides
+                 and can size the card wider than the space actually available. */
               flex-shrink: 0 !important;
               scroll-snap-align: start !important;
               padding: 10px !important;
