@@ -70,6 +70,31 @@ const TsOverflowDebugger = () => {
   );
 };
 
+// 🐛 TEMP LIVE DEBUG BAR — polls every 150ms and shows a running log of the
+// last 6 readings, so we can literally watch the scale/width numbers change
+// (or not change) from first paint through your pinch-zoom gesture. Remove
+// this whole component once the culprit is confirmed.
+const TsLiveScaleDebugger = ({ isMobile }) => {
+  const [log, setLog] = useState([]);
+  useEffect(() => {
+    let count = 0;
+    const interval = setInterval(() => {
+      count++;
+      const vv = window.visualViewport;
+      const entry = `t=${count * 150}ms iW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : 'n/a'} scale=${vv ? vv.scale.toFixed(2) : 'n/a'} oW=${window.outerWidth}`;
+      setLog(prev => [...prev.slice(-9), entry]);
+      if (count >= 40) clearInterval(interval); // stop after ~6s
+    }, 150);
+    return () => clearInterval(interval);
+  }, []);
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999, background: '#ff0000', color: '#fff', fontSize: '9px', padding: '4px 8px', fontWeight: 'bold', maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+      isMobile: {String(isMobile)}{'\n'}
+      {log.join('\n')}
+    </div>
+  );
+};
+
 const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnalysis, session }) => {
   // 🎯 PASSING DOWN REGISTERED SESSION MATRIX TO PREVENT ADMIN VALUE DRIFTS
   const { isAdmin, loading: adminLoading } = useAdmin(session); 
@@ -402,10 +427,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         }}
         className="ts-container"
       >
-        {/* 🐛 TEMP DEBUG BAR — tells us the real numbers on first paint. Remove after diagnosis. */}
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999, background: '#ff0000', color: '#fff', fontSize: '11px', padding: '4px 8px', fontWeight: 'bold' }}>
-          innerWidth: {window.innerWidth} | isMobile: {String(isMobile)} | outerWidth: {window.outerWidth} | dpr: {window.devicePixelRatio} | visualVW: {window.visualViewport ? Math.round(window.visualViewport.width) : 'n/a'}
-        </div>
+        {/* 🐛 TEMP DEBUG BAR — polls live so we can see the scale change in real time. */}
+        <TsLiveScaleDebugger isMobile={isMobile} />
         <TsOverflowDebugger />
         <style>{`
           @media (max-width: 768px) {
