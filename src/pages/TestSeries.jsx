@@ -12,27 +12,38 @@ const TsOverflowDebugger = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+      const html = document.documentElement;
+      const body = document.body;
+      const parts = [];
+      parts.push(`html: scrollW=${html.scrollWidth} clientW=${html.clientWidth} offsetW=${html.offsetWidth}`);
+      parts.push(`body: scrollW=${body.scrollWidth} clientW=${body.clientWidth} offsetW=${body.offsetWidth}`);
+      parts.push(`window.innerWidth=${window.innerWidth} screen.width=${window.screen.width}`);
+
+      // scrollWidth-based scan: catches containers whose CUMULATIVE children
+      // (e.g. flex row + gaps) exceed their own box, even if no single child
+      // individually pokes past the visual viewport edge.
       const all = document.querySelectorAll('*');
       const offenders = [];
       all.forEach(el => {
-        const rect = el.getBoundingClientRect();
-        if (rect.right > vw + 2 || rect.width > vw + 2) {
+        if (el.scrollWidth > el.clientWidth + 2 && el.clientWidth > 0) {
           offenders.push({
             tag: el.tagName,
-            cls: (el.className || '').toString().slice(0, 40),
-            width: Math.round(rect.width),
-            right: Math.round(rect.right)
+            cls: (el.className || '').toString().slice(0, 30),
+            scrollW: el.scrollWidth,
+            clientW: el.clientWidth
           });
         }
       });
-      offenders.sort((a, b) => b.right - a.right);
-      const top5 = offenders.slice(0, 5).map(o => `${o.tag}.${o.cls} w=${o.width} right=${o.right}`).join(' || ');
-      setReport(offenders.length === 0 ? 'NO OVERFLOWING ELEMENTS FOUND' : `${offenders.length} offenders: ${top5}`);
+      offenders.sort((a, b) => (b.scrollW - b.clientW) - (a.scrollW - a.clientW));
+      const top5 = offenders.slice(0, 4).map(o => `${o.tag}.${o.cls} scrollW=${o.scrollW} clientW=${o.clientW}`).join(' || ');
+      parts.push(offenders.length === 0 ? 'no scrollWidth offenders' : `${offenders.length} scrollW offenders: ${top5}`);
+
+      setReport(parts.join(' ||| '));
     }, 400);
     return () => clearTimeout(timer);
   }, []);
   return (
-    <div style={{ position: 'fixed', top: '20px', left: 0, right: 0, zIndex: 99999, background: '#0000ff', color: '#fff', fontSize: '10px', padding: '4px 8px', maxHeight: '120px', overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', top: '20px', left: 0, right: 0, zIndex: 99999, background: '#0000ff', color: '#fff', fontSize: '9px', padding: '4px 8px', maxHeight: '150px', overflowY: 'auto', lineHeight: '1.5' }}>
       {report}
     </div>
   );
