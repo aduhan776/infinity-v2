@@ -378,17 +378,35 @@ function App() {
         }
 
         .bottom-tab-bar {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 60px;
-          background: #ffffff;
-          border-top: 1px solid #e2e8f0;
-          z-index: 1500;
-          align-items: center;
-          justify-content: space-around;
-          padding-bottom: env(safe-area-inset-bottom);
+          /* 🔒 LOCKED — this bar's size/position must never depend on any
+             page's own CSS. Every page (TestSeries, AiTests, etc.) injects
+             its own <style> block that can target shared classnames like
+             .content-view or .main-content, and those page-scoped overrides
+             have in the past leaked into this bar's layout indirectly. Every
+             geometry property here carries !important so no page-level rule,
+             regardless of specificity or load order, can move, resize, or
+             hide this bar. Only App.jsx should ever edit these lines. */
+          position: fixed !important;
+          bottom: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          top: auto !important;
+          width: 100% !important;
+          height: 60px !important;
+          max-height: 60px !important;
+          min-height: 60px !important;
+          margin: 0 !important;
+          transform: none !important;
+          background: #ffffff !important;
+          border-top: 1px solid #e2e8f0 !important;
+          z-index: 999999 !important;
+          align-items: center !important;
+          justify-content: space-around !important;
+          padding-top: 0 !important;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+          padding-bottom: env(safe-area-inset-bottom) !important;
+          box-sizing: border-box !important;
         }
         .bottom-tab-bar button {
           background: none;
@@ -640,7 +658,23 @@ function App() {
       </main>
 
       {isMobile && !isTestActive && activeTab !== 'analysis-portal' && (
-        <nav className="bottom-tab-bar">
+        <nav
+          className="bottom-tab-bar"
+          style={{
+            // 🔒 Inline backup for the locked CSS rule above — guarantees
+            // correct position/size even in the instant before this
+            // component's own <style> tag has been parsed by the browser.
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            width: '100%',
+            height: '60px',
+            zIndex: 999999,
+            display: 'flex',
+            boxSizing: 'border-box'
+          }}
+        >
           <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
