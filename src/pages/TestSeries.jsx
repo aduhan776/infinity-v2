@@ -321,7 +321,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         <style>{`
           @media (max-width: 768px) {
             .content-view { padding-left: 0 !important; padding-right: 0 !important; }
-            .ts-container { width: 100% !important; max-width: 100vw !important; box-sizing: border-box !important; padding-left: 6px !important; padding-right: 6px !important; }
+            .ts-container { width: 100% !important; max-width: 100vw !important; min-width: 0 !important; box-sizing: border-box !important; padding-left: 6px !important; padding-right: 6px !important; overflow-x: hidden !important; }
             .ts-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; margin-bottom: 22px !important; }
             .ts-category-row { width: 100% !important; max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; margin: 0 !important; padding: 10px !important; overflow: hidden !important; }
             .ts-descriptor-block {

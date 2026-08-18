@@ -356,9 +356,19 @@ function App() {
           .content-view {
             padding: 16px !important;
             padding-bottom: 84px !important;
+            min-width: 0 !important;
+            max-width: 100vw !important;
+            overflow-x: hidden !important;
           }
           .main-content {
             padding-bottom: 0 !important;
+            min-width: 0 !important;
+            max-width: 100vw !important;
+          }
+          .app-container {
+            min-width: 0 !important;
+            max-width: 100vw !important;
+            overflow-x: hidden !important;
           }
           .bottom-tab-bar {
             display: flex !important;
