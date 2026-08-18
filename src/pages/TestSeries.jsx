@@ -75,20 +75,25 @@ const TsOverflowDebugger = () => {
 // (or not change) from first paint through your pinch-zoom gesture. Remove
 // this whole component once the culprit is confirmed.
 const TsLiveScaleDebugger = ({ isMobile }) => {
-  const [log, setLog] = useState([]);
+  const readNow = (label) => {
+    const vv = window.visualViewport;
+    return `${label} iW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : 'n/a'} scale=${vv ? vv.scale.toFixed(2) : 'n/a'} oW=${window.outerWidth}`;
+  };
+  // Capture an immediate synchronous reading at first render, not just on the
+  // first interval tick — so even a screenshot taken instantly still shows
+  // at least one real data point instead of an empty log.
+  const [log, setLog] = useState(() => [readNow('t=0ms(sync)')]);
   useEffect(() => {
     let count = 0;
     const interval = setInterval(() => {
       count++;
-      const vv = window.visualViewport;
-      const entry = `t=${count * 150}ms iW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : 'n/a'} scale=${vv ? vv.scale.toFixed(2) : 'n/a'} oW=${window.outerWidth}`;
-      setLog(prev => [...prev.slice(-9), entry]);
-      if (count >= 40) clearInterval(interval); // stop after ~6s
+      setLog(prev => [...prev.slice(-19), readNow(`t=${count * 150}ms`)]);
+      if (count >= 60) clearInterval(interval); // stop after ~9s, giving time to pinch and screenshot
     }, 150);
     return () => clearInterval(interval);
   }, []);
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999, background: '#ff0000', color: '#fff', fontSize: '9px', padding: '4px 8px', fontWeight: 'bold', maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999, background: '#ff0000', color: '#fff', fontSize: '9px', padding: '4px 8px', fontWeight: 'bold', maxHeight: '200px', overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
       isMobile: {String(isMobile)}{'\n'}
       {log.join('\n')}
     </div>
