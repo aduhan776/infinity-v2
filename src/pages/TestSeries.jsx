@@ -457,7 +457,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                           className="ts-series-card"
                           style={{
                             ...seriesChronologicalCardBox,
-                            width: isMobile ? '148px' : seriesChronologicalCardBox.width,
+                            width: isMobile ? '120px' : seriesChronologicalCardBox.width,
                             padding: isMobile ? '12px' : seriesChronologicalCardBox.padding
                           }}
                         >
