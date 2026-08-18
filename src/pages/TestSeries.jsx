@@ -18,6 +18,27 @@ const TsOverflowDebugger = () => {
       parts.push(`html: scrollW=${html.scrollWidth} clientW=${html.clientWidth} offsetW=${html.offsetWidth}`);
       parts.push(`body: scrollW=${body.scrollWidth} clientW=${body.clientWidth} offsetW=${body.offsetWidth}`);
       parts.push(`window.innerWidth=${window.innerWidth} screen.width=${window.screen.width}`);
+      parts.push(`matchMedia(max-width:768px)=${window.matchMedia('(max-width: 768px)').matches}`);
+
+      const tsContainer = document.querySelector('.ts-container');
+      if (tsContainer) {
+        const cs = getComputedStyle(tsContainer);
+        parts.push(`.ts-container computed: width=${cs.width} maxWidth=${cs.maxWidth} paddingL=${cs.paddingLeft}`);
+      } else {
+        parts.push('.ts-container NOT FOUND');
+      }
+      const tsCard = document.querySelector('.ts-series-card');
+      if (tsCard) {
+        const cs2 = getComputedStyle(tsCard);
+        parts.push(`.ts-series-card computed: width=${cs2.width}`);
+      } else {
+        parts.push('.ts-series-card NOT FOUND');
+      }
+      const contentView = document.querySelector('.content-view');
+      if (contentView) {
+        const cs3 = getComputedStyle(contentView);
+        parts.push(`.content-view computed: paddingL=${cs3.paddingLeft} paddingR=${cs3.paddingRight} width=${cs3.width}`);
+      }
 
       // scrollWidth-based scan: catches containers whose CUMULATIVE children
       // (e.g. flex row + gaps) exceed their own box, even if no single child
@@ -38,12 +59,12 @@ const TsOverflowDebugger = () => {
       const top5 = offenders.slice(0, 4).map(o => `${o.tag}.${o.cls} scrollW=${o.scrollW} clientW=${o.clientW}`).join(' || ');
       parts.push(offenders.length === 0 ? 'no scrollWidth offenders' : `${offenders.length} scrollW offenders: ${top5}`);
 
-      setReport(parts.join(' ||| '));
+      setReport(parts.join('\n'));
     }, 400);
     return () => clearTimeout(timer);
   }, []);
   return (
-    <div style={{ position: 'fixed', top: '20px', left: 0, right: 0, zIndex: 99999, background: '#0000ff', color: '#fff', fontSize: '9px', padding: '4px 8px', maxHeight: '150px', overflowY: 'auto', lineHeight: '1.5' }}>
+    <div style={{ position: 'fixed', top: '20px', left: 0, right: 0, zIndex: 99999, background: '#0000ff', color: '#fff', fontSize: '10px', padding: '4px 8px', maxHeight: '280px', overflowY: 'auto', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
       {report}
     </div>
   );
