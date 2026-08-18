@@ -2,104 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; 
 import useAdmin from '../hooks/useAdmin'; // 🎯 Custom Hook Linked
 
-// 🐛 TEMP DEBUG COMPONENT — walks every element on the page after mount and
-// reports any whose actual rendered width exceeds the visual viewport, so we
-// can find exactly which element is forcing the document wider than the
-// screen (which is what inflates window.innerWidth and causes the zoomed
-// look). Remove this whole component once the culprit is found and fixed.
-const TsOverflowDebugger = () => {
-  const [report, setReport] = useState('scanning...');
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
-      const html = document.documentElement;
-      const body = document.body;
-      const parts = [];
-      parts.push(`html: scrollW=${html.scrollWidth} clientW=${html.clientWidth} offsetW=${html.offsetWidth}`);
-      parts.push(`body: scrollW=${body.scrollWidth} clientW=${body.clientWidth} offsetW=${body.offsetWidth}`);
-      parts.push(`window.innerWidth=${window.innerWidth} screen.width=${window.screen.width}`);
-      parts.push(`matchMedia(max-width:768px)=${window.matchMedia('(max-width: 768px)').matches}`);
-
-      const tsContainer = document.querySelector('.ts-container');
-      if (tsContainer) {
-        const cs = getComputedStyle(tsContainer);
-        parts.push(`.ts-container computed: width=${cs.width} maxWidth=${cs.maxWidth} paddingL=${cs.paddingLeft}`);
-      } else {
-        parts.push('.ts-container NOT FOUND');
-      }
-      const tsCard = document.querySelector('.ts-series-card');
-      if (tsCard) {
-        const cs2 = getComputedStyle(tsCard);
-        parts.push(`.ts-series-card computed: width=${cs2.width}`);
-      } else {
-        parts.push('.ts-series-card NOT FOUND');
-      }
-      const contentView = document.querySelector('.content-view');
-      if (contentView) {
-        const cs3 = getComputedStyle(contentView);
-        parts.push(`.content-view computed: paddingL=${cs3.paddingLeft} paddingR=${cs3.paddingRight} width=${cs3.width}`);
-      }
-
-      // scrollWidth-based scan: catches containers whose CUMULATIVE children
-      // (e.g. flex row + gaps) exceed their own box, even if no single child
-      // individually pokes past the visual viewport edge.
-      const all = document.querySelectorAll('*');
-      const offenders = [];
-      all.forEach(el => {
-        if (el.scrollWidth > el.clientWidth + 2 && el.clientWidth > 0) {
-          offenders.push({
-            tag: el.tagName,
-            cls: (el.className || '').toString().slice(0, 30),
-            scrollW: el.scrollWidth,
-            clientW: el.clientWidth
-          });
-        }
-      });
-      offenders.sort((a, b) => (b.scrollW - b.clientW) - (a.scrollW - a.clientW));
-      const top5 = offenders.slice(0, 4).map(o => `${o.tag}.${o.cls} scrollW=${o.scrollW} clientW=${o.clientW}`).join(' || ');
-      parts.push(offenders.length === 0 ? 'no scrollWidth offenders' : `${offenders.length} scrollW offenders: ${top5}`);
-
-      setReport(parts.join('\n'));
-    }, 400);
-    return () => clearTimeout(timer);
-  }, []);
-  return (
-    <div style={{ position: 'fixed', top: '20px', left: 0, right: 0, zIndex: 99999, background: '#0000ff', color: '#fff', fontSize: '10px', padding: '4px 8px', maxHeight: '280px', overflowY: 'auto', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-      {report}
-    </div>
-  );
-};
-
-// 🐛 TEMP LIVE DEBUG BAR — polls every 150ms and shows a running log of the
-// last 6 readings, so we can literally watch the scale/width numbers change
-// (or not change) from first paint through your pinch-zoom gesture. Remove
-// this whole component once the culprit is confirmed.
-const TsLiveScaleDebugger = ({ isMobile }) => {
-  const readNow = (label) => {
-    const vv = window.visualViewport;
-    return `${label} iW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : 'n/a'} scale=${vv ? vv.scale.toFixed(2) : 'n/a'} oW=${window.outerWidth}`;
-  };
-  // Capture an immediate synchronous reading at first render, not just on the
-  // first interval tick — so even a screenshot taken instantly still shows
-  // at least one real data point instead of an empty log.
-  const [log, setLog] = useState(() => [readNow('t=0ms(sync)')]);
-  useEffect(() => {
-    let count = 0;
-    const interval = setInterval(() => {
-      count++;
-      setLog(prev => [...prev.slice(-19), readNow(`t=${count * 150}ms`)]);
-      if (count >= 60) clearInterval(interval); // stop after ~9s, giving time to pinch and screenshot
-    }, 150);
-    return () => clearInterval(interval);
-  }, []);
-  return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999, background: '#ff0000', color: '#fff', fontSize: '9px', padding: '4px 8px', fontWeight: 'bold', maxHeight: '200px', overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
-      isMobile: {String(isMobile)}{'\n'}
-      {log.join('\n')}
-    </div>
-  );
-};
-
 const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnalysis, session }) => {
   // 🎯 PASSING DOWN REGISTERED SESSION MATRIX TO PREVENT ADMIN VALUE DRIFTS
   const { isAdmin, loading: adminLoading } = useAdmin(session); 
@@ -113,19 +15,11 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
   // 📱 MOBILE DETECTION — same window.innerWidth-based approach used on
   // Dashboard/BrainFeed/AiTests, so layout doesn't depend on CSS media-query
   // matching at all (avoids any inconsistency between pages).
-  //
-  // 🐛 FIX: the useState initializer only reads window.innerWidth once, at
-  // the exact instant this component mounts. On some mobile browsers that
-  // instant is BEFORE layout has settled, so it can read a stale/incorrect
-  // width and load in desktop layout — only correcting itself once some
-  // later resize event (e.g. a pinch gesture) forces a recheck. Re-checking
-  // again immediately after mount (not just on resize) closes that gap.
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
-    const checkIsMobile = () => setIsMobile(window.innerWidth <= 768);
-    checkIsMobile(); // re-verify right after mount, don't trust the initial read alone
-    window.addEventListener('resize', checkIsMobile);
-    return () => window.removeEventListener('resize', checkIsMobile);
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // 📱 One scroll-container ref per category, so left/right arrow buttons can
@@ -423,18 +317,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
     const renderCategories = getUniqueCategories();
 
     return (
-      <div
-        style={{
-          ...containerStyle,
-          ...(isMobile
-            ? { padding: '10px 0', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }
-            : {})
-        }}
-        className="ts-container"
-      >
-        {/* 🐛 TEMP DEBUG BAR — polls live so we can see the scale change in real time. */}
-        <TsLiveScaleDebugger isMobile={isMobile} />
-        <TsOverflowDebugger />
+      <div style={{ ...containerStyle, ...(isMobile ? { padding: '10px 0' } : {}) }} className="ts-container">
         <style>{`
           @media (max-width: 768px) {
             .content-view { padding-left: 0 !important; padding-right: 0 !important; }
@@ -484,7 +367,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
             .ts-viewall-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
           }
         `}</style>
-        <header style={{ ...headerPanelRow, marginBottom: isMobile ? '16px' : headerPanelRow.marginBottom }} className="ts-header">
+        <header style={headerPanelRow} className="ts-header">
           <div>
             <h1 style={{ fontSize: isMobile ? '1.3rem' : '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>Test Series Hub</h1>
             <p style={{ color: '#64748b', marginTop: '4px', fontWeight: '500', fontSize: isMobile ? '0.72rem' : '1rem' }}>Explore custom testing frameworks and enroll to track progress.</p>
@@ -499,7 +382,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
           </div>
         </header>
 
-        <div style={{ ...horizontalStackColumnLayout, gap: isMobile ? '14px' : horizontalStackColumnLayout.gap }}>
+        <div style={horizontalStackColumnLayout}>
           {renderCategories.map((catName) => {
             const seriesList = getSeriesForCategory(catName);
             return (
@@ -512,7 +395,6 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                   width: '100%',
                   maxWidth: '100%',
                   boxSizing: 'border-box',
-                  borderRadius: isMobile ? '16px' : horizontalCategorySpaceRow.borderRadius,
                   padding: isMobile ? '12px' : horizontalCategorySpaceRow.padding,
                   gap: isMobile ? '10px' : horizontalCategorySpaceRow.gap
                 }}
