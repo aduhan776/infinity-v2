@@ -317,7 +317,15 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
     const renderCategories = getUniqueCategories();
 
     return (
-      <div style={{ ...containerStyle, ...(isMobile ? { padding: '10px 0' } : {}) }} className="ts-container">
+      <div
+        style={{
+          ...containerStyle,
+          ...(isMobile
+            ? { padding: '10px 0', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }
+            : {})
+        }}
+        className="ts-container"
+      >
         <style>{`
           @media (max-width: 768px) {
             .content-view { padding-left: 0 !important; padding-right: 0 !important; }
@@ -367,7 +375,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
             .ts-viewall-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
           }
         `}</style>
-        <header style={headerPanelRow} className="ts-header">
+        <header style={{ ...headerPanelRow, marginBottom: isMobile ? '16px' : headerPanelRow.marginBottom }} className="ts-header">
           <div>
             <h1 style={{ fontSize: isMobile ? '1.3rem' : '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>Test Series Hub</h1>
             <p style={{ color: '#64748b', marginTop: '4px', fontWeight: '500', fontSize: isMobile ? '0.72rem' : '1rem' }}>Explore custom testing frameworks and enroll to track progress.</p>
@@ -382,7 +390,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
           </div>
         </header>
 
-        <div style={horizontalStackColumnLayout}>
+        <div style={{ ...horizontalStackColumnLayout, gap: isMobile ? '14px' : horizontalStackColumnLayout.gap }}>
           {renderCategories.map((catName) => {
             const seriesList = getSeriesForCategory(catName);
             return (
@@ -395,6 +403,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                   width: '100%',
                   maxWidth: '100%',
                   boxSizing: 'border-box',
+                  borderRadius: isMobile ? '16px' : horizontalCategorySpaceRow.borderRadius,
                   padding: isMobile ? '12px' : horizontalCategorySpaceRow.padding,
                   gap: isMobile ? '10px' : horizontalCategorySpaceRow.gap
                 }}
