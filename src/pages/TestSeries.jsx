@@ -321,7 +321,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         <style>{`
           @media (max-width: 768px) {
             .content-view { padding-left: 0 !important; padding-right: 0 !important; }
-            .ts-container { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; padding-left: 6px !important; padding-right: 6px !important; }
+            .ts-container { width: 100% !important; max-width: 100vw !important; box-sizing: border-box !important; padding-left: 6px !important; padding-right: 6px !important; }
             .ts-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; margin-bottom: 22px !important; }
             .ts-category-row { width: 100% !important; max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; margin: 0 !important; padding: 10px !important; overflow: hidden !important; }
             .ts-descriptor-block {
@@ -369,8 +369,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         `}</style>
         <header style={headerPanelRow} className="ts-header">
           <div>
-            <h1 style={{ fontSize: isMobile ? '1.15rem' : '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>Test Series Hub</h1>
-            <p style={{ color: '#64748b', marginTop: '4px', fontWeight: '500', fontSize: isMobile ? '0.68rem' : '1rem' }}>Explore custom testing frameworks and enroll to track progress.</p>
+            <h1 style={{ fontSize: isMobile ? '1.3rem' : '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>Test Series Hub</h1>
+            <p style={{ color: '#64748b', marginTop: '4px', fontWeight: '500', fontSize: isMobile ? '0.72rem' : '1rem' }}>Explore custom testing frameworks and enroll to track progress.</p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
             {/* 🛡️ Admin Verification Wrapper */}
@@ -457,7 +457,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                           className="ts-series-card"
                           style={{
                             ...seriesChronologicalCardBox,
-                            width: isMobile ? '135px' : seriesChronologicalCardBox.width,
+                            width: isMobile ? '148px' : seriesChronologicalCardBox.width,
                             padding: isMobile ? '12px' : seriesChronologicalCardBox.padding
                           }}
                         >
