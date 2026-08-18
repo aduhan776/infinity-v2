@@ -15,11 +15,19 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
   // 📱 MOBILE DETECTION — same window.innerWidth-based approach used on
   // Dashboard/BrainFeed/AiTests, so layout doesn't depend on CSS media-query
   // matching at all (avoids any inconsistency between pages).
+  //
+  // 🐛 FIX: the useState initializer only reads window.innerWidth once, at
+  // the exact instant this component mounts. On some mobile browsers that
+  // instant is BEFORE layout has settled, so it can read a stale/incorrect
+  // width and load in desktop layout — only correcting itself once some
+  // later resize event (e.g. a pinch gesture) forces a recheck. Re-checking
+  // again immediately after mount (not just on resize) closes that gap.
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const checkIsMobile = () => setIsMobile(window.innerWidth <= 768);
+    checkIsMobile(); // re-verify right after mount, don't trust the initial read alone
+    window.addEventListener('resize', checkIsMobile);
+    return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
 
   // 📱 One scroll-container ref per category, so left/right arrow buttons can
@@ -326,6 +334,10 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         }}
         className="ts-container"
       >
+        {/* 🐛 TEMP DEBUG BAR — tells us the real numbers on first paint. Remove after diagnosis. */}
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999, background: '#ff0000', color: '#fff', fontSize: '11px', padding: '4px 8px', fontWeight: 'bold' }}>
+          innerWidth: {window.innerWidth} | isMobile: {String(isMobile)} | outerWidth: {window.outerWidth} | dpr: {window.devicePixelRatio} | visualVW: {window.visualViewport ? Math.round(window.visualViewport.width) : 'n/a'}
+        </div>
         <style>{`
           @media (max-width: 768px) {
             .content-view { padding-left: 0 !important; padding-right: 0 !important; }
