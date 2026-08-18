@@ -2,6 +2,42 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; 
 import useAdmin from '../hooks/useAdmin'; // 🎯 Custom Hook Linked
 
+// 🐛 TEMP DEBUG COMPONENT — walks every element on the page after mount and
+// reports any whose actual rendered width exceeds the visual viewport, so we
+// can find exactly which element is forcing the document wider than the
+// screen (which is what inflates window.innerWidth and causes the zoomed
+// look). Remove this whole component once the culprit is found and fixed.
+const TsOverflowDebugger = () => {
+  const [report, setReport] = useState('scanning...');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+      const all = document.querySelectorAll('*');
+      const offenders = [];
+      all.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        if (rect.right > vw + 2 || rect.width > vw + 2) {
+          offenders.push({
+            tag: el.tagName,
+            cls: (el.className || '').toString().slice(0, 40),
+            width: Math.round(rect.width),
+            right: Math.round(rect.right)
+          });
+        }
+      });
+      offenders.sort((a, b) => b.right - a.right);
+      const top5 = offenders.slice(0, 5).map(o => `${o.tag}.${o.cls} w=${o.width} right=${o.right}`).join(' || ');
+      setReport(offenders.length === 0 ? 'NO OVERFLOWING ELEMENTS FOUND' : `${offenders.length} offenders: ${top5}`);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <div style={{ position: 'fixed', top: '20px', left: 0, right: 0, zIndex: 99999, background: '#0000ff', color: '#fff', fontSize: '10px', padding: '4px 8px', maxHeight: '120px', overflowY: 'auto' }}>
+      {report}
+    </div>
+  );
+};
+
 const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnalysis, session }) => {
   // 🎯 PASSING DOWN REGISTERED SESSION MATRIX TO PREVENT ADMIN VALUE DRIFTS
   const { isAdmin, loading: adminLoading } = useAdmin(session); 
@@ -338,6 +374,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999, background: '#ff0000', color: '#fff', fontSize: '11px', padding: '4px 8px', fontWeight: 'bold' }}>
           innerWidth: {window.innerWidth} | isMobile: {String(isMobile)} | outerWidth: {window.outerWidth} | dpr: {window.devicePixelRatio} | visualVW: {window.visualViewport ? Math.round(window.visualViewport.width) : 'n/a'}
         </div>
+        <TsOverflowDebugger />
         <style>{`
           @media (max-width: 768px) {
             .content-view { padding-left: 0 !important; padding-right: 0 !important; }
