@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'; 
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import BrainFeed from './pages/BrainFeed';
 import Dashboard from './pages/Dashboard';
 import TestSeries from './pages/TestSeries';
@@ -24,8 +25,16 @@ function App() {
   // --- 🛡️ GLOBAL ADMIN ACCESS PRIVILEGES TRACKER ---
   const { isAdmin } = useAdmin(session); // Live system role state
 
+  // --- 🧭 ROUTING: activeTab is now derived from the URL instead of being
+  // its own disconnected state. setActiveTab(x) below is kept as a thin
+  // wrapper around navigate('/x') so every existing call site inside this
+  // file keeps working unchanged — only its implementation moved. ---
+  const navigate = useNavigate();
+  const location = useLocation();
+  const activeTab = location.pathname === '/' ? 'dashboard' : location.pathname.slice(1);
+  const setActiveTab = (tab) => navigate('/' + tab);
+
   // --- CORE SYSTEM APPLICATION STATES ---
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [isTestActive, setIsTestActive] = useState(false);
   const [currentTestData, setCurrentTestData] = useState(null);
   const [testResults, setTestResults] = useState(null);
@@ -631,14 +640,17 @@ function App() {
           {isTestActive ? (
             <TestPortal testData={currentTestData} onExit={finishTestHandler} />
           ) : (
-            <>
-              {activeTab === 'dashboard' && (
+            <Routes>
+              <Route path="/" element={
                 <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
-              )}
-              {activeTab === 'statistics' && <Statistics />}
-              {activeTab === 'BrainFeed' && <BrainFeed />}
-              {activeTab === 'aitests' && <AiTests onStartTest={startTestHandler} />}
-              {activeTab === 'tests' && (
+              } />
+              <Route path="/dashboard" element={
+                <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
+              } />
+              <Route path="/statistics" element={<Statistics />} />
+              <Route path="/BrainFeed" element={<BrainFeed />} />
+              <Route path="/aitests" element={<AiTests onStartTest={startTestHandler} />} />
+              <Route path="/tests" element={
                 <TestSeries 
                   onStartTest={startTestHandler}
                   selectedFolder={testSeriesFolder}
@@ -646,23 +658,31 @@ function App() {
                   onViewAnalysis={handleViewAnalysis}
                   session={session}
                 />
-              )}
-              {activeTab === 'library' && (
+              } />
+              <Route path="/library" element={
                 <Library onResumeTest={handleResumeTest} onViewAnalysis={handleViewAnalysis} onStartTest={startTestHandler} />
-              )}
-              {activeTab === 'analysis-portal' && testResults && (
-                <AnalysisPortal results={testResults} onBackToDashboard={() => setActiveTab('dashboard')} />
-              )}
+              } />
+              <Route path="/analysis-portal" element={
+                testResults ? (
+                  <AnalysisPortal results={testResults} onBackToDashboard={() => setActiveTab('dashboard')} />
+                ) : (
+                  <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
+                )
+              } />
               {/* 🛡️ GATEWAY GUARD: Double checking admin permissions before rendering component */}
-              {activeTab === 'custom-builder' && (
+              <Route path="/custom-builder" element={
                 isAdmin ? (
                   <CustomBuilder onStartTest={startTestHandler} />
                 ) : (
                   <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
                 )
-              )}
-              {activeTab === 'profile' && <Profile />}
-            </>
+              } />
+              <Route path="/profile" element={<Profile />} />
+              {/* Unknown paths fall back to Dashboard instead of a blank screen */}
+              <Route path="*" element={
+                <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
+              } />
+            </Routes>
           )}
         </section>
       </main>
