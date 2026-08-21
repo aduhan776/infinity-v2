@@ -525,6 +525,24 @@ const BrainFeed = () => {
     }
   };
 
+  // 🧭 PHASE 5: BROWSER BACK-BUTTON INTERCEPTION
+  // While a live feed session is active, browser back should trigger the
+  // same exit-confirm flow as the in-app "End Session" button — never
+  // silently lose the student's place. Same dummy-history-entry technique
+  // as TestPortal: push one extra entry while the feed is active, catch the
+  // resulting popstate, and re-arm the guard so Cancel doesn't disarm it.
+  useEffect(() => {
+    if (!isFeedActive) return;
+    window.history.pushState({ infinityBrainFeedGuard: true }, '');
+    const handlePopState = () => {
+      handleTriggerExit();
+      window.history.pushState({ infinityBrainFeedGuard: true }, '');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFeedActive]);
+
   const handleForceClearFeed = () => {
     clearTimeout(lastQuestionTimerRef.current);
     awaitingCompletionRef.current = false;

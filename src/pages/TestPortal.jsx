@@ -228,6 +228,29 @@ const TestPortal = ({ testData, onExit }) => {
 
   const isSubmittingRef = useRef(false);
 
+  // 🧭 PHASE 5: BROWSER BACK-BUTTON INTERCEPTION
+  // Pressing the browser's own back button mid-test should always trigger
+  // the same pausing-confirmation modal as the in-app Pause button — never
+  // silently abandon the test. Technique: push one dummy history entry when
+  // the real test screen is showing, so a back-press first lands on that
+  // entry (firing popstate without actually leaving the page yet). We catch
+  // it there and open the confirm modal; if the student confirms exit via
+  // "Yes, Save Snapshot Draft" (handleSaveForLater → onExit), the real
+  // navigation away happens through that flow as normal, not through this.
+  useEffect(() => {
+    if (isResolving || resolveError) return; // only guard the real, interactive test screen
+    window.history.pushState({ infinityTestGuard: true }, '');
+    const handlePopState = () => {
+      setIsPaused(true);
+      // Immediately re-push, so the guard stays in place for the *next*
+      // back-press too (Cancel should re-arm it, not leave it disarmed).
+      window.history.pushState({ infinityTestGuard: true }, '');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isResolving, resolveError]);
+
   // --- 📱 MOBILE UI STATES ---
   const isMobile = useIsMobile();
   const [showDrawer, setShowDrawer] = useState(false);
