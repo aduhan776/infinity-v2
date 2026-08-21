@@ -263,7 +263,16 @@ const TestPortal = ({ testData, onExit }) => {
   }, [answers, uploads, globalTimeLeft, sectionTimeLeft, currentSectionIdx, timeTracker, questions, isSubmitting]);
 
   // --- 3. PERSISTENCE RESUME SNAPSHOTS ---
+  // 🐛 FIX: this used to run once on mount ([]), but when TestPortal is
+  // still resolving test data via fetch-by-id (Step B), data.id is still the
+  // placeholder fallback id on that first render — so the lookup below was
+  // reading the wrong key and never finding the real autosave/draft. It now
+  // waits for isResolving to finish and re-runs once data.id becomes the
+  // real resolved id, guarded so it still only actually restores once.
+  const hasRestoredRef = useRef(false);
   useEffect(() => {
+    if (isResolving || hasRestoredRef.current) return;
+    hasRestoredRef.current = true;
     try {
       // 🧭 STEP C: autosave (silent, per-reload recovery) takes priority —
       // it's the most recent snapshot of exactly where the student was,
@@ -298,11 +307,17 @@ const TestPortal = ({ testData, onExit }) => {
         setCurrentQ(sourceDraft.lastIndex || 0);
         setTimeTracker(sourceDraft.timeTracker || {});
         setMarkedForReview(sourceDraft.markedForReview || []);
+      } else {
+        // 🐛 FIX: no autosave, no draft — a genuinely fresh start. globalTimeLeft
+        // was initialized off the fallback placeholder data on first render
+        // (before fetch-by-id resolved), so it needs to be corrected to the
+        // real test's duration now that data.id/data.time are the real values.
+        setGlobalTimeLeft(data.rawSeconds || (data.time || 180) * 60);
       }
     } catch (e) {
       console.error("Failed to parse local draft backup:", e);
     }
-  }, []);
+  }, [isResolving, data.id]);
 
   // 🧭 STEP C: AUTOSAVE WRITER
   // Debounced write on any answer/upload/mark/timer change, a safety-net
