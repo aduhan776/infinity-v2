@@ -63,6 +63,76 @@ const BrainFeed = () => {
   const pendingCompletionDataRef = useRef(null);
   const pendingLedgerWritesRef = useRef([]); // tracks in-flight submit-attempt promises, so Load More can wait for them to land before re-querying the ledger
 
+  // --- 🧭 PHASE 4: BRAINFEED SESSION RESUME (local-only) ---
+  // A live session's question batch + progress is saved locally as it goes.
+  // On (re)mount, if a saved session exists, we ask before doing anything
+  // else — never silently auto-resume, and never silently start fresh.
+  // This is purely a reload/crash-recovery convenience: it's cleared the
+  // moment the student deliberately exits, so it never becomes a second,
+  // confusing "draft" system layered on top of the live session itself.
+  const BRAINFEED_SESSION_KEY = 'infinity_brainfeed_session';
+  const [resumePrompt, setResumePrompt] = useState(null); // null = not checked yet / none found
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(BRAINFEED_SESSION_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved && Array.isArray(saved.questions) && saved.questions.length > 0) {
+          setResumePrompt(saved);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to read saved BrainFeed session:", e);
+    }
+    setResumePrompt(false); // checked, nothing to resume
+  }, []);
+
+  const handleResumeSession = () => {
+    if (!resumePrompt) return;
+    const restoredIdx = resumePrompt.currentIdx || 0;
+    setQuestions(resumePrompt.questions);
+    setSelectedAnswers(resumePrompt.selectedAnswers || {});
+    setAnswerResults(resumePrompt.answerResults || {});
+    setCurrentIdx(restoredIdx);
+    setExam(resumePrompt.exam || '');
+    setSubjectSection(resumePrompt.subjectSection || '');
+    setSubject(resumePrompt.subject || '');
+    setDifficulty(resumePrompt.difficulty || 'Medium');
+    setLanguage(resumePrompt.language || 'English');
+    setIsFeedActive(true);
+    setSessionMode('live');
+    setResumePrompt(false);
+    // 📱 MOBILE: position is driven by native scroll (scroll-snap), not the
+    // currentIdx transform — same fix as Load More, wait a tick for the
+    // restored cards to render before jumping scroll to the right one.
+    if (isMobile) {
+      requestAnimationFrame(() => {
+        const el = viewportRef.current;
+        if (el) el.scrollTo({ top: restoredIdx * el.clientHeight, behavior: 'auto' });
+      });
+    }
+  };
+
+  const handleDiscardSession = () => {
+    try { localStorage.removeItem(BRAINFEED_SESSION_KEY); } catch (e) { /* ignore */ }
+    setResumePrompt(false);
+  };
+
+  // Keep the saved session in sync while a live session is actually in progress.
+  useEffect(() => {
+    if (!isFeedActive || sessionMode !== 'live' || questions.length === 0) return;
+    try {
+      localStorage.setItem(BRAINFEED_SESSION_KEY, JSON.stringify({
+        questions, selectedAnswers, answerResults, currentIdx,
+        exam, subjectSection, subject, difficulty, language
+      }));
+    } catch (e) {
+      console.error("Failed to save BrainFeed session locally:", e);
+    }
+  }, [questions, selectedAnswers, answerResults, currentIdx, isFeedActive, sessionMode]);
+
   // --- 🏁 Fires the end-of-session summary — called either after the 7s grace period
   // on the last question, or the moment the person tries to interact with it again.
   const finishMobileSession = () => {
@@ -75,18 +145,31 @@ const BrainFeed = () => {
   };
 
   // --- 📱 MOBILE: once the scroll has settled on a new card, sync currentIdx to it.
-  // (Forward-blocking itself happens earlier, at the touch level below — this only
-  // ever runs for moves that were actually allowed, so there's nothing to fight here.)
+  // 🐛 FIX: the touchmove guard below only catches forward swipes it sees live —
+  // a fast/hard flick can trigger native momentum scrolling that continues
+  // *after* touchmove stops firing, carrying the viewport past an unanswered
+  // question with nothing left to intercept it. So this settle-handler now
+  // also hard-checks: if the scroll landed past the first unanswered question,
+  // snap back to that unanswered question instead of accepting the skip.
+  // Backward (to any already-answered card) is always left completely free.
   const handleFeedScroll = () => {
     const el = viewportRef.current;
     if (!el) return;
     clearTimeout(scrollDebounceTimer.current);
     scrollDebounceTimer.current = setTimeout(() => {
       const newIdx = Math.round(el.scrollTop / el.clientHeight);
-      if (newIdx !== currentIdx && newIdx >= 0 && newIdx < questions.length) {
-        setShowWarning(false);
-        setCurrentIdx(newIdx);
+      if (newIdx === currentIdx || newIdx < 0 || newIdx >= questions.length) return;
+
+      const movingForward = newIdx > currentIdx;
+      if (movingForward && selectedAnswers[currentIdx] === undefined) {
+        // Snap back to the unanswered question the scroll tried to skip past.
+        el.scrollTo({ top: currentIdx * el.clientHeight, behavior: 'auto' });
+        setShowWarning(true);
+        return;
       }
+
+      setShowWarning(false);
+      setCurrentIdx(newIdx);
     }, 120);
   };
 
@@ -456,6 +539,8 @@ const BrainFeed = () => {
     setShowEndModal(false);
     setSessionMode('live');
     setHasLoadedMore(false);
+    // 🧭 PHASE 4: deliberate exit — nothing left to resume, clear the saved session.
+    try { localStorage.removeItem(BRAINFEED_SESSION_KEY); } catch (e) { /* ignore */ }
   };
 
   // --- 📖 REVISE: re-open the same finished session, read-only, so the person can scroll back through it ---
@@ -475,6 +560,12 @@ const BrainFeed = () => {
     setSavedStatus({});
     setShowWarning(false);
   };
+
+  // 🧭 PHASE 4: while we haven't checked localStorage yet, render nothing
+  // (avoids a flash of the config form before the resume modal, if any).
+  if (resumePrompt === null) {
+    return null;
+  }
 
   if (loading) {
     return (
@@ -772,6 +863,26 @@ const BrainFeed = () => {
 
   return (
     <div style={{ ...formWrapper, boxSizing: 'border-box', ...(isMobile ? { minHeight: 'auto', height: '100%', width: '100%', padding: 0, alignItems: 'stretch' } : {}) }}>
+      {/* 🧭 PHASE 4: resume-session modal — shown once, only when a saved
+          live session actually exists. "Continue" restores it exactly
+          (same questions, same answers, same position, no new API call).
+          "Start Fresh" discards it permanently and shows the normal form. */}
+      {resumePrompt && (
+        <div style={modalOverlayStyle}>
+          <div style={modalContentCardStyle}>
+            <h3 style={{ color: '#0f172a', fontWeight: '900', fontSize: '1.15rem', margin: '0 0 10px 0' }}>Resume your session?</h3>
+            <p style={{ color: '#64748b', fontSize: '0.88rem', lineHeight: '1.6', fontWeight: '500', margin: '0 0 20px 0' }}>
+              You were on question <strong>{(resumePrompt.currentIdx || 0) + 1}</strong> of <strong>{resumePrompt.questions.length}</strong> — {Object.keys(resumePrompt.selectedAnswers || {}).length} answered so far.
+            </p>
+            <button onClick={handleResumeSession} style={{ ...modalActionBtn, background: '#000000', marginBottom: '10px' }}>
+              Continue Session
+            </button>
+            <button onClick={handleDiscardSession} style={{ ...modalActionBtn, background: '#fff', color: '#ef4444', border: '1px solid #fee2e2' }}>
+              Start Fresh
+            </button>
+          </div>
+        </div>
+      )}
       {isMobile && (
         <style>{`
           .content-view {
