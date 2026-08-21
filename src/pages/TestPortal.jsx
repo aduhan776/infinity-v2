@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; 
 import LatexText from '../components/LatexText';
 
@@ -15,6 +16,9 @@ const initPortalDB = () => {
       }
       if (!db.objectStoreNames.contains("saved_questions")) {
         db.createObjectStore("saved_questions", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("ai_mock_tests")) {
+        db.createObjectStore("ai_mock_tests", { keyPath: "id" });
       }
     };
     request.onsuccess = (e) => resolve(e.target.result);
@@ -44,6 +48,20 @@ const deleteFromLocalStore = async (storeName, id) => {
   });
 };
 
+// 🧭 STEP B: read a single record back out of an IndexedDB store by id —
+// used to recover AI Labs tests (ai_mock_tests) after a reload, when the
+// test data no longer exists in memory.
+const getFromLocalStore = async (storeName, id) => {
+  const db = await initPortalDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const store = tx.objectStore(storeName);
+    const req = store.get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = (err) => reject(err);
+  });
+};
+
 // --- 📱 MOBILE BREAKPOINT DETECTION ---
 const useIsMobile = (breakpoint = 768) => {
   const [isMobile, setIsMobile] = useState(() =>
@@ -57,9 +75,111 @@ const useIsMobile = (breakpoint = 768) => {
   return isMobile;
 };
 
+// 🧭 STEP C: LOCAL-ONLY AUTOSAVE (crash/reload recovery)
+// Separate from "Save for Later" — this is invisible plumbing, not a
+// user-facing draft. Own storage key per test, self-clears on clean submit
+// or deliberate Save-for-Later/exit, never appears in Library.
+const AUTOSAVE_KEY_PREFIX = 'infinity_autosave_';
+
+const readAutosave = (testId) => {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY_PREFIX + testId);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.error("Failed to parse autosave snapshot:", e);
+    return null;
+  }
+};
+
+const writeAutosave = (testId, snapshot) => {
+  try {
+    localStorage.setItem(AUTOSAVE_KEY_PREFIX + testId, JSON.stringify(snapshot));
+  } catch (e) {
+    // Text-only payload, should essentially never hit quota — fail silently,
+    // autosave is a convenience layer, not a critical path.
+    console.error("Autosave write failed:", e);
+  }
+};
+
+const clearAutosave = (testId) => {
+  try {
+    localStorage.removeItem(AUTOSAVE_KEY_PREFIX + testId);
+  } catch (e) {
+    console.error("Failed to clear autosave snapshot:", e);
+  }
+};
+
 const TestPortal = ({ testData, onExit }) => {
+  // 🧭 STEP B: FETCH-BY-ID RESOLUTION
+  // Normal in-app flow: testData arrives as a prop (from App.jsx's
+  // currentTestData), nothing changes for that path.
+  // Reload / direct URL hit: testData prop is null (App.jsx lost its
+  // in-memory state on remount), but the URL still has :testId — so we
+  // resolve it ourselves from the same sources the rest of the app already
+  // uses (IndexedDB for AI Labs tests, /api/tests/load for Test Series /
+  // mock_tests). Only runs when testData wasn't already provided.
+  const { testId: urlTestId } = useParams();
+  const [resolvedTestData, setResolvedTestData] = useState(testData || null);
+  const [resolveError, setResolveError] = useState(null);
+  const [isResolving, setIsResolving] = useState(!testData);
+
+  useEffect(() => {
+    // If App.jsx already handed us the data (normal navigation), just use it.
+    if (testData) {
+      setResolvedTestData(testData);
+      setIsResolving(false);
+      setResolveError(null);
+      return;
+    }
+    // No prop data — this is a reload/direct-URL case. Resolve from urlTestId.
+    if (!urlTestId) {
+      setIsResolving(false);
+      setResolveError("No test specified.");
+      return;
+    }
+
+    let cancelled = false;
+    setIsResolving(true);
+    setResolveError(null);
+
+    (async () => {
+      try {
+        // AI Labs tests are saved locally with ids like "AI-FULL-..." / "AI-TOPIC-..."
+        if (urlTestId.startsWith('AI-FULL-') || urlTestId.startsWith('AI-TOPIC-')) {
+          const localTest = await getFromLocalStore('ai_mock_tests', urlTestId);
+          if (cancelled) return;
+          if (localTest) {
+            setResolvedTestData(localTest);
+          } else {
+            setResolveError("This AI test could not be found on this device. It may have been generated on a different device or browser.");
+          }
+          setIsResolving(false);
+          return;
+        }
+
+        // Otherwise treat it as a mock_tests / Test Series id — fetch stripped
+        // (no answers) since this is a fresh/reattempt load, not a review.
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/load?testId=${encodeURIComponent(urlTestId)}&reveal=false`);
+        const json = await res.json();
+        if (cancelled) return;
+        if (json.success && json.test) {
+          setResolvedTestData({ ...json.test, hasSectionalTiming: json.test.has_sectional_timing || false });
+        } else {
+          setResolveError(json.error || "Could not load this test. It may no longer be available.");
+        }
+      } catch (err) {
+        if (!cancelled) setResolveError("Network error — could not load the test. Please check your connection.");
+      } finally {
+        if (!cancelled) setIsResolving(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlTestId, testData]);
+
   // --- 1. DATA PARSING & FALLBACKS ---
-  const data = testData || { title: "Standard Mock Test", time: 180, questions: 100, id: 'test_' + Date.now() };
+  const data = resolvedTestData || { title: "Standard Mock Test", time: 180, questions: 100, id: 'test_' + Date.now() };
   const hasSections = !!data.sections && data.sections.length > 0;
   const isSectionalTimed = data.hasSectionalTiming || false;
 
@@ -145,6 +265,22 @@ const TestPortal = ({ testData, onExit }) => {
   // --- 3. PERSISTENCE RESUME SNAPSHOTS ---
   useEffect(() => {
     try {
+      // 🧭 STEP C: autosave (silent, per-reload recovery) takes priority —
+      // it's the most recent snapshot of exactly where the student was,
+      // written automatically without them having to do anything.
+      const autosaved = readAutosave(data.id);
+      if (autosaved) {
+        setAnswers(autosaved.answers || {});
+        setUploads(autosaved.uploads || {});
+        setGlobalTimeLeft(autosaved.rawSeconds || globalTimeLeft);
+        setSectionTimeLeft(autosaved.sectionTimeLeft !== undefined ? autosaved.sectionTimeLeft : sectionTimeLeft);
+        setCurrentSectionIdx(autosaved.currentSectionIdx || 0);
+        setCurrentQ(autosaved.lastIndex || 0);
+        setTimeTracker(autosaved.timeTracker || {});
+        setMarkedForReview(autosaved.markedForReview || []);
+        return;
+      }
+
       const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
       const currentDraft = savedDrafts.find(d => d.id === data.id);
       // Fallback: if this device's localStorage doesn't have a matching cached
@@ -167,6 +303,57 @@ const TestPortal = ({ testData, onExit }) => {
       console.error("Failed to parse local draft backup:", e);
     }
   }, []);
+
+  // 🧭 STEP C: AUTOSAVE WRITER
+  // Debounced write on any answer/upload/mark/timer change, a safety-net
+  // interval, and a final flush on tab-hide/unload — so a reload, crash, or
+  // backgrounded app never loses more than a few seconds of progress.
+  const autosaveDebounceRef = useRef(null);
+
+  const buildAutosaveSnapshot = useCallback(() => {
+    const snapshot = stateRef.current;
+    return {
+      id: data.id,
+      lastIndex: currentQ,
+      currentSectionIdx: snapshot.currentSectionIdx,
+      answers: snapshot.answers,
+      uploads: snapshot.uploads,
+      timeTracker: snapshot.timeTracker,
+      markedForReview: markedForReview,
+      rawSeconds: snapshot.globalTimeLeft,
+      sectionTimeLeft: snapshot.sectionTimeLeft,
+    };
+  }, [data.id, currentQ, markedForReview]);
+
+  const flushAutosave = useCallback(() => {
+    if (stateRef.current.isSubmitting) return; // don't resurrect a test that's mid-submit
+    writeAutosave(data.id, buildAutosaveSnapshot());
+  }, [data.id, buildAutosaveSnapshot]);
+
+  // Debounced write whenever the things worth saving change.
+  useEffect(() => {
+    if (autosaveDebounceRef.current) clearTimeout(autosaveDebounceRef.current);
+    autosaveDebounceRef.current = setTimeout(flushAutosave, 800);
+    return () => clearTimeout(autosaveDebounceRef.current);
+  }, [answers, uploads, markedForReview, currentQ, currentSectionIdx, flushAutosave]);
+
+  // Safety-net interval, mainly for the ticking timer (which changes every
+  // second and shouldn't debounce-write that often).
+  useEffect(() => {
+    const interval = setInterval(flushAutosave, 12000);
+    return () => clearInterval(interval);
+  }, [flushAutosave]);
+
+  // Last-chance flush if the tab is hidden/closed or the app is backgrounded.
+  useEffect(() => {
+    const handleVisibility = () => { if (document.visibilityState === 'hidden') flushAutosave(); };
+    window.addEventListener('beforeunload', flushAutosave);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('beforeunload', flushAutosave);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [flushAutosave]);
 
   useEffect(() => {
     if (questions[currentQ]) {
@@ -250,6 +437,9 @@ const TestPortal = ({ testData, onExit }) => {
       } else {
         alert("Active test cached securely inside Drafts! 📂");
       }
+      // 🧭 STEP C: deliberate Save-for-Later now covers this test's saved
+      // state — the silent autosave copy is no longer needed.
+      clearAutosave(data.id);
       onExit(null);
     } catch (err) {
       console.error("Draft save failed entirely:", err);
@@ -496,6 +686,9 @@ const TestPortal = ({ testData, onExit }) => {
       
       const drafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
       localStorage.setItem('infinity_saved_for_later', JSON.stringify(drafts.filter(d => d.id !== data.id)));
+
+      // 🧭 STEP C: clean submit — autosave has served its purpose, clear it.
+      clearAutosave(data.id);
     } catch (e) {
       console.error(e);
     }
@@ -730,6 +923,34 @@ const TestPortal = ({ testData, onExit }) => {
   };
   const unattemptedCount = questions.length - attemptedCount;
   const reviewCount = markedForReview.length;
+
+  // 🧭 STEP B: while resolving test data after a reload (or if it failed to
+  // resolve), show a minimal loading/error screen instead of falling through
+  // to render the full portal against fallback/dummy data.
+  if (isResolving) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '14px', background: '#f8fafc' }}>
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        <div style={{ width: '40px', height: '40px', border: '4px solid #e2e8f0', borderTopColor: '#1e293b', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <p style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: '600' }}>Loading your test...</p>
+      </div>
+    );
+  }
+
+  if (resolveError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '14px', background: '#f8fafc', padding: '24px', textAlign: 'center' }}>
+        <p style={{ fontSize: '1rem', color: '#dc2626', fontWeight: '700' }}>Couldn't load this test</p>
+        <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '360px' }}>{resolveError}</p>
+        <button
+          onClick={() => onExit && onExit(null)}
+          style={{ marginTop: '8px', padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#1e293b', color: '#fff', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' }}
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="portalContainer" style={styles.portalContainer}>

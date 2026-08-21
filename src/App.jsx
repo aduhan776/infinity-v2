@@ -35,7 +35,12 @@ function App() {
   const setActiveTab = (tab) => navigate('/' + tab);
 
   // --- CORE SYSTEM APPLICATION STATES ---
-  const [isTestActive, setIsTestActive] = useState(false);
+  // 🧭 isTestActive is now derived from the URL, not separate state — a
+  // reload landing directly on /test-portal/:id needs this to be true
+  // immediately (before any handler runs), otherwise sidebar/header briefly
+  // flash on top of the test screen.
+  const isTestActive = location.pathname.startsWith('/test-portal/');
+  const setIsTestActive = () => {}; // kept as a no-op so existing call sites below don't need touching
   const [currentTestData, setCurrentTestData] = useState(null);
   const [testResults, setTestResults] = useState(null);
   const [sharedTestInvite, setSharedTestInvite] = useState(null); 
@@ -202,12 +207,14 @@ function App() {
     setCurrentTestData(test);
     setIsTestActive(true);
     setTestResults(null);
+    navigate('/test-portal/' + encodeURIComponent(test?.id ?? ('test_' + Date.now())));
   };
 
   const handleResumeTest = (savedSnapshot) => {
     setCurrentTestData(savedSnapshot); 
     setIsTestActive(true);
     setTestResults(null);
+    navigate('/test-portal/' + encodeURIComponent(savedSnapshot?.id ?? ('test_' + Date.now())));
   };
 
   const handleViewAnalysis = (oldReport) => {
@@ -637,53 +644,55 @@ function App() {
         )}
 
         <section className="content-view" style={{ height: (isTestActive || activeTab === 'analysis-portal') ? '100vh' : 'auto' }}>
-          {isTestActive ? (
-            <TestPortal testData={currentTestData} onExit={finishTestHandler} />
-          ) : (
-            <Routes>
-              <Route path="/" element={
+          <Routes>
+            <Route path="/" element={
+              <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
+            } />
+            <Route path="/dashboard" element={
+              <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
+            } />
+            <Route path="/statistics" element={<Statistics />} />
+            <Route path="/BrainFeed" element={<BrainFeed />} />
+            <Route path="/aitests" element={<AiTests onStartTest={startTestHandler} />} />
+            <Route path="/tests" element={
+              <TestSeries 
+                onStartTest={startTestHandler}
+                selectedFolder={testSeriesFolder}
+                setSelectedFolder={setTestSeriesFolder}
+                onViewAnalysis={handleViewAnalysis}
+                session={session}
+              />
+            } />
+            <Route path="/library" element={
+              <Library onResumeTest={handleResumeTest} onViewAnalysis={handleViewAnalysis} onStartTest={startTestHandler} />
+            } />
+            {/* 🧭 STEP B: TestPortal now resolves its own data from the URL's
+                :testId when currentTestData isn't in memory (e.g. after a
+                reload) — so it always renders, no longer gated on currentTestData. */}
+            <Route path="/test-portal/:testId" element={
+              <TestPortal testData={currentTestData} onExit={finishTestHandler} />
+            } />
+            <Route path="/analysis-portal" element={
+              testResults ? (
+                <AnalysisPortal results={testResults} onBackToDashboard={() => setActiveTab('dashboard')} />
+              ) : (
                 <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
-              } />
-              <Route path="/dashboard" element={
+              )
+            } />
+            {/* 🛡️ GATEWAY GUARD: Double checking admin permissions before rendering component */}
+            <Route path="/custom-builder" element={
+              isAdmin ? (
+                <CustomBuilder onStartTest={startTestHandler} />
+              ) : (
                 <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
-              } />
-              <Route path="/statistics" element={<Statistics />} />
-              <Route path="/BrainFeed" element={<BrainFeed />} />
-              <Route path="/aitests" element={<AiTests onStartTest={startTestHandler} />} />
-              <Route path="/tests" element={
-                <TestSeries 
-                  onStartTest={startTestHandler}
-                  selectedFolder={testSeriesFolder}
-                  setSelectedFolder={setTestSeriesFolder}
-                  onViewAnalysis={handleViewAnalysis}
-                  session={session}
-                />
-              } />
-              <Route path="/library" element={
-                <Library onResumeTest={handleResumeTest} onViewAnalysis={handleViewAnalysis} onStartTest={startTestHandler} />
-              } />
-              <Route path="/analysis-portal" element={
-                testResults ? (
-                  <AnalysisPortal results={testResults} onBackToDashboard={() => setActiveTab('dashboard')} />
-                ) : (
-                  <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
-                )
-              } />
-              {/* 🛡️ GATEWAY GUARD: Double checking admin permissions before rendering component */}
-              <Route path="/custom-builder" element={
-                isAdmin ? (
-                  <CustomBuilder onStartTest={startTestHandler} />
-                ) : (
-                  <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
-                )
-              } />
-              <Route path="/profile" element={<Profile />} />
-              {/* Unknown paths fall back to Dashboard instead of a blank screen */}
-              <Route path="*" element={
-                <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
-              } />
-            </Routes>
-          )}
+              )
+            } />
+            <Route path="/profile" element={<Profile />} />
+            {/* Unknown paths fall back to Dashboard instead of a blank screen */}
+            <Route path="*" element={
+              <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
+            } />
+          </Routes>
         </section>
       </main>
 
