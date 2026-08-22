@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; 
 import LatexText from '../components/LatexText'; // 👈 YEH IMPORT GAYAB THA BHAI, AB FIXED HAI!
 
 const BrainFeed = () => {
+  const navigate = useNavigate();
   // --- CONFIGURATION FORM STATES ---
   const [exam, setExam] = useState('');
   const [subjectSection, setSubjectSection] = useState('');
@@ -64,46 +66,39 @@ const BrainFeed = () => {
   const pendingLedgerWritesRef = useRef([]); // tracks in-flight submit-attempt promises, so Load More can wait for them to land before re-querying the ledger
 
   // --- 🧭 PHASE 4: BRAINFEED SESSION RESUME (local-only) ---
-  // A live session's question batch + progress is saved locally as it goes.
-  // On (re)mount, if a saved session exists, we ask before doing anything
-  // else — never silently auto-resume, and never silently start fresh.
-  // This is purely a reload/crash-recovery convenience: it's cleared the
-  // moment the student deliberately exits, so it never becomes a second,
-  // confusing "draft" system layered on top of the live session itself.
+  // Two different situations, two different behaviors:
+  //   • RELOAD mid-session (same browser tab/session) → resume silently,
+  //     exactly like TestPortal's autosave — no modal, no interruption.
+  //   • FRESH VISIT to BrainFeed (a different/new tab session, or coming
+  //     back later) with a saved-but-not-finished session sitting around
+  //     → ask first, with details (exam/subject/topic/progress), never
+  //     silently drop them into an old session or silently discard it.
+  //
+  // The distinguishing signal: sessionStorage is unique per browser tab and
+  // is cleared when that tab closes, but survives a same-tab reload —
+  // unlike localStorage (survives everything) or React state (survives
+  // nothing). So: a sessionStorage marker present = "this is the same tab
+  // that was running the session, just reloaded" = silent resume.
+  // Marker absent but a localStorage session exists = "new tab/visit,
+  // stumbled on an old unfinished session" = ask first.
   const BRAINFEED_SESSION_KEY = 'infinity_brainfeed_session';
+  const BRAINFEED_TAB_MARKER_KEY = 'infinity_brainfeed_active_tab';
   const [resumePrompt, setResumePrompt] = useState(null); // null = not checked yet / none found
+  const [isRestoringSilently, setIsRestoringSilently] = useState(true); // true until the initial check completes
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(BRAINFEED_SESSION_KEY);
-      if (raw) {
-        const saved = JSON.parse(raw);
-        if (saved && Array.isArray(saved.questions) && saved.questions.length > 0) {
-          setResumePrompt(saved);
-          return;
-        }
-      }
-    } catch (e) {
-      console.error("Failed to read saved BrainFeed session:", e);
-    }
-    setResumePrompt(false); // checked, nothing to resume
-  }, []);
-
-  const handleResumeSession = () => {
-    if (!resumePrompt) return;
-    const restoredIdx = resumePrompt.currentIdx || 0;
-    setQuestions(resumePrompt.questions);
-    setSelectedAnswers(resumePrompt.selectedAnswers || {});
-    setAnswerResults(resumePrompt.answerResults || {});
+  const restoreSession = (saved) => {
+    const restoredIdx = saved.currentIdx || 0;
+    setQuestions(saved.questions);
+    setSelectedAnswers(saved.selectedAnswers || {});
+    setAnswerResults(saved.answerResults || {});
     setCurrentIdx(restoredIdx);
-    setExam(resumePrompt.exam || '');
-    setSubjectSection(resumePrompt.subjectSection || '');
-    setSubject(resumePrompt.subject || '');
-    setDifficulty(resumePrompt.difficulty || 'Medium');
-    setLanguage(resumePrompt.language || 'English');
+    setExam(saved.exam || '');
+    setSubjectSection(saved.subjectSection || '');
+    setSubject(saved.subject || '');
+    setDifficulty(saved.difficulty || 'Medium');
+    setLanguage(saved.language || 'English');
     setIsFeedActive(true);
     setSessionMode('live');
-    setResumePrompt(false);
     // 📱 MOBILE: position is driven by native scroll (scroll-snap), not the
     // currentIdx transform — same fix as Load More, wait a tick for the
     // restored cards to render before jumping scroll to the right one.
@@ -115,8 +110,51 @@ const BrainFeed = () => {
     }
   };
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(BRAINFEED_SESSION_KEY);
+      const saved = raw ? JSON.parse(raw) : null;
+      const hasSavedSession = saved && Array.isArray(saved.questions) && saved.questions.length > 0;
+      const isSameTabReload = sessionStorage.getItem(BRAINFEED_TAB_MARKER_KEY) === '1';
+
+      if (hasSavedSession && isSameTabReload) {
+        // Reload mid-session — restore silently, no modal.
+        restoreSession(saved);
+        setResumePrompt(false);
+        setIsRestoringSilently(false);
+        return;
+      }
+      if (hasSavedSession) {
+        // Fresh visit, an unfinished session is sitting there — ask first.
+        setResumePrompt(saved);
+        setIsRestoringSilently(false);
+        return;
+      }
+    } catch (e) {
+      console.error("Failed to read saved BrainFeed session:", e);
+    }
+    setResumePrompt(false);
+    setIsRestoringSilently(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mark this tab as "actively running BrainFeed" for as long as a live
+  // session is in progress — this is what lets a same-tab reload be told
+  // apart from a genuinely fresh visit.
+  useEffect(() => {
+    if (isFeedActive && sessionMode === 'live') {
+      sessionStorage.setItem(BRAINFEED_TAB_MARKER_KEY, '1');
+    }
+  }, [isFeedActive, sessionMode]);
+
+  const handleResumeSession = () => {
+    if (!resumePrompt) return;
+    restoreSession(resumePrompt);
+    setResumePrompt(false);
+  };
+
   const handleDiscardSession = () => {
-    try { localStorage.removeItem(BRAINFEED_SESSION_KEY); } catch (e) { /* ignore */ }
+    clearSavedBrainFeedSession();
     setResumePrompt(false);
   };
 
@@ -514,6 +552,16 @@ const BrainFeed = () => {
     }
   };
 
+  // 🐛 FIX: clearing the saved session belongs only at points where the
+  // session is genuinely, finally done — not inside the shared reset
+  // function used by every exit path (that broke "Save and Exit").
+  const clearSavedBrainFeedSession = () => {
+    try {
+      localStorage.removeItem(BRAINFEED_SESSION_KEY);
+      sessionStorage.removeItem(BRAINFEED_TAB_MARKER_KEY);
+    } catch (e) { /* ignore */ }
+  };
+
   const handleTriggerExit = () => {
     const totalAttempted = Object.keys(selectedAnswers).length;
     const remaining = questions.length - totalAttempted;
@@ -521,6 +569,7 @@ const BrainFeed = () => {
       setShowExitWarning(true);
     } else {
       if (sessionMode === 'live') saveSessionMetricsToProfile();
+      clearSavedBrainFeedSession(); // every question answered — nothing left to resume
       handleForceClearFeed();
     }
   };
@@ -557,8 +606,12 @@ const BrainFeed = () => {
     setShowEndModal(false);
     setSessionMode('live');
     setHasLoadedMore(false);
-    // 🧭 PHASE 4: deliberate exit — nothing left to resume, clear the saved session.
-    try { localStorage.removeItem(BRAINFEED_SESSION_KEY); } catch (e) { /* ignore */ }
+    // 🐛 FIX: this used to also clear the saved BrainFeed session here, but
+    // handleForceClearFeed runs on *every* exit path — including "Save and
+    // Exit", which is meant to preserve progress for later, not discard it.
+    // The saved session should only ever be cleared when the student
+    // explicitly chooses "Start Fresh" on the resume modal (see
+    // handleDiscardSession) — never as a side effect of leaving the screen.
   };
 
   // --- 📖 REVISE: re-open the same finished session, read-only, so the person can scroll back through it ---
@@ -579,9 +632,10 @@ const BrainFeed = () => {
     setShowWarning(false);
   };
 
-  // 🧭 PHASE 4: while we haven't checked localStorage yet, render nothing
-  // (avoids a flash of the config form before the resume modal, if any).
-  if (resumePrompt === null) {
+  // 🧭 PHASE 4: while we haven't checked localStorage yet (or we're silently
+  // restoring a same-tab reload), render nothing — avoids a flash of the
+  // config form before either the resume modal or the restored feed shows.
+  if (isRestoringSilently) {
     return null;
   }
 
@@ -832,7 +886,7 @@ const BrainFeed = () => {
                 <button onClick={handleReattemptSession} style={{ ...modalActionBtn, background: '#f1f5f9', color: '#0f172a', border: '1px solid #e2e8f0' }}>
                   Reattempt Session
                 </button>
-                <button onClick={handleForceClearFeed} style={{ ...modalActionBtn, background: '#f1f5f9', color: '#0f172a', border: '1px solid #e2e8f0' }}>
+                <button onClick={() => { clearSavedBrainFeedSession(); handleForceClearFeed(); }} style={{ ...modalActionBtn, background: '#f1f5f9', color: '#0f172a', border: '1px solid #e2e8f0' }}>
                   Exit Session
                 </button>
               </div>
@@ -851,7 +905,17 @@ const BrainFeed = () => {
                 <button onClick={() => setShowExitWarning(false)} style={{ ...modalActionBtn, flex: 1, background: '#f1f5f9', color: '#0f172a', border: '1px solid #e2e8f0' }}>
                   Resume Session
                 </button>
-                <button onClick={() => { saveSessionMetricsToProfile(); handleForceClearFeed(); }} style={{ ...modalActionBtn, flex: 1, background: '#ef4444' }}>
+                <button onClick={() => {
+                  saveSessionMetricsToProfile();
+                  handleForceClearFeed();
+                  // 🐛 FIX: deliberately leaving — clear the "same tab, just
+                  // reloaded" marker (so the *next* time BrainFeed opens in
+                  // this tab, it correctly asks via the modal instead of
+                  // silently resuming) while keeping the actual saved
+                  // session data intact for that modal to show.
+                  try { sessionStorage.removeItem(BRAINFEED_TAB_MARKER_KEY); } catch (e) { /* ignore */ }
+                  navigate('/dashboard');
+                }} style={{ ...modalActionBtn, flex: 1, background: '#ef4444' }}>
                   Save and Exit
                 </button>
               </div>
@@ -889,6 +953,9 @@ const BrainFeed = () => {
         <div style={modalOverlayStyle}>
           <div style={modalContentCardStyle}>
             <h3 style={{ color: '#0f172a', fontWeight: '900', fontSize: '1.15rem', margin: '0 0 10px 0' }}>Resume your session?</h3>
+            <p style={{ color: '#64748b', fontSize: '0.88rem', lineHeight: '1.6', fontWeight: '500', margin: '0 0 14px 0' }}>
+              You have an unfinished session — <strong>{resumePrompt.exam}</strong> · {resumePrompt.subjectSection} · {resumePrompt.subject}.
+            </p>
             <p style={{ color: '#64748b', fontSize: '0.88rem', lineHeight: '1.6', fontWeight: '500', margin: '0 0 20px 0' }}>
               You were on question <strong>{(resumePrompt.currentIdx || 0) + 1}</strong> of <strong>{resumePrompt.questions.length}</strong> — {Object.keys(resumePrompt.selectedAnswers || {}).length} answered so far.
             </p>

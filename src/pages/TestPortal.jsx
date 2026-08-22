@@ -178,6 +178,26 @@ const TestPortal = ({ testData, onExit }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlTestId, testData]);
 
+  // 🐛 FIX: defensive guard against a rare edge case — if the browser lands
+  // directly back on /test-portal/:id for a test that's *already been
+  // submitted* (e.g. via back-forward cache or a stale bookmark, bypassing
+  // the normal history-replace on submit), don't silently show it as a
+  // fresh/empty attempt. Only applies to this reload/direct-URL path — a
+  // legitimate reattempt still arrives via the testData prop, untouched.
+  useEffect(() => {
+    if (testData || isResolving || !urlTestId) return;
+    try {
+      const history = JSON.parse(localStorage.getItem('infinity_test_history')) || [];
+      const alreadySubmitted = history.some(h => h.testId === urlTestId || h.id === urlTestId);
+      if (alreadySubmitted && !resolveError) {
+        setResolveError("This test has already been submitted. Please start a fresh attempt from the Dashboard or Test Series instead.");
+      }
+    } catch (e) {
+      // non-fatal — worst case this defensive check is skipped
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isResolving, urlTestId, testData]);
+
   // --- 1. DATA PARSING & FALLBACKS ---
   const data = resolvedTestData || { title: "Standard Mock Test", time: 180, questions: 100, id: 'test_' + Date.now() };
   const hasSections = !!data.sections && data.sections.length > 0;

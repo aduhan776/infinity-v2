@@ -32,7 +32,7 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const activeTab = location.pathname === '/' ? 'dashboard' : location.pathname.slice(1);
-  const setActiveTab = (tab) => navigate('/' + tab);
+  const setActiveTab = (tab, options) => navigate('/' + tab, options);
 
   // --- CORE SYSTEM APPLICATION STATES ---
   // 🧭 isTestActive is now derived from the URL, not separate state — a
@@ -219,7 +219,12 @@ function App() {
 
   const handleViewAnalysis = (oldReport) => {
     setTestResults(oldReport);
-    setActiveTab('analysis-portal');
+    // 🐛 FIX: replace, not push — if we got here from /test-portal/:id (e.g.
+    // Library's "View Analysis"), a plain push leaves that test-portal entry
+    // sitting in history, so browser back would land back on a finished test
+    // showing fresh/empty state. Replacing it means back goes to wherever the
+    // person actually was before opening the test, not back into the test itself.
+    setActiveTab('analysis-portal', { replace: true });
     setIsTestActive(false);
   };
 
@@ -227,9 +232,11 @@ function App() {
     setIsTestActive(false);
     if (finalReport) {
       setTestResults(finalReport);
-      setActiveTab('analysis-portal');
+      // 🐛 FIX: same reasoning as handleViewAnalysis — a submitted test is
+      // done, /test-portal/:id shouldn't remain a valid "back" target.
+      setActiveTab('analysis-portal', { replace: true });
     } else {
-      setActiveTab('dashboard');
+      setActiveTab('dashboard', { replace: true });
     }
   };
 
