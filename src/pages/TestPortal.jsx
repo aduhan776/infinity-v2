@@ -178,26 +178,6 @@ const TestPortal = ({ testData, onExit }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlTestId, testData]);
 
-  // 🐛 FIX: defensive guard against a rare edge case — if the browser lands
-  // directly back on /test-portal/:id for a test that's *already been
-  // submitted* (e.g. via back-forward cache or a stale bookmark, bypassing
-  // the normal history-replace on submit), don't silently show it as a
-  // fresh/empty attempt. Only applies to this reload/direct-URL path — a
-  // legitimate reattempt still arrives via the testData prop, untouched.
-  useEffect(() => {
-    if (testData || isResolving || !urlTestId) return;
-    try {
-      const history = JSON.parse(localStorage.getItem('infinity_test_history')) || [];
-      const alreadySubmitted = history.some(h => h.testId === urlTestId || h.id === urlTestId);
-      if (alreadySubmitted && !resolveError) {
-        setResolveError("This test has already been submitted. Please start a fresh attempt from the Dashboard or Test Series instead.");
-      }
-    } catch (e) {
-      // non-fatal — worst case this defensive check is skipped
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isResolving, urlTestId, testData]);
-
   // --- 1. DATA PARSING & FALLBACKS ---
   const data = resolvedTestData || { title: "Standard Mock Test", time: 180, questions: 100, id: 'test_' + Date.now() };
   const hasSections = !!data.sections && data.sections.length > 0;
@@ -247,23 +227,34 @@ const TestPortal = ({ testData, onExit }) => {
   const fileInputRef = useRef(null);
 
   const isSubmittingRef = useRef(false);
+  // Set true only by a genuine submit or Save-for-Later — used by the
+  // unmount cleanup below to know autosave was already handled, so it
+  // doesn't need to (and shouldn't) also try to clear it again.
+  const intentionalExitRef = useRef(false);
 
-  // 🧭 PHASE 5: BROWSER BACK-BUTTON INTERCEPTION
-  // Pressing the browser's own back button mid-test should always trigger
-  // the same pausing-confirmation modal as the in-app Pause button — never
-  // silently abandon the test. Technique: push one dummy history entry when
-  // the real test screen is showing, so a back-press first lands on that
-  // entry (firing popstate without actually leaving the page yet). We catch
-  // it there and open the confirm modal; if the student confirms exit via
-  // "Yes, Save Snapshot Draft" (handleSaveForLater → onExit), the real
-  // navigation away happens through that flow as normal, not through this.
+  // 🧭 BROWSER BACK-BUTTON → PAUSE MODAL (safe version)
+  // Requirement: pressing the browser's own back button mid-test must
+  // always show the same pause-confirmation modal as the in-app Pause
+  // button — including on the very first press.
+  //
+  // A previous version of this tried to actively manage history depth
+  // (calling history.back() during exit, re-pushing aggressively on every
+  // press). That fought the browser's *real* navigation stack — which also
+  // contains genuine entries like a Google OAuth login redirect — and
+  // caused real corruption (back button landing on the Google account
+  // picker, a stuck submitting flag that silently broke the Submit button).
+  //
+  // This version is deliberately minimal: push one guard entry when the
+  // test screen mounts, and re-push it after a cancelled back-press so the
+  // guard still fires next time too. It NEVER calls history.back() or any
+  // other history method during submit/save/exit — those flows are left
+  // entirely alone, using plain onExit(...) so App.jsx's own
+  // replace-navigation (already correct) is never interfered with.
   useEffect(() => {
     if (isResolving || resolveError) return; // only guard the real, interactive test screen
     window.history.pushState({ infinityTestGuard: true }, '');
     const handlePopState = () => {
       setIsPaused(true);
-      // Immediately re-push, so the guard stays in place for the *next*
-      // back-press too (Cancel should re-arm it, not leave it disarmed).
       window.history.pushState({ infinityTestGuard: true }, '');
     };
     window.addEventListener('popstate', handlePopState);
@@ -287,7 +278,9 @@ const TestPortal = ({ testData, onExit }) => {
 
   // --- TIMING STATES ---
   const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
-  const [globalTimeLeft, setGlobalTimeLeft] = useState(data.rawSeconds || (data.time || 180) * 60);
+  const [globalTimeLeft, setGlobalTimeLeft] = useState(
+    data.rawSeconds !== undefined && data.rawSeconds !== null ? data.rawSeconds : (data.time || 180) * 60
+  );
   const [sectionTimeLeft, setSectionTimeLeft] = useState(() => {
     if (data.sectionTimeLeft !== undefined && data.sectionTimeLeft !== null) return data.sectionTimeLeft;
     if (hasSections && isSectionalTimed && data.sections[0]) {
@@ -306,25 +299,30 @@ const TestPortal = ({ testData, onExit }) => {
   }, [answers, uploads, globalTimeLeft, sectionTimeLeft, currentSectionIdx, timeTracker, questions, isSubmitting]);
 
   // --- 3. PERSISTENCE RESUME SNAPSHOTS ---
-  // 🐛 FIX: this used to run once on mount ([]), but when TestPortal is
-  // still resolving test data via fetch-by-id (Step B), data.id is still the
-  // placeholder fallback id on that first render — so the lookup below was
-  // reading the wrong key and never finding the real autosave/draft. It now
-  // waits for isResolving to finish and re-runs once data.id becomes the
-  // real resolved id, guarded so it still only actually restores once.
+  // 🧭 REQUIREMENT: autosave should ONLY ever resume a genuine reload — not
+  // a fresh open of the same test (e.g. leaving without submitting/saving,
+  // then starting the same test again from Test Series should start clean,
+  // not silently continue the old attempt). Same technique as BrainFeed:
+  // sessionStorage is unique per browser tab and survives a same-tab
+  // reload, but disappears when the tab actually closes/navigates fresh —
+  // so its presence is what tells "reload" apart from "fresh open."
+  const TEST_TAB_MARKER_KEY = 'infinity_testportal_active_tab_' ;
   const hasRestoredRef = useRef(false);
   useEffect(() => {
     if (isResolving || hasRestoredRef.current) return;
     hasRestoredRef.current = true;
     try {
+      const isSameTabReload = sessionStorage.getItem(TEST_TAB_MARKER_KEY + data.id) === '1';
+
       // 🧭 STEP C: autosave (silent, per-reload recovery) takes priority —
       // it's the most recent snapshot of exactly where the student was,
-      // written automatically without them having to do anything.
-      const autosaved = readAutosave(data.id);
+      // written automatically without them having to do anything. Only
+      // trusted on a genuine same-tab reload — see note above.
+      const autosaved = isSameTabReload ? readAutosave(data.id) : null;
       if (autosaved) {
         setAnswers(autosaved.answers || {});
         setUploads(autosaved.uploads || {});
-        setGlobalTimeLeft(autosaved.rawSeconds || globalTimeLeft);
+        setGlobalTimeLeft(autosaved.rawSeconds !== undefined && autosaved.rawSeconds !== null ? autosaved.rawSeconds : globalTimeLeft);
         setSectionTimeLeft(autosaved.sectionTimeLeft !== undefined ? autosaved.sectionTimeLeft : sectionTimeLeft);
         setCurrentSectionIdx(autosaved.currentSectionIdx || 0);
         setCurrentQ(autosaved.lastIndex || 0);
@@ -332,6 +330,11 @@ const TestPortal = ({ testData, onExit }) => {
         setMarkedForReview(autosaved.markedForReview || []);
         return;
       }
+
+      // Not a reload (or no autosave existed) — any leftover autosave from a
+      // previous, abandoned attempt at this same test is now stale. Clear it
+      // so it can never accidentally resurface on some later reload.
+      clearAutosave(data.id);
 
       const savedDrafts = JSON.parse(localStorage.getItem('infinity_saved_for_later')) || [];
       const currentDraft = savedDrafts.find(d => d.id === data.id);
@@ -344,7 +347,7 @@ const TestPortal = ({ testData, onExit }) => {
       if (sourceDraft) {
         setAnswers(sourceDraft.answers || {});
         setUploads(sourceDraft.uploads || {});
-        setGlobalTimeLeft(sourceDraft.rawSeconds || globalTimeLeft);
+        setGlobalTimeLeft(sourceDraft.rawSeconds !== undefined && sourceDraft.rawSeconds !== null ? sourceDraft.rawSeconds : globalTimeLeft);
         setSectionTimeLeft(sourceDraft.sectionTimeLeft !== undefined ? sourceDraft.sectionTimeLeft : sectionTimeLeft);
         setCurrentSectionIdx(sourceDraft.currentSectionIdx || 0);
         setCurrentQ(sourceDraft.lastIndex || 0);
@@ -355,12 +358,72 @@ const TestPortal = ({ testData, onExit }) => {
         // was initialized off the fallback placeholder data on first render
         // (before fetch-by-id resolved), so it needs to be corrected to the
         // real test's duration now that data.id/data.time are the real values.
-        setGlobalTimeLeft(data.rawSeconds || (data.time || 180) * 60);
+        setGlobalTimeLeft(data.rawSeconds !== undefined && data.rawSeconds !== null ? data.rawSeconds : (data.time || 180) * 60);
       }
     } catch (e) {
       console.error("Failed to parse local draft backup:", e);
     }
   }, [isResolving, data.id]);
+
+  // Mark this tab as "actively running this specific test" for as long as
+  // it's in progress — this is what lets a same-tab reload be told apart
+  // from a fresh open of the same test later. Set as soon as we know the
+  // real test id (not the placeholder), matching the same isResolving gate
+  // as everything else here.
+  useEffect(() => {
+    if (isResolving) return;
+    sessionStorage.setItem(TEST_TAB_MARKER_KEY + data.id, '1');
+  }, [isResolving, data.id]);
+
+  // 🧭 REQUIREMENT: if the student leaves this screen any way OTHER than a
+  // real submit or explicit Save-for-Later (browser back navigating all the
+  // way away, closing the tab, etc.), nothing should be left resumable —
+  // the marker AND the autosave both need to disappear so a later fresh
+  // open of the same test starts clean, not mid-way through the old
+  // attempt. Both intentional exits (handleFinalSubmit, handleSaveForLater)
+  // already clear the autosave themselves before calling onExit — this
+  // cleanup only fires on unmount, and only removes the *tab marker*, not
+  // the autosave content itself. That ordering matters: if a genuine exit
+  // already cleared the autosave, there's nothing left to accidentally
+  // resurrect; if the student instead just navigated away without
+  // submitting/saving, the marker disappearing means a future fresh open
+  // won't trust whatever (now-stale) autosave might still be sitting there
+  // — the same-tab-reload check above only trusts the marker, not the
+  // autosave's mere presence, so removing the marker is sufficient and the
+  // autosave content is left to be naturally overwritten or ignored later.
+  // 🐛 IMPORTANT DISTINCTION: React's unmount cleanup fires for BOTH a real
+  // browser reload AND an in-app navigation away — there's no way to tell
+  // them apart from the cleanup function alone, because a real reload
+  // destroys the whole JS context (the cleanup may not even reliably run
+  // before that happens). The one thing that DOES only fire for a real
+  // page reload/close (not in-app navigation) is the 'beforeunload' event.
+  // So: beforeunload sets a flag saying "a real reload/close is happening,
+  // preserve everything" — and the unmount-cleanup below only clears things
+  // when that flag was NOT set, meaning it must have been in-app navigation.
+  const isRealPageUnloadRef = useRef(false);
+  useEffect(() => {
+    const handleBeforeUnload = () => { isRealPageUnloadRef.current = true; };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (isRealPageUnloadRef.current) return; // genuine reload/close — keep marker + autosave intact
+      try { sessionStorage.removeItem(TEST_TAB_MARKER_KEY + data.id); } catch (e) { /* ignore */ }
+      // 🧭 REQUIREMENT: leaving without submitting or explicitly saving means
+      // nothing should be resumable later — clear the autosave content too,
+      // not just the tab marker. If handleFinalSubmit or handleSaveForLater
+      // already ran, they've set intentionalExitRef and already cleared it
+      // themselves; this only fires for every other way of leaving in-app
+      // (browser back navigating away for real within the SPA, switching
+      // routes without going through Pause → Save, etc.).
+      if (!intentionalExitRef.current) {
+        clearAutosave(data.id);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.id]);
 
   // 🧭 STEP C: AUTOSAVE WRITER
   // Debounced write on any answer/upload/mark/timer change, a safety-net
@@ -418,6 +481,7 @@ const TestPortal = ({ testData, onExit }) => {
       setCurrentSectionIdx(questions[currentQ].sectionIndex);
     }
   }, [currentQ, questions]);
+
 
   const formatTime = (seconds) => {
     if (seconds <= 0) return "0:00";
@@ -497,6 +561,7 @@ const TestPortal = ({ testData, onExit }) => {
       }
       // 🧭 STEP C: deliberate Save-for-Later now covers this test's saved
       // state — the silent autosave copy is no longer needed.
+      intentionalExitRef.current = true;
       clearAutosave(data.id);
       onExit(null);
     } catch (err) {
@@ -746,6 +811,7 @@ const TestPortal = ({ testData, onExit }) => {
       localStorage.setItem('infinity_saved_for_later', JSON.stringify(drafts.filter(d => d.id !== data.id)));
 
       // 🧭 STEP C: clean submit — autosave has served its purpose, clear it.
+      intentionalExitRef.current = true;
       clearAutosave(data.id);
     } catch (e) {
       console.error(e);
