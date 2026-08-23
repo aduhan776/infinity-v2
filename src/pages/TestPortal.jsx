@@ -178,26 +178,6 @@ const TestPortal = ({ testData, onExit }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlTestId, testData]);
 
-  // 🐛 FIX: defensive guard against a rare edge case — if the browser lands
-  // directly back on /test-portal/:id for a test that's *already been
-  // submitted* (e.g. via back-forward cache or a stale bookmark, bypassing
-  // the normal history-replace on submit), don't silently show it as a
-  // fresh/empty attempt. Only applies to this reload/direct-URL path — a
-  // legitimate reattempt still arrives via the testData prop, untouched.
-  useEffect(() => {
-    if (testData || isResolving || !urlTestId) return;
-    try {
-      const history = JSON.parse(localStorage.getItem('infinity_test_history')) || [];
-      const alreadySubmitted = history.some(h => h.testId === urlTestId || h.id === urlTestId);
-      if (alreadySubmitted && !resolveError) {
-        setResolveError("This test has already been submitted. Please start a fresh attempt from the Dashboard or Test Series instead.");
-      }
-    } catch (e) {
-      // non-fatal — worst case this defensive check is skipped
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isResolving, urlTestId, testData]);
-
   // --- 1. DATA PARSING & FALLBACKS ---
   const data = resolvedTestData || { title: "Standard Mock Test", time: 180, questions: 100, id: 'test_' + Date.now() };
   const hasSections = !!data.sections && data.sections.length > 0;
@@ -251,25 +231,48 @@ const TestPortal = ({ testData, onExit }) => {
   // 🧭 PHASE 5: BROWSER BACK-BUTTON INTERCEPTION
   // Pressing the browser's own back button mid-test should always trigger
   // the same pausing-confirmation modal as the in-app Pause button — never
-  // silently abandon the test. Technique: push one dummy history entry when
-  // the real test screen is showing, so a back-press first lands on that
-  // entry (firing popstate without actually leaving the page yet). We catch
-  // it there and open the confirm modal; if the student confirms exit via
-  // "Yes, Save Snapshot Draft" (handleSaveForLater → onExit), the real
-  // navigation away happens through that flow as normal, not through this.
+  // silently abandon the test.
+  //
+  // 🐛 FIX: the original version used pushState to add a guard entry on top
+  // of the real /test-portal/:id entry. That worked for catching a genuine
+  // back-press, but when the test was later submitted and App.jsx did a
+  // replace-navigation to /analysis-portal, the replace only swapped out
+  // that guard entry — the real /test-portal/:id entry underneath it was
+  // never touched, so a *second* back-press from Analysis Portal landed
+  // back on it and remounted the test for real. Fixed by using
+  // replaceState (not pushState) for the guard, so it never adds an extra
+  // layer on top of the real entry in the first place — and by tracking
+  // intentional exits via a ref, so a real submit/save-and-exit navigation
+  // is never mistaken for the user pressing back.
+  const intentionalExitRef = useRef(false);
+
   useEffect(() => {
     if (isResolving || resolveError) return; // only guard the real, interactive test screen
-    window.history.pushState({ infinityTestGuard: true }, '');
     const handlePopState = () => {
+      if (intentionalExitRef.current) return; // we navigated away ourselves — not a user back-press
       setIsPaused(true);
-      // Immediately re-push, so the guard stays in place for the *next*
-      // back-press too (Cancel should re-arm it, not leave it disarmed).
+      // Re-arm: browser back already moved us off this entry, so push straight
+      // back to it (still via replaceState-style depth, not stacking a new layer).
       window.history.pushState({ infinityTestGuard: true }, '');
     };
+    window.history.pushState({ infinityTestGuard: true }, '');
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isResolving, resolveError]);
+
+  // 🐛 FIX: any intentional exit (submit, save-and-exit, close button) must
+  // first consume the guard entry the effect above pushed on top of the
+  // real /test-portal/:id entry — otherwise App.jsx's replace-navigation
+  // only swaps out that guard layer, leaving the real test entry sitting
+  // underneath for a *second* back-press to land on and remount the test.
+  const exitTestPortal = (finalReportOrNull) => {
+    intentionalExitRef.current = true;
+    window.history.back(); // pop the guard entry off, landing back on the real test-portal entry
+    // history.back() is async (it queues a popstate), so give it a tick
+    // before the real navigation runs, or the replace could race it.
+    setTimeout(() => onExit(finalReportOrNull), 0);
+  };
 
   // --- 📱 MOBILE UI STATES ---
   const isMobile = useIsMobile();
@@ -498,7 +501,7 @@ const TestPortal = ({ testData, onExit }) => {
       // 🧭 STEP C: deliberate Save-for-Later now covers this test's saved
       // state — the silent autosave copy is no longer needed.
       clearAutosave(data.id);
-      onExit(null);
+      exitTestPortal(null);
     } catch (err) {
       console.error("Draft save failed entirely:", err);
       alert("Could not save your progress. Please try again before exiting.");
@@ -752,7 +755,7 @@ const TestPortal = ({ testData, onExit }) => {
     }
 
     setIsSubmitting(false);
-    onExit(finalReport);
+    exitTestPortal(finalReport);
   }, [data, onExit]);
 
   useEffect(() => {
