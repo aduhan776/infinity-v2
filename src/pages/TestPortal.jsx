@@ -409,17 +409,20 @@ const TestPortal = ({ testData, onExit }) => {
 
   useEffect(() => {
     return () => {
-      if (isRealPageUnloadRef.current) return; // genuine reload/close — keep marker + autosave intact
+      if (isRealPageUnloadRef.current) return; // genuine reload/close — keep marker + autosave + background draft intact (tab-close should leave a resumable Library draft, by design)
       try { sessionStorage.removeItem(TEST_TAB_MARKER_KEY + data.id); } catch (e) { /* ignore */ }
       // 🧭 REQUIREMENT: leaving without submitting or explicitly saving means
-      // nothing should be resumable later — clear the autosave content too,
-      // not just the tab marker. If handleFinalSubmit or handleSaveForLater
-      // already ran, they've set intentionalExitRef and already cleared it
-      // themselves; this only fires for every other way of leaving in-app
-      // (browser back navigating away for real within the SPA, switching
-      // routes without going through Pause → Save, etc.).
+      // nothing should be resumable later — clear the autosave AND the
+      // background Library-visible draft too. If handleFinalSubmit or
+      // handleSaveForLater already ran, they've set intentionalExitRef and
+      // already cleaned up themselves; this only fires for every other way
+      // of leaving in-app (browser back navigating away for real within the
+      // SPA, switching routes without going through Pause → Save, etc.) —
+      // a genuine tab/window close is the ONE case that should leave the
+      // background draft behind, and that's handled by the early return above.
       if (!intentionalExitRef.current) {
         clearAutosave(data.id);
+        deleteFromLocalStore("test_sessions", data.id).catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -446,10 +449,57 @@ const TestPortal = ({ testData, onExit }) => {
     };
   }, [data.id, currentQ, markedForReview]);
 
+  // 🧭 REQUIREMENT: if the student closes the tab/window mid-test, it should
+  // show up as a paused draft in Library — same as pressing "Save for
+  // Later" manually. Library reads drafts from IndexedDB (test_sessions,
+  // status: 'draft'), and that write is async — beforeunload can't reliably
+  // wait for async work to finish before the tab actually closes. So instead
+  // of trying to catch the close event itself, we keep an IndexedDB draft
+  // record continuously up to date throughout the test (same cadence as the
+  // existing autosave). By the time a tab-close happens, the draft sitting
+  // in IndexedDB is already current — nothing needs to race the unload.
+  // Every OTHER way of leaving (submit, in-app back-without-saving) must
+  // still explicitly delete this record, since only a genuine tab/window
+  // close should leave it behind as a resumable draft.
+  const writeLibraryVisibleDraft = useCallback(async () => {
+    if (stateRef.current.isSubmitting) return;
+    const snapshot = stateRef.current;
+    try {
+      await saveToLocalStore("test_sessions", {
+        id: data.id,
+        test_id: data.id,
+        title: data.title,
+        status: 'draft',
+        lastIndex: currentQ,
+        currentSectionIdx: snapshot.currentSectionIdx,
+        answers: snapshot.answers,
+        timeTracker: snapshot.timeTracker,
+        time_tracker: snapshot.timeTracker,
+        markedForReview: markedForReview,
+        score: 'Drafted',
+        accuracy: 0,
+        time_left: Math.floor(snapshot.globalTimeLeft / 60),
+        raw_seconds: snapshot.globalTimeLeft,
+        sectionTimeLeft: snapshot.sectionTimeLeft,
+        date: new Date().toLocaleDateString(),
+        created_at: new Date().getTime(),
+        time: data.time || 180,
+        questions: data.questions,
+        questions_list: data.questions_list,
+        sections: data.sections,
+        hasSectionalTiming: data.hasSectionalTiming,
+        mode: data.mode
+      });
+    } catch (e) {
+      console.error("Background draft write failed:", e);
+    }
+  }, [data, currentQ, markedForReview]);
+
   const flushAutosave = useCallback(() => {
     if (stateRef.current.isSubmitting) return; // don't resurrect a test that's mid-submit
     writeAutosave(data.id, buildAutosaveSnapshot());
-  }, [data.id, buildAutosaveSnapshot]);
+    writeLibraryVisibleDraft();
+  }, [data.id, buildAutosaveSnapshot, writeLibraryVisibleDraft]);
 
   // Debounced write whenever the things worth saving change.
   useEffect(() => {
@@ -457,6 +507,7 @@ const TestPortal = ({ testData, onExit }) => {
     autosaveDebounceRef.current = setTimeout(flushAutosave, 800);
     return () => clearTimeout(autosaveDebounceRef.current);
   }, [answers, uploads, markedForReview, currentQ, currentSectionIdx, flushAutosave]);
+
 
   // Safety-net interval, mainly for the ticking timer (which changes every
   // second and shouldn't debounce-write that often).
@@ -587,7 +638,18 @@ const TestPortal = ({ testData, onExit }) => {
   const handleFinalSubmit = useCallback(async () => {
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
-    
+
+    // 🐛 FIX: this used to only block the screen (setIsSubmitting(true)) when
+    // the test had subjective questions to evaluate — a purely objective
+    // test never got the overlay, so the Submit button visually did
+    // nothing while grading was actually happening in the background. That
+    // looked like "submit isn't working," and made it easy to press it
+    // multiple times in a row (isSubmittingRef guards against that, but the
+    // user had no visual feedback that anything was happening at all).
+    // The overlay should show immediately for every submit, objective or not.
+    setIsSubmitting(true);
+    setShowSummary(false);
+
     const snapshot = stateRef.current;
     const evaluatedQuestions = [...snapshot.questions];
 
@@ -602,15 +664,6 @@ const TestPortal = ({ testData, onExit }) => {
     } catch (authErr) {
       console.warn("Could not resolve student id for ledger logging (non-blocking):", authErr);
     }
-
-    const hasSubjectiveToEvaluate = evaluatedQuestions.some((q, i) => 
-      q.type === 'Subjective' && (snapshot.answers[i] || (snapshot.uploads[i] && snapshot.uploads[i].length > 0))
-    );
-
-    if (hasSubjectiveToEvaluate) {
-      setIsSubmitting(true); 
-    }
-    setShowSummary(false);
 
     let objectiveCalculatedScore = 0;
     let correctCount = 0;
@@ -1084,9 +1137,9 @@ const TestPortal = ({ testData, onExit }) => {
         <div style={styles.submittingOverlay}>
           <div style={styles.spinnerCard}>
             <div style={styles.spinner}></div>
-            <h3 style={{ color: '#000000', fontWeight: '900', marginTop: '22px', marginBottom: '8px', fontSize: '1.25rem' }}>Please wait, AI is analyzing your responses...</h3>
+            <h3 style={{ color: '#000000', fontWeight: '900', marginTop: '22px', marginBottom: '8px', fontSize: '1.25rem' }}>Submitting your test...</h3>
             <p style={{ color: '#64748b', fontSize: '0.86rem', fontWeight: '500', margin: 0, lineHeight: '1.5' }}>
-              Project Infinity engine is evaluating your handwritten answer sheets and structural metrics compilation patterns.
+              Please wait while we grade your responses. This will only take a moment — don't close this window.
             </p>
           </div>
         </div>
@@ -1409,7 +1462,7 @@ const TestPortal = ({ testData, onExit }) => {
             </div>
             <div style={{marginTop:'35px', display:'flex', gap:'12px'}}>
               <button onClick={() => setShowSummary(false)} style={{...styles.secBtnSmall, flex:1, height:'48px'}}>Review Questions</button>
-              <button onClick={handleFinalSubmit} style={{...styles.priBtn, flex:1.5, fontSize:'1rem'}}>Confirm Final Submission</button>
+              <button onClick={handleFinalSubmit} disabled={isSubmitting} style={{...styles.priBtn, flex:1.5, fontSize:'1rem', ...(isSubmitting ? {opacity:0.6, cursor:'not-allowed'} : {})}}>Confirm Final Submission</button>
             </div>
           </div>
         </div>
