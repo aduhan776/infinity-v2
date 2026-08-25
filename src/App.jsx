@@ -40,6 +40,11 @@ function App() {
   // immediately (before any handler runs), otherwise sidebar/header briefly
   // flash on top of the test screen.
   const isTestActive = location.pathname.startsWith('/test-portal/');
+  // 🧭 FIX: Analysis Portal's URL now carries :attemptId
+  // (/analysis-portal/xyz), so exact string equality against activeTab
+  // ('analysis-portal') no longer matches — it needs the same
+  // startsWith pattern as isTestActive above.
+  const isAnalysisPortalActive = location.pathname.startsWith('/analysis-portal');
   const setIsTestActive = () => {}; // kept as a no-op so existing call sites below don't need touching
   const [currentTestData, setCurrentTestData] = useState(null);
   const [testResults, setTestResults] = useState(null);
@@ -52,7 +57,7 @@ function App() {
   // calls history.back() itself, so it doesn't interact with real browser
   // history depth (e.g. an earlier OAuth redirect) at all.
   useEffect(() => {
-    if (activeTab !== 'analysis-portal') return;
+    if (!isAnalysisPortalActive) return;
     window.history.pushState({ infinityAnalysisGuard: true }, '');
     const handlePopState = () => {
       navigate('/dashboard', { replace: true });
@@ -173,9 +178,11 @@ function App() {
       const sharedTest = history.find(t => t.attemptId === sharedAttemptId);
       if (sharedTest) {
         setTestResults(sharedTest);
-        setActiveTab('analysis-portal');
-        window.history.replaceState({}, document.title, "/");
       }
+      // Navigate to the real route regardless of whether it was found in
+      // local history — AnalysisPortal's own fetch-by-id resolution (cloud
+      // fallback) can still find it even if this device's local history doesn't.
+      navigate('/analysis-portal/' + encodeURIComponent(sharedAttemptId), { replace: true });
     } 
     else if (sharedTestId) {
       setSharedTestInvite({ id: sharedTestId, title: "Shared Mock Test" });
@@ -237,22 +244,23 @@ function App() {
 
   const handleViewAnalysis = (oldReport) => {
     setTestResults(oldReport);
-    // 🐛 FIX: replace, not push — if we got here from /test-portal/:id (e.g.
-    // Library's "View Analysis"), a plain push leaves that test-portal entry
-    // sitting in history, so browser back would land back on a finished test
-    // showing fresh/empty state. Replacing it means back goes to wherever the
-    // person actually was before opening the test, not back into the test itself.
-    setActiveTab('analysis-portal', { replace: true });
     setIsTestActive(false);
+    // 🧭 FIX: Analysis Portal now carries its identity in the URL
+    // (attemptId) so a reload can resolve its own data instead of relying
+    // on in-memory testResults (which used to fall back to rendering
+    // Dashboard's content inside the sidebar-less Analysis Portal shell).
+    // replace, not push — same reasoning as before: don't leave
+    // /test-portal/:id sitting in history for a finished test.
+    const attemptId = oldReport?.attemptId || oldReport?.id || ('attempt_' + Date.now());
+    navigate('/analysis-portal/' + encodeURIComponent(attemptId), { replace: true });
   };
 
   const finishTestHandler = (finalReport) => {
     setIsTestActive(false);
     if (finalReport) {
       setTestResults(finalReport);
-      // 🐛 FIX: same reasoning as handleViewAnalysis — a submitted test is
-      // done, /test-portal/:id shouldn't remain a valid "back" target.
-      setActiveTab('analysis-portal', { replace: true });
+      const attemptId = finalReport?.attemptId || finalReport?.id || ('attempt_' + Date.now());
+      navigate('/analysis-portal/' + encodeURIComponent(attemptId), { replace: true });
     } else {
       setActiveTab('dashboard', { replace: true });
     }
@@ -519,11 +527,11 @@ function App() {
         </div>
       )}
 
-      {isMobile && mobileSidebarOpen && !isTestActive && activeTab !== 'analysis-portal' && (
+      {isMobile && mobileSidebarOpen && !isTestActive && !isAnalysisPortalActive && (
         <div className="mobile-sidebar-backdrop" onClick={() => setMobileSidebarOpen(false)} />
       )}
 
-      {!isTestActive && activeTab !== 'analysis-portal' && (
+      {!isTestActive && !isAnalysisPortalActive && (
         <aside className={`sidebar ${isMobile && mobileSidebarOpen ? 'mobile-open' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="logo" style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '8px', marginBottom: '24px' }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -608,8 +616,8 @@ function App() {
         </aside>
       )}
 
-      <main className="main-content" style={{ padding: (isTestActive || activeTab === 'analysis-portal') ? '0' : '20px' }}>
-        {!isTestActive && activeTab !== 'analysis-portal' && (
+      <main className="main-content" style={{ padding: (isTestActive || isAnalysisPortalActive) ? '0' : '20px' }}>
+        {!isTestActive && !isAnalysisPortalActive && (
           <header className="top-bar" style={{ display: 'flex', alignItems: 'center', gap: '20px', background: 'none', border: 'none', boxShadow: 'none' }}>
             {isMobile && (
               <button
@@ -668,7 +676,7 @@ function App() {
           </header>
         )}
 
-        <section className="content-view" style={{ height: (isTestActive || activeTab === 'analysis-portal') ? '100vh' : 'auto' }}>
+        <section className="content-view" style={{ height: (isTestActive || isAnalysisPortalActive) ? '100vh' : 'auto' }}>
           <Routes>
             <Route path="/" element={
               <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
@@ -697,12 +705,11 @@ function App() {
             <Route path="/test-portal/:testId" element={
               <TestPortal testData={currentTestData} onExit={finishTestHandler} />
             } />
-            <Route path="/analysis-portal" element={
-              testResults ? (
-                <AnalysisPortal results={testResults} onBackToDashboard={() => setActiveTab('dashboard')} />
-              ) : (
-                <Dashboard setActiveTab={setActiveTab} setTestSeriesFolder={setTestSeriesFolder} onStartTest={startTestHandler} />
-              )
+            {/* 🧭 AnalysisPortal now resolves its own data from the URL's
+                :attemptId when testResults isn't in memory (e.g. after a
+                reload) — so it always renders, no longer gated on testResults. */}
+            <Route path="/analysis-portal/:attemptId" element={
+              <AnalysisPortal results={testResults} onBackToDashboard={() => navigate('/dashboard', { replace: true })} />
             } />
             {/* 🛡️ GATEWAY GUARD: Double checking admin permissions before rendering component */}
             <Route path="/custom-builder" element={
@@ -721,7 +728,7 @@ function App() {
         </section>
       </main>
 
-      {isMobile && !isTestActive && activeTab !== 'analysis-portal' && (
+      {isMobile && !isTestActive && !isAnalysisPortalActive && (
         <nav
           className="bottom-tab-bar"
           style={{

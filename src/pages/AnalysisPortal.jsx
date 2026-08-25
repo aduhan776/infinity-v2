@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; 
 import LatexText from '../components/LatexText'; 
 
@@ -49,6 +50,125 @@ const saveToLocalStore = async (storeName, payload) => {
 const SECTION_KEY = 'section';
 
 const AnalysisPortal = ({ results, onBackToDashboard }) => {
+  // 🧭 FETCH-BY-ID RESOLUTION
+  // Normal in-app flow: results arrives as a prop (App.jsx's in-memory
+  // testResults), nothing changes for that path.
+  // Reload / direct URL hit: results prop is null (App.jsx lost its
+  // in-memory state on remount), but the URL still has :attemptId — resolve
+  // it ourselves. attemptId is the same identifier used both locally
+  // (IndexedDB test_sessions, keyed by attemptId) and in the cloud
+  // (Supabase test_sessions.id) — both are written with the exact same
+  // value at submit time, so one id works for both lookups.
+  const { attemptId: urlAttemptId } = useParams();
+  const [resolvedResults, setResolvedResults] = useState(results || null);
+  const [isResolving, setIsResolving] = useState(!results);
+  const [resolveError, setResolveError] = useState(null);
+
+  useEffect(() => {
+    if (results) {
+      setResolvedResults(results);
+      setIsResolving(false);
+      setResolveError(null);
+      return;
+    }
+    if (!urlAttemptId) {
+      setIsResolving(false);
+      setResolveError("No attempt specified.");
+      return;
+    }
+
+    let cancelled = false;
+    setIsResolving(true);
+    setResolveError(null);
+
+    (async () => {
+      try {
+        // 1) Try local IndexedDB first — covers a fresh submission on this
+        // device, or Library's local review of a past attempt.
+        const localRow = await getFromLocalStore('test_sessions', urlAttemptId);
+        if (cancelled) return;
+        if (localRow && localRow.status === 'submitted') {
+          // Local rows from Library are already in the exact shape
+          // AnalysisPortal expects when they include question content —
+          // but a raw submitted test_sessions row (from handleFinalSubmit)
+          // doesn't carry full question objects, only answers/uploads/time.
+          // Re-join with the matching mock_tests row for question content,
+          // same way Library does, so reload always has everything needed.
+          const testIdForJoin = localRow.test_id || localRow.id;
+          let questionContent = localRow.questions || localRow.questions_list || null;
+          if (!questionContent) {
+            try {
+              const { data: cloudMatch } = await supabase.from('mock_tests').select('*').eq('id', testIdForJoin).single();
+              if (cloudMatch) {
+                questionContent = Array.isArray(cloudMatch.sections) && cloudMatch.sections.length > 0
+                  ? cloudMatch.sections.flatMap((sec, secIdx) => (sec.questions || []).map(q => ({ ...q, sectionIndex: secIdx, sectionName: sec.name, sectionTime: sec.time })))
+                  : (cloudMatch.questions_list || []);
+              }
+            } catch (joinErr) {
+              console.warn("Could not join question content for local review (non-blocking):", joinErr);
+            }
+          }
+          setResolvedResults({
+            id: testIdForJoin,
+            attemptId: localRow.id,
+            title: localRow.title,
+            questions: questionContent || [],
+            answers: localRow.answers || {},
+            uploads: localRow.uploads || {},
+            timeLeft: localRow.raw_seconds ?? localRow.time_left ?? 0,
+            timeTracker: localRow.time_tracker || {}
+          });
+          setIsResolving(false);
+          return;
+        }
+
+        // 2) Not found locally (different device, or cleared storage) — try
+        // the cloud copy, same as TestSeries' "Detailed Review" flow: the
+        // Supabase test_sessions row for the summary/answers, plus
+        // /api/tests/load?reveal=true for the actual question content.
+        const { data: cloudRow, error: cloudErr } = await supabase.from('test_sessions').select('*').eq('id', urlAttemptId).single();
+        if (cancelled) return;
+        if (cloudErr || !cloudRow) {
+          setResolveError("Could not find this test attempt. It may not exist on this device or account.");
+          setIsResolving(false);
+          return;
+        }
+
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/load?testId=${encodeURIComponent(cloudRow.test_id)}&reveal=true`);
+        const json = await res.json();
+        if (cancelled) return;
+        if (!json.success || !json.test) {
+          setResolveError(json.error || "Could not load this attempt's questions.");
+          setIsResolving(false);
+          return;
+        }
+
+        const flatQuestions = Array.isArray(json.test.sections) && json.test.sections.length > 0
+          ? json.test.sections.flatMap((sec, secIdx) => (sec.questions || []).map(q => ({ ...q, sectionIndex: secIdx, sectionName: sec.name, sectionTime: sec.time })))
+          : (json.test.questions_list || []);
+
+        setResolvedResults({
+          id: cloudRow.test_id,
+          attemptId: cloudRow.id,
+          title: cloudRow.title,
+          questions: flatQuestions,
+          answers: cloudRow.answers || {},
+          uploads: cloudRow.uploads || {},
+          timeLeft: cloudRow.raw_seconds ?? cloudRow.time_left ?? 0,
+          timeTracker: cloudRow.time_tracker || {}
+        });
+      } catch (err) {
+        if (!cancelled) setResolveError("Network error — could not load this attempt. Please check your connection.");
+      } finally {
+        if (!cancelled) setIsResolving(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlAttemptId, results]);
+
+
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedQIdx, setSelectedQIdx] = useState(null);
   const [showExplanation, setShowExplanation] = useState(false); 
@@ -81,7 +201,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
     title = "Test Results", 
     id, 
     attemptId 
-  } = results || {};
+  } = resolvedResults || {};
 
   const totalQ = questions ? questions.length : 0;
   
@@ -322,6 +442,33 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
       setActiveTab('analysis'); // swipe right → previous tab
     }
   };
+
+  // 🧭 while resolving via URL (reload/direct hit), or if it failed, show a
+  // minimal state instead of falling through to render against empty data.
+  if (isResolving) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '14px', background: '#f8fafc' }}>
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        <div style={{ width: '40px', height: '40px', border: '4px solid #e2e8f0', borderTopColor: '#1e293b', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <p style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: '600' }}>Loading your results...</p>
+      </div>
+    );
+  }
+
+  if (resolveError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '14px', background: '#f8fafc', padding: '24px', textAlign: 'center' }}>
+        <p style={{ fontSize: '1rem', color: '#dc2626', fontWeight: '700' }}>Couldn't load this attempt</p>
+        <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '360px' }}>{resolveError}</p>
+        <button
+          onClick={onBackToDashboard}
+          style={{ marginTop: '8px', padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#1e293b', color: '#fff', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' }}
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ ...styles.container, ...(isMobile ? styles.containerMobile : {}) }}>
