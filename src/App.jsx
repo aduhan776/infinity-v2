@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'; 
-import { Routes, Route, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import BrainFeed from './pages/BrainFeed';
 import Dashboard from './pages/Dashboard';
 import TestSeries from './pages/TestSeries';
@@ -51,30 +51,21 @@ function App() {
 
   // 🧭 REQUIREMENT: browser back button on Analysis Portal must always land
   // on Dashboard, strictly — never back into the finished test itself.
-  //
-  // 🐛 FIX: an earlier version of this used window.history.pushState +
-  // a popstate listener (same technique as TestPortal's pause guard).
-  // That relies on manually keeping the real browser history stack in a
-  // specific shape, and some browsers (confirmed: desktop Brave) don't
-  // reliably fire pushState/popstate the way this needs — the guard
-  // silently failed to catch the back-press at all.
-  //
-  // This version needs no manual history manipulation. React Router's
-  // useNavigationType tells us WHY the current route rendered — 'POP'
-  // specifically means "the user just used the browser's back or forward
-  // button." So: if we're leaving Analysis Portal (previous pathname was
-  // /analysis-portal/...) via a POP navigation, force-redirect to
-  // Dashboard instead of wherever back would have naturally landed.
-  const navigationType = useNavigationType();
-  const wasOnAnalysisPortalRef = useRef(false);
+  // Same safe pattern as TestPortal's pause guard: push one entry when this
+  // screen is showing, and on a back-press force-navigate to Dashboard
+  // (replace, so Analysis Portal doesn't linger in history either). Never
+  // calls history.back() itself, so it doesn't interact with real browser
+  // history depth (e.g. an earlier OAuth redirect) at all.
   useEffect(() => {
-    const leavingAnalysisPortalViaBack = wasOnAnalysisPortalRef.current && !isAnalysisPortalActive && navigationType === 'POP';
-    wasOnAnalysisPortalRef.current = isAnalysisPortalActive;
-    if (leavingAnalysisPortalViaBack) {
+    if (!isAnalysisPortalActive) return;
+    window.history.pushState({ infinityAnalysisGuard: true }, '');
+    const handlePopState = () => {
       navigate('/dashboard', { replace: true });
-    }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, navigationType]);
+  }, [activeTab]);
   const [sharedTestInvite, setSharedTestInvite] = useState(null); 
   const [testSeriesFolder, setTestSeriesFolder] = useState(null);
   

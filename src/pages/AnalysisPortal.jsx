@@ -97,20 +97,12 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
           const testIdForJoin = localRow.test_id || localRow.id;
           let questionContent = localRow.questions || localRow.questions_list || null;
           if (!questionContent) {
-            // 🐛 FIX: mock_tests has no client-accessible SELECT policy for
-            // regular students (locked down as part of Secure Test Delivery)
-            // — querying it directly from here via supabase.from(...) was
-            // silently blocked by RLS, leaving questionContent null and
-            // Analysis Portal rendering with no questions. Use the backend
-            // endpoint instead, same as the cloud-fallback path below already
-            // correctly does — it has server-side authority to read it.
             try {
-              const joinRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/load?testId=${encodeURIComponent(testIdForJoin)}&reveal=true`);
-              const joinJson = await joinRes.json();
-              if (joinJson.success && joinJson.test) {
-                questionContent = Array.isArray(joinJson.test.sections) && joinJson.test.sections.length > 0
-                  ? joinJson.test.sections.flatMap((sec, secIdx) => (sec.questions || []).map(q => ({ ...q, sectionIndex: secIdx, sectionName: sec.name, sectionTime: sec.time })))
-                  : (joinJson.test.questions_list || []);
+              const { data: cloudMatch } = await supabase.from('mock_tests').select('*').eq('id', testIdForJoin).single();
+              if (cloudMatch) {
+                questionContent = Array.isArray(cloudMatch.sections) && cloudMatch.sections.length > 0
+                  ? cloudMatch.sections.flatMap((sec, secIdx) => (sec.questions || []).map(q => ({ ...q, sectionIndex: secIdx, sectionName: sec.name, sectionTime: sec.time })))
+                  : (cloudMatch.questions_list || []);
               }
             } catch (joinErr) {
               console.warn("Could not join question content for local review (non-blocking):", joinErr);
