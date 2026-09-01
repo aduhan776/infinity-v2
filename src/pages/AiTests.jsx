@@ -177,6 +177,15 @@ const AiTests = ({ onStartTest }) => {
       
       setLoadingMessage(`Generating Questions ${startIndex} to ${endIndex}... Please wait`);
       
+      // 🚨 excludeIds: question_pool row IDs already served in EARLIER
+      // batches of this same generation run. Without this, build-test's
+      // pool-selection step has no way to know these rows were just handed
+      // out seconds ago (no ledger entry exists yet since the student
+      // hasn't attempted them) — it would re-select the same rows every
+      // batch instead of generating new ones, so the DB (and the test)
+      // gets stuck at the first 15 questions repeated over and over.
+      const excludeIds = masterQuestionsArray.map(q => q.id).filter(Boolean);
+
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/build-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -189,7 +198,8 @@ const AiTests = ({ onStartTest }) => {
           type, 
           difficulty,
           language,
-          origin: 'ailabs'
+          origin: 'ailabs',
+          excludeIds
         })
       });
 
