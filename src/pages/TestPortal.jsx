@@ -791,6 +791,24 @@ const TestPortal = ({ testData, onExit }) => {
       }));
     });
 
+    // 🌐 Cross-device reconstruction support (AI Labs tests only — Test
+    // Series tests reconstruct via the mock_tests join instead and don't
+    // need this). question_ids is order-matched to evaluatedQuestions, which
+    // is order-matched to snapshot.answers (both indexed by question position
+    // in the paper), so AnalysisPortal can pair answers[i] with
+    // question_ids[i] without needing to change the answers format itself.
+    const questionIdsForCloud = evaluatedQuestions.map(q => q.id || null);
+
+    // subjective_results: marks + AI remark only, no images (images stay
+    // local-only by design to save cloud storage).
+    const subjectiveResultsForCloud = evaluatedQuestions
+      .filter(q => q.type === 'Subjective' && q.score_given !== undefined)
+      .map(q => ({
+        question_id: q.id,
+        marks_awarded: q.score_given,
+        ai_remark: q.ai_evaluation || null
+      }));
+
     const uniqueAttemptTimestampId = new Date().getTime();
     const finalReport = {
       id: data.id,
@@ -848,7 +866,9 @@ const TestPortal = ({ testData, onExit }) => {
           raw_seconds: snapshot.globalTimeLeft,
           answers: snapshot.answers,
           uploads: optimizedLocalUploads,
-          time_tracker: snapshot.timeTracker
+          time_tracker: snapshot.timeTracker,
+          question_ids: questionIdsForCloud,
+          subjective_results: subjectiveResultsForCloud
         });
       } catch (cloudErr) {
         console.warn("Cloud test session sync skipped (non-blocking):", cloudErr);

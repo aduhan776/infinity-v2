@@ -84,8 +84,31 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
         setSavedQuestions([]);
       }
 
-      // 2. Fetch Centralized Test Sessions from IndexedDB Offline Store
+      // 2. Fetch Centralized Test Sessions — merge local (IndexedDB, fast,
+      // carries the full question snapshot) with cloud (Supabase, source of
+      // truth, survives across devices / cleared local storage). Local wins
+      // on id conflicts since it already has the richer data; cloud-only
+      // rows (not present locally) are appended so history is never blank
+      // just because this device's IndexedDB doesn't have that attempt.
       const localSessions = await getAllFromLocalStore("test_sessions");
+      let cloudSessions = [];
+      if (user) {
+        const { data: cloudRows, error: cloudSessionsErr } = await supabase
+          .from('test_sessions')
+          .select('*')
+          .eq('user_id', user.id);
+        if (cloudSessionsErr) {
+          console.error("Cloud test_sessions fetch failed (non-blocking):", cloudSessionsErr);
+        } else {
+          cloudSessions = cloudRows || [];
+        }
+      }
+      const localIds = new Set(localSessions.map(row => row.id));
+      const cloudOnlySessions = cloudSessions
+        .filter(row => !localIds.has(row.id))
+        .map(row => ({ ...row, questions: null })); // no local question snapshot — AnalysisPortal reconstructs via mock_tests/question_pool join
+      const allSessions = [...localSessions, ...cloudOnlySessions];
+
       const { data: masterTests } = await supabase.from('mock_tests').select('*');
 
       const cloudTestsMap = {};
@@ -94,7 +117,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
       }
 
       // Parse and map Submitted Tests History
-      const historyRows = localSessions
+      const historyRows = allSessions
         .filter(row => row.status === 'submitted')
         .map(row => {
           const cloudMatch = cloudTestsMap[row.test_id] || {};
@@ -115,11 +138,17 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
             answers: row.answers || {},
             uploads: row.uploads || {},
             timeTracker: row.time_tracker || {},
-            questions: cloudMatch.questions_list || [],
-            questions_list: cloudMatch.questions_list || [],
+            // Priority: local full snapshot (row.questions, from IndexedDB) >
+            // mock_tests join (Test Series) > neither, in which case
+            // question_ids/subjective_results are passed through so
+            // AnalysisPortal can reconstruct from question_pool (AI Labs).
+            questions: row.questions || cloudMatch.questions_list || [],
+            questions_list: row.questions || cloudMatch.questions_list || [],
+            question_ids: row.question_ids || [],
+            subjective_results: row.subjective_results || [],
             sections: cloudMatch.sections || null,
             hasSectionalTiming: cloudMatch.has_sectional_timing || false,
-            mode: cloudMatch.category_name || "Standard",
+            mode: cloudMatch.category_name || row.title || "Standard",
             time: cloudMatch.time || 180,
             createdAt: row.created_at || 0 
           };
