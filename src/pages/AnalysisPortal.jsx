@@ -65,15 +65,30 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
   const [resolveError, setResolveError] = useState(null);
 
   useEffect(() => {
-    if (results) {
+    // Library can pass a results prop whose questions came back empty
+    // because this device's IndexedDB doesn't have this attempt's local
+    // snapshot (see Library.jsx's cloudOnlySessions handling) — in that
+    // case we still need the question_ids -> question_pool reconstruction
+    // below, so only short-circuit here when questions actually has data.
+    const hasUsableQuestions = results && Array.isArray(results.questions) && results.questions.length > 0;
+    if (hasUsableQuestions) {
       setResolvedResults(results);
       setIsResolving(false);
       setResolveError(null);
       return;
     }
-    if (!urlAttemptId) {
-      setIsResolving(false);
-      setResolveError("No attempt specified.");
+    const effectiveAttemptId = urlAttemptId || (results && results.attemptId);
+    if (!effectiveAttemptId) {
+      if (results) {
+        // Had a results prop but no questions and no id to resolve from —
+        // just show whatever was given rather than blocking entirely.
+        setResolvedResults(results);
+        setIsResolving(false);
+        setResolveError(null);
+      } else {
+        setIsResolving(false);
+        setResolveError("No attempt specified.");
+      }
       return;
     }
 
@@ -85,7 +100,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
       try {
         // 1) Try local IndexedDB first — covers a fresh submission on this
         // device, or Library's local review of a past attempt.
-        const localRow = await getFromLocalStore('test_sessions', urlAttemptId);
+        const localRow = await getFromLocalStore('test_sessions', effectiveAttemptId);
         if (cancelled) return;
         if (localRow && localRow.status === 'submitted') {
           // Local rows from Library are already in the exact shape
@@ -123,10 +138,12 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
         }
 
         // 2) Not found locally (different device, or cleared storage) — try
-        // the cloud copy, same as TestSeries' "Detailed Review" flow: the
-        // Supabase test_sessions row for the summary/answers, plus
-        // /api/tests/load?reveal=true for the actual question content.
-        const { data: cloudRow, error: cloudErr } = await supabase.from('test_sessions').select('*').eq('id', urlAttemptId).single();
+        // the cloud copy. Two reconstruction paths depending on test type:
+        //   a) Test Series: mock_tests join, same as Detailed Review flow.
+        //   b) AI Labs: mock_tests has no matching row (its ids look like
+        //      "MOCK_MOVED_..." and are never inserted into mock_tests), so
+        //      fall back to question_ids -> question_pool join instead.
+        const { data: cloudRow, error: cloudErr } = await supabase.from('test_sessions').select('*').eq('id', effectiveAttemptId).single();
         if (cancelled) return;
         if (cloudErr || !cloudRow) {
           setResolveError("Could not find this test attempt. It may not exist on this device or account.");
@@ -137,26 +154,86 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
         const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/load?testId=${encodeURIComponent(cloudRow.test_id)}&reveal=true`);
         const json = await res.json();
         if (cancelled) return;
-        if (!json.success || !json.test) {
-          setResolveError(json.error || "Could not load this attempt's questions.");
+
+        if (json.success && json.test) {
+          // Path (a): Test Series
+          const flatQuestions = Array.isArray(json.test.sections) && json.test.sections.length > 0
+            ? json.test.sections.flatMap((sec, secIdx) => (sec.questions || []).map(q => ({ ...q, sectionIndex: secIdx, sectionName: sec.name, sectionTime: sec.time })))
+            : (json.test.questions_list || []);
+
+          setResolvedResults({
+            id: cloudRow.test_id,
+            attemptId: cloudRow.id,
+            title: cloudRow.title,
+            questions: flatQuestions,
+            answers: cloudRow.answers || {},
+            uploads: cloudRow.uploads || {},
+            timeLeft: cloudRow.raw_seconds ?? cloudRow.time_left ?? 0,
+            timeTracker: cloudRow.time_tracker || {}
+          });
           setIsResolving(false);
           return;
         }
 
-        const flatQuestions = Array.isArray(json.test.sections) && json.test.sections.length > 0
-          ? json.test.sections.flatMap((sec, secIdx) => (sec.questions || []).map(q => ({ ...q, sectionIndex: secIdx, sectionName: sec.name, sectionTime: sec.time })))
-          : (json.test.questions_list || []);
+        // Path (b): AI Labs — mock_tests had no matching row. Reconstruct
+        // from question_pool using the ordered question_ids saved at submit
+        // time. Order matches evaluatedQuestions at submit time, which is
+        // what answers/subjective_results are indexed against.
+        const poolIds = (cloudRow.question_ids || []).filter(Boolean);
+        if (poolIds.length === 0) {
+          setResolveError("Could not load this attempt's questions — no question reference was saved for this test.");
+          setIsResolving(false);
+          return;
+        }
+
+        const { data: poolRows, error: poolErr } = await supabase
+          .from('question_pool')
+          .select('*')
+          .in('id', poolIds);
+        if (cancelled) return;
+        if (poolErr) {
+          setResolveError("Could not load this attempt's questions from the question bank.");
+          setIsResolving(false);
+          return;
+        }
+
+        const poolById = {};
+        (poolRows || []).forEach(p => { poolById[p.id] = p; });
+
+        const subjectiveById = {};
+        (cloudRow.subjective_results || []).forEach(r => { subjectiveById[r.question_id] = r; });
+
+        // Rebuild in original order (poolIds order = evaluatedQuestions order
+        // at submit time), skipping any id that vanished from the pool.
+        const reconstructedQuestions = poolIds
+          .map(pid => {
+            const p = poolById[pid];
+            if (!p) return null;
+            const subj = subjectiveById[pid];
+            return {
+              id: p.id,
+              question: p.question_text,
+              type: p.type,
+              options: p.options || null,
+              correct: typeof p.correct_option_index === 'number' ? p.correct_option_index : null,
+              explanation: p.explanation || null,
+              ...(subj ? { score_given: subj.marks_awarded, ai_evaluation: subj.ai_remark } : {})
+            };
+          })
+          .filter(Boolean);
 
         setResolvedResults({
           id: cloudRow.test_id,
           attemptId: cloudRow.id,
           title: cloudRow.title,
-          questions: flatQuestions,
+          questions: reconstructedQuestions,
           answers: cloudRow.answers || {},
-          uploads: cloudRow.uploads || {},
+          uploads: {}, // images are intentionally local-only, not synced to cloud
           timeLeft: cloudRow.raw_seconds ?? cloudRow.time_left ?? 0,
           timeTracker: cloudRow.time_tracker || {}
         });
+        setIsResolving(false);
+        return;
       } catch (err) {
         if (!cancelled) setResolveError("Network error — could not load this attempt. Please check your connection.");
       } finally {
