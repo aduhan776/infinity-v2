@@ -161,6 +161,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
           display: flex !important;
           flex-direction: column !important;
           padding: 24px 32px !important;
+          background: #FAFAF9 !important;
         }
         @media (max-width: 768px) {
           .content-view {
@@ -169,6 +170,9 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
             min-height: calc(100vh - 65px) !important;
           }
         }
+        .nx-explore-btn:hover { background: #2E2870 !important; }
+        .nx-outline-btn:hover { background: #F3F2FA !important; }
+        .nx-folder-card:hover { border-color: #C6C2E8 !important; box-shadow: 0 2px 10px rgba(60, 52, 137, 0.06) !important; }
       `}</style>
 
       <div style={{ ...mainSplitFlexLayoutContainer, flexDirection: isMobile ? 'column' : 'row', overflow: isMobile ? 'visible' : 'hidden', gap: isMobile ? '20px' : '24px' }}>
@@ -190,26 +194,28 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
         )}
 
         <div style={{ ...leftMainScrollableColumn, height: isMobile ? 'auto' : '100%', overflowY: isMobile ? 'visible' : 'auto' }}>
-          <h2 style={{
-            color: '#0f172a',
-            fontWeight: '900',
-            fontSize: isMobile ? 'clamp(1.05rem, 5.5vw, 1.4rem)' : '1.8rem',
-            margin: 0,
-            letterSpacing: '-0.5px',
-            whiteSpace: isMobile ? 'nowrap' : 'normal',
-            overflow: isMobile ? 'hidden' : 'visible',
-            textOverflow: isMobile ? 'ellipsis' : 'clip'
-          }}>
-            Welcome back, {userName}!
-          </h2>
-          <p style={{ color: '#64748b', marginTop: '4px', fontSize: '0.8rem', fontWeight: '500' }}>
-            Your pinned exam series and quick stats, all in one place.
-          </p>
+          <div style={{ borderLeft: `3px solid ${ACCENT}`, paddingLeft: '14px' }}>
+            <h2 style={{
+              color: '#1A1A2E',
+              fontWeight: '700',
+              fontSize: isMobile ? 'clamp(1.05rem, 5.5vw, 1.4rem)' : '1.8rem',
+              margin: 0,
+              letterSpacing: '-0.3px',
+              whiteSpace: isMobile ? 'nowrap' : 'normal',
+              overflow: isMobile ? 'hidden' : 'visible',
+              textOverflow: isMobile ? 'ellipsis' : 'clip'
+            }}>
+              Welcome back, {userName}!
+            </h2>
+            <p style={{ color: '#6B7280', marginTop: '4px', fontSize: '0.8rem', fontWeight: '500' }}>
+              Your pinned exam series and quick stats, all in one place.
+            </p>
+          </div>
                   
           <div style={{ marginTop: isMobile ? '20px' : '30px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ color: '#0f172a', margin: 0, fontWeight: '800', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              <h3 style={{ color: '#1A1A2E', margin: 0, fontWeight: '600', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                 Pinned Exam Series
               </h3>
               <button type="button" onClick={() => setShowViewAllModal(true)} style={headerSectionViewAllLink}>View All</button>
@@ -218,26 +224,26 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(230px, 1fr))', gap: isMobile ? '12px' : '20px', paddingBottom: '20px' }}>
               
               {/* INDEPENDENT PRIVATE AI LAB GENERATED FOLDER snaps into Dashboard grid */}
-              <div style={{ ...folderCardStyle, border: '1px solid #000000', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', padding: isMobile ? '14px' : folderCardStyle.padding }} onClick={() => setShowAiFolderModal(true)}>
-                <div style={{ ...folderIconWrapperFrame, background: '#000000', width: isMobile ? '34px' : folderIconWrapperFrame.width, height: isMobile ? '34px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '8px' : folderIconWrapperFrame.margin }}>
+              <div className="nx-folder-card" style={{ ...folderCardStyle, padding: isMobile ? '14px' : folderCardStyle.padding }} onClick={() => setShowAiFolderModal(true)}>
+                <div style={{ ...folderIconWrapperFrame, background: ACCENT, width: isMobile ? '34px' : folderIconWrapperFrame.width, height: isMobile ? '34px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '8px' : folderIconWrapperFrame.margin }}>
                   <svg width={isMobile ? "15" : "20"} height={isMobile ? "15" : "20"} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 2h4M12 2v7M5 21h14M5 21l6-12h2l6 12M7 17h10"/>
                   </svg>
                 </div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: isMobile ? '0.85rem' : '1.15rem', fontWeight: '900', color: '#000000' }}>AI Lab Generated</h3>
-                <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#64748b', margin: isMobile ? '0 0 10px 0' : '0 0 20px 0', fontWeight: '600' }}>{aiLabTests.length} custom tests compiled.</p>
-                <button type="button" onClick={(e) => { e.stopPropagation(); setShowAiFolderModal(true); }} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '7px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.7rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: isMobile ? '0.85rem' : '1.15rem', fontWeight: '700', color: '#1A1A2E' }}>AI Lab Generated</h3>
+                <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#6B7280', margin: isMobile ? '0 0 10px 0' : '0 0 20px 0', fontWeight: '500' }}>{aiLabTests.length} custom tests compiled.</p>
+                <button type="button" className="nx-explore-btn" onClick={(e) => { e.stopPropagation(); setShowAiFolderModal(true); }} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '7px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.7rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
               </div>
 
               {subscribedExams.map((folder) => (
-                <div key={folder} style={{ ...folderCardStyle, padding: isMobile ? '14px' : folderCardStyle.padding }}>
+                <div key={folder} className="nx-folder-card" style={{ ...folderCardStyle, padding: isMobile ? '14px' : folderCardStyle.padding }}>
                   <button type="button" onClick={(e) => handleUnpinClick(e, folder)} style={unpinIconCloseWidget}>✕</button>
                   <div style={{ ...folderIconWrapperFrame, width: isMobile ? '34px' : folderIconWrapperFrame.width, height: isMobile ? '34px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '8px' : folderIconWrapperFrame.margin }}>
-                    <svg width={isMobile ? "15" : "20"} height={isMobile ? "15" : "20"} viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                    <svg width={isMobile ? "15" : "20"} height={isMobile ? "15" : "20"} viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                   </div>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: isMobile ? '0.85rem' : '1.15rem', fontWeight: '800', color: '#0f172a' }}>{folder}</h3>
-                  <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#64748b', margin: isMobile ? '0 0 10px 0' : '0 0 20px 0', fontWeight: '500' }}>Tracked inside dashboard stream.</p>
-                  <button type="button" onClick={() => handleExploreRedirect(folder)} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '7px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.7rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: isMobile ? '0.85rem' : '1.15rem', fontWeight: '600', color: '#1A1A2E' }}>{folder}</h3>
+                  <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#6B7280', margin: isMobile ? '0 0 10px 0' : '0 0 20px 0', fontWeight: '500' }}>Tracked inside dashboard stream.</p>
+                  <button type="button" className="nx-outline-btn" onClick={() => handleExploreRedirect(folder)} style={{ ...exploreSeriesOutlineActionBtn, padding: isMobile ? '7px' : exploreSeriesOutlineActionBtn.padding, fontSize: isMobile ? '0.7rem' : exploreSeriesOutlineActionBtn.fontSize }}>Explore Series →</button>
                 </div>
               ))}
             </div>
@@ -246,41 +252,41 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
 
         {!isMobile && (
         <div style={rightSidebarMetricsFixedArea}>
-          <h3 style={{ color: '#0f172a', margin: '0 0 4px 0', fontWeight: '800', fontSize: '1rem' }}>Your Progress Overview</h3>
-          <p style={{ color: '#94a3b8', fontSize: '0.7rem', margin: '0 0 16px 0', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Live Platform Index</p>
+          <h3 style={{ color: '#1A1A2E', margin: '0 0 4px 0', fontWeight: '600', fontSize: '1rem' }}>Your Progress Overview</h3>
+          <p style={{ color: '#9CA3AF', fontSize: '0.7rem', margin: '0 0 16px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Live Platform Index</p>
 
           <div style={verticalMetricsStackGapLayout}>
             <div style={glanceStatMetricCard}>
               <div style={glanceCardHeaderLineRow}>
                 <span style={glanceCardTitleLabel}>BrainFeed Practice</span>
                 <div style={glanceIconWrapperCircle}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v12"/><path d="M6 12h12"/></svg>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v12"/><path d="M6 12h12"/></svg>
                 </div>
               </div>
               <div style={glanceCardLargeMetricNumber}>{brainFeedCount}</div>
-              <div style={glanceCardBottomTrendingIndicatorLine}><span style={{ color: '#10b981', marginRight: '4px' }}>Live</span> metrics track active</div>
+              <div style={glanceCardBottomTrendingIndicatorLine}><span style={{ color: '#0F6E56', marginRight: '4px' }}>Live</span> metrics track active</div>
             </div>
 
             <div style={glanceStatMetricCard}>
               <div style={glanceCardHeaderLineRow}>
                 <span style={glanceCardTitleLabel}>Tests Attempted</span>
                 <div style={glanceIconWrapperCircle}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 </div>
               </div>
               <div style={glanceCardLargeMetricNumber}>{totalTests}</div>
-              <div style={glanceCardBottomTrendingIndicatorLine}><span style={{ color: '#10b981', marginRight: '4px' }}>Sync</span> database node connected</div>
+              <div style={glanceCardBottomTrendingIndicatorLine}><span style={{ color: '#0F6E56', marginRight: '4px' }}>Sync</span> database node connected</div>
             </div>
 
             <div style={glanceStatMetricCard}>
               <div style={glanceCardHeaderLineRow}>
                 <span style={glanceCardTitleLabel}>Current Streak</span>
                 <div style={glanceIconWrapperCircle}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                 </div>
               </div>
               <div style={glanceCardLargeMetricNumber}>{streakCount}</div>
-              <div style={glanceCardBottomTrendingIndicatorLine}><span style={{ color: '#f59e0b', fontWeight: '700' }}>{streakCount > 0 ? 'Keep it up!' : 'Start a test today!'}</span></div>
+              <div style={glanceCardBottomTrendingIndicatorLine}><span style={{ color: '#854F0B', fontWeight: '600' }}>{streakCount > 0 ? 'Keep it up!' : 'Start a test today!'}</span></div>
             </div>
           </div>
         </div>
@@ -291,20 +297,21 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
       {showAiFolderModal && (
         <div style={modalOverlayStyle} onClick={() => setShowAiFolderModal(false)}>
           <div style={{ ...modalCardStyle, maxWidth: '480px', textAlign: 'left' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontWeight: '900', color: '#0f172a', fontSize: '1.15rem' }}>AI Lab Generated Tests ({aiLabTests.length})</h3>
-              <button onClick={() => setShowAiFolderModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.1rem', cursor: 'pointer', color: '#94a3b8', fontWeight: 'bold' }}>✕</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #EDEBF5', paddingBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontWeight: '700', color: '#1A1A2E', fontSize: '1.15rem' }}>AI Lab Generated Tests ({aiLabTests.length})</h3>
+              <button onClick={() => setShowAiFolderModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.1rem', cursor: 'pointer', color: '#9CA3AF', fontWeight: 'bold' }}>✕</button>
             </div>
             <div style={{ maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '4px' }}>
               {aiLabTests.length > 0 ? (
                 aiLabTests.map((test) => (
-                  <div key={test.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', background: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0', gap: '15px' }}>
+                  <div key={test.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', background: '#FAFAF9', borderRadius: '14px', border: '1px solid #EDEBF5', gap: '15px' }}>
                     <div style={{ flex: 1 }}>
-                      <h4 style={{ margin: 0, fontWeight: '800', color: '#0f172a', fontSize: '0.95rem', lineHeight: '1.4' }}>{test.title.replace('🤖 ', '')}</h4>
-                      <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem', color: '#64748b', fontWeight: '600' }}>⏱️ {test.time} Mins | 📋 {test.questions} Questions</p>
+                      <h4 style={{ margin: 0, fontWeight: '600', color: '#1A1A2E', fontSize: '0.95rem', lineHeight: '1.4' }}>{test.title.replace('🤖 ', '')}</h4>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem', color: '#6B7280', fontWeight: '500' }}>⏱️ {test.time} Mins | 📋 {test.questions} Questions</p>
                     </div>
                     <button 
                       type="button" 
+                      className="nx-explore-btn"
                       onClick={() => {
                         setShowAiFolderModal(false);
                         onStartTest?.({
@@ -317,14 +324,14 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
                           hasSectionalTiming: test.has_sectional_timing || false
                         });
                       }} 
-                      style={{ background: '#000000', color: '#ffffff', border: 'none', padding: '8px 14px', borderRadius: '8px', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      style={{ background: ACCENT, color: '#ffffff', border: 'none', padding: '8px 14px', borderRadius: '8px', fontWeight: '600', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
                     >
                       Start Test →
                     </button>
                   </div>
                 ))
               ) : (
-                <p style={{ color: '#94a3b8', fontSize: '0.85rem', textAlign: 'center', margin: '20px 0', fontWeight: '600', fontStyle: 'italic' }}>No compiled AI tests found. Create one inside AI Lab!</p>
+                <p style={{ color: '#9CA3AF', fontSize: '0.85rem', textAlign: 'center', margin: '20px 0', fontWeight: '500', fontStyle: 'italic' }}>No compiled AI tests found. Create one inside AI Lab!</p>
               )}
             </div>
           </div>
@@ -334,20 +341,20 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
       {showViewAllModal && (
         <div style={modalOverlayStyle} onClick={() => setShowViewAllModal(false)}>
           <div style={{ ...modalCardStyle, maxWidth: '420px', textAlign: 'left' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontWeight: '900', color: '#0f172a', fontSize: '1.15rem' }}>All Pinned Series ({subscribedExams.length})</h3>
-              <button onClick={() => setShowViewAllModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.1rem', cursor: 'pointer', color: '#94a3b8', fontWeight: 'bold' }}>✕</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #EDEBF5', paddingBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontWeight: '700', color: '#1A1A2E', fontSize: '1.15rem' }}>All Pinned Series ({subscribedExams.length})</h3>
+              <button onClick={() => setShowViewAllModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.1rem', cursor: 'pointer', color: '#9CA3AF', fontWeight: 'bold' }}>✕</button>
             </div>
             <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {subscribedExams.map((folder, idx) => (
-                <div key={folder} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div key={folder} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#FAFAF9', borderRadius: '12px', border: '1px solid #EDEBF5' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '800' }}>#{idx + 1}</span>
-                    <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '0.92rem' }}>{folder}</span>
+                    <span style={{ fontSize: '0.85rem', color: '#9CA3AF', fontWeight: '700' }}>#{idx + 1}</span>
+                    <span style={{ fontWeight: '600', color: '#1A1A2E', fontSize: '0.92rem' }}>{folder}</span>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={(e) => handleUnpinClick(e, folder)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: '700', fontSize: '0.78rem', cursor: 'pointer' }}>Unpin</button>
-                    <button onClick={() => handleExploreRedirect(folder)} style={{ background: '#000000', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: '700', fontSize: '0.78rem', cursor: 'pointer' }}>Explore</button>
+                    <button onClick={(e) => handleUnpinClick(e, folder)} style={{ background: '#FCEBEB', color: '#A32D2D', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: '600', fontSize: '0.78rem', cursor: 'pointer' }}>Unpin</button>
+                    <button onClick={() => handleExploreRedirect(folder)} style={{ background: ACCENT, color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: '600', fontSize: '0.78rem', cursor: 'pointer' }}>Explore</button>
                   </div>
                 </div>
               ))}
@@ -359,8 +366,8 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
       {folderToUnpin && (
         <div style={modalOverlayStyle} onClick={() => setFolderToUnpin(null)}>
           <div style={modalCardStyle} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#1e293b', fontWeight: '900', fontSize: '1.35rem' }}>Unpin Exam Series?</h3>
-            <p style={{ margin: '0 0 25px 0', color: '#64748b', fontSize: '0.9rem', fontWeight: '500' }}>Bhai, kya tu sach mein "{folderToUnpin}" series ko Dashboard se unpin karna chahta hai?</p>
+            <h3 style={{ margin: '0 0 10px 0', color: '#1A1A2E', fontWeight: '700', fontSize: '1.35rem' }}>Unpin Exam Series?</h3>
+            <p style={{ margin: '0 0 25px 0', color: '#6B7280', fontSize: '0.9rem', fontWeight: '500' }}>Bhai, kya tu sach mein "{folderToUnpin}" series ko Dashboard se unpin karna chahta hai?</p>
             <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
               <button onClick={() => setFolderToUnpin(null)} style={cancelBtnStyle}>Cancel</button>
               <button onClick={handleConfirmUnpin} style={confirmUnpinBtnStyle}>Unpin Now</button>
@@ -372,11 +379,14 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
   );
 };
 
+// --- BRAND ACCENT (single source of truth for the whole Dashboard) ---
+const ACCENT = '#3C3489';
+
 // Styles Configuration Map
-const dashboardLayoutWrapper = { display: 'flex', flexDirection: 'column', height: '100%', width: '100%', fontFamily: 'Inter, sans-serif', boxSizing: 'border-box' }; const mainSplitFlexLayoutContainer = { display: 'flex', flex: 1, gap: '24px', width: '100%', height: '100%', overflow: 'hidden' }; const leftMainScrollableColumn = { flex: 1, overflowY: 'auto', paddingRight: '4px', height: '100%' }; const headerSectionViewAllLink = { background: 'none', border: 'none', color: '#64748b', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline' }; const folderCardStyle = { background: '#fff', padding: '20px', borderRadius: '14px', border: '1px solid #e2e8f0', textAlign: 'center', position: 'relative' }; const folderIconWrapperFrame = { width: '48px', height: '48px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px auto' }; const exploreSeriesSolidActionBtn = { width: '100%', border: 'none', color: '#fff', background: '#000000', padding: '10px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '0.82rem' }; const unpinIconCloseWidget = { position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.82rem', color: '#94a3b8', fontWeight: 'bold' }; const rightSidebarMetricsFixedArea = { width: '240px', flexShrink: 0, borderLeft: '1px solid #e2e8f0', paddingLeft: '20px', height: '100%', overflowY: 'auto', boxSizing: 'border-box' }; const verticalMetricsStackGapLayout = { display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }; const glanceStatMetricCard = { background: '#ffffff', border: '1px solid #e2e8f0', padding: '14px 16px', borderRadius: '12px', textAlign: 'left', width: '100%', boxSizing: 'border-box' }; const glanceCardHeaderLineRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }; const glanceCardTitleLabel = { fontSize: '0.78rem', color: '#475569', fontWeight: '600' }; const glanceIconWrapperCircle = { width: '24px', height: '24px', borderRadius: '50%', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #f1f5f9' }; const glanceCardLargeMetricNumber = { fontSize: '1.75rem', fontWeight: '800', color: '#0f172a', margin: '2px 0', letterSpacing: '-0.5px' }; const glanceCardBottomTrendingIndicatorLine = { fontSize: '0.68rem', color: '#64748b', fontWeight: '500' }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }; const modalCardStyle = { background: '#fff', padding: '28px', borderRadius: '20px', width: '90%', border: '1px solid #e2e8f0', fontFamily: 'Inter, sans-serif' }; const cancelBtnStyle = { flex: 1, padding: '11px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const confirmUnpinBtnStyle = { flex: 1.3, padding: '11px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', fontSize: '0.85rem' };
+const dashboardLayoutWrapper = { display: 'flex', flexDirection: 'column', height: '100%', width: '100%', fontFamily: 'Inter, sans-serif', boxSizing: 'border-box' }; const mainSplitFlexLayoutContainer = { display: 'flex', flex: 1, gap: '24px', width: '100%', height: '100%', overflow: 'hidden' }; const leftMainScrollableColumn = { flex: 1, overflowY: 'auto', paddingRight: '4px', height: '100%' }; const headerSectionViewAllLink = { background: 'none', border: 'none', color: ACCENT, fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline' }; const folderCardStyle = { background: '#fff', padding: '20px', borderRadius: '14px', border: '1px solid #EDEBF5', textAlign: 'center', position: 'relative', transition: 'border-color 0.15s ease, box-shadow 0.15s ease' }; const folderIconWrapperFrame = { width: '48px', height: '48px', borderRadius: '50%', background: '#F3F2FA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px auto' }; const exploreSeriesSolidActionBtn = { width: '100%', border: 'none', color: '#fff', background: ACCENT, padding: '10px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.82rem', transition: 'background 0.15s ease' }; const exploreSeriesOutlineActionBtn = { width: '100%', border: `1px solid ${ACCENT}`, color: ACCENT, background: 'transparent', padding: '10px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.82rem', transition: 'background 0.15s ease' }; const unpinIconCloseWidget = { position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.82rem', color: '#9CA3AF', fontWeight: 'bold' }; const rightSidebarMetricsFixedArea = { width: '240px', flexShrink: 0, borderLeft: '1px solid #EDEBF5', paddingLeft: '20px', height: '100%', overflowY: 'auto', boxSizing: 'border-box' }; const verticalMetricsStackGapLayout = { display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }; const glanceStatMetricCard = { background: '#FAFAF9', border: 'none', padding: '14px 16px', borderRadius: '12px', textAlign: 'left', width: '100%', boxSizing: 'border-box' }; const glanceCardHeaderLineRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }; const glanceCardTitleLabel = { fontSize: '0.78rem', color: '#6B7280', fontWeight: '500' }; const glanceIconWrapperCircle = { width: '24px', height: '24px', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #EDEBF5' }; const glanceCardLargeMetricNumber = { fontSize: '1.75rem', fontWeight: '600', color: '#1A1A2E', margin: '2px 0', letterSpacing: '-0.5px' }; const glanceCardBottomTrendingIndicatorLine = { fontSize: '0.68rem', color: '#6B7280', fontWeight: '500' }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(26, 26, 46, 0.4)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }; const modalCardStyle = { background: '#fff', padding: '28px', borderRadius: '20px', width: '90%', border: '1px solid #EDEBF5', fontFamily: 'Inter, sans-serif' }; const cancelBtnStyle = { flex: 1, padding: '11px', background: '#F3F2FA', color: '#4B4B63', border: 'none', borderRadius: '10px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' }; const confirmUnpinBtnStyle = { flex: 1.3, padding: '11px', background: '#A32D2D', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' };
 const mobileStatsRowStyle = { display: 'flex', width: '100%', gap: '10px' };
-const mobileStatChip = { flex: 1, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '10px 6px', textAlign: 'center' };
-const mobileStatChipNumber = { fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.5px' };
-const mobileStatChipLabel = { fontSize: '0.68rem', color: '#64748b', fontWeight: '600', marginTop: '2px' };
+const mobileStatChip = { flex: 1, background: '#FAFAF9', border: 'none', borderRadius: '12px', padding: '10px 6px', textAlign: 'center' };
+const mobileStatChipNumber = { fontSize: '1.25rem', fontWeight: '600', color: '#1A1A2E', letterSpacing: '-0.5px' };
+const mobileStatChipLabel = { fontSize: '0.68rem', color: '#6B7280', fontWeight: '500', marginTop: '2px' };
 
 export default Dashboard;
