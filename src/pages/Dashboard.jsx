@@ -178,18 +178,21 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
           position: absolute;
           top: -6px;
           left: -6px;
-          width: 40px;
-          height: 40px;
-          background: #7065BA;
-          border-radius: 10px 0 10px 0;
+          width: 34px;
+          height: 34px;
+          border-top: 3px solid #7065BA;
+          border-left: 3px solid #7065BA;
+          border-radius: 8px 0 0 0;
           z-index: -1;
         }
         .nx-folder-card.nx-peek-card::before {
-          width: 56px;
-          height: 56px;
+          width: 44px;
+          height: 44px;
           top: -8px;
           left: -8px;
-          border-radius: 14px 0 14px 0;
+          border-top: 3px solid #7065BA;
+          border-left: 3px solid #7065BA;
+          border-radius: 10px 0 0 0;
         }
       `}</style>
 
@@ -225,6 +228,9 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
             }}>
               Welcome back, {userName}!
             </h2>
+            <p style={{ color: '#9691C4', margin: '4px 0 0 0', fontSize: isMobile ? '0.72rem' : '0.8rem', fontWeight: '600' }}>
+              Practice hard!!
+            </p>
           </div>
                   
           <div style={{ marginTop: isMobile ? '20px' : '30px' }}>
@@ -239,26 +245,26 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(230px, 1fr))', gap: isMobile ? '12px' : '20px', paddingBottom: '20px' }}>
               
               {/* INDEPENDENT PRIVATE AI LAB GENERATED FOLDER snaps into Dashboard grid */}
-              <div className="nx-folder-card nx-peek-card" style={{ ...folderCardStyle, padding: isMobile ? '14px' : folderCardStyle.padding }} onClick={() => setShowAiFolderModal(true)}>
-                <div style={{ ...folderIconWrapperFrame, background: ACCENT, width: isMobile ? '34px' : folderIconWrapperFrame.width, height: isMobile ? '34px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '8px' : folderIconWrapperFrame.margin }}>
-                  <svg width={isMobile ? "15" : "20"} height={isMobile ? "15" : "20"} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <div className="nx-folder-card nx-peek-card" style={{ ...folderCardStyle, padding: isMobile ? '11px' : folderCardStyle.padding }} onClick={() => setShowAiFolderModal(true)}>
+                <div style={{ ...folderIconWrapperFrame, background: ACCENT, width: isMobile ? '28px' : folderIconWrapperFrame.width, height: isMobile ? '28px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '6px' : folderIconWrapperFrame.margin }}>
+                  <svg width={isMobile ? "12" : "20"} height={isMobile ? "12" : "20"} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 2h4M12 2v7M5 21h14M5 21l6-12h2l6 12M7 17h10"/>
                   </svg>
                 </div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: isMobile ? '0.85rem' : '1.15rem', fontWeight: '700', color: '#1A1A2E' }}>AI Lab Generated</h3>
-                <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#6B7280', margin: isMobile ? '0 0 8px 0' : '0 0 12px 0', fontWeight: '500' }}>{aiLabTests.length} custom tests compiled.</p>
-                <button type="button" className="nx-explore-btn" onClick={(e) => { e.stopPropagation(); setShowAiFolderModal(true); }} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '7px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.7rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
+                <h3 style={{ margin: '0 0 2px 0', fontSize: isMobile ? '0.8rem' : '1.15rem', fontWeight: '700', color: '#1A1A2E' }}>AI Lab Generated</h3>
+                <p style={{ fontSize: isMobile ? '0.64rem' : '0.8rem', color: '#6B7280', margin: isMobile ? '0 0 6px 0' : '0 0 12px 0', fontWeight: '500' }}>{aiLabTests.length} custom tests compiled.</p>
+                <button type="button" className="nx-explore-btn" onClick={(e) => { e.stopPropagation(); setShowAiFolderModal(true); }} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '6px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.66rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
               </div>
 
               {subscribedExams.map((folder) => (
-                <div key={folder} className="nx-folder-card nx-peek-card" style={{ ...folderCardStyle, padding: isMobile ? '14px' : folderCardStyle.padding }}>
+                <div key={folder} className="nx-folder-card nx-peek-card" style={{ ...folderCardStyle, padding: isMobile ? '11px' : folderCardStyle.padding }}>
                   <button type="button" onClick={(e) => handleUnpinClick(e, folder)} style={unpinIconCloseWidget}>✕</button>
-                  <div style={{ ...folderIconWrapperFrame, width: isMobile ? '34px' : folderIconWrapperFrame.width, height: isMobile ? '34px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '8px' : folderIconWrapperFrame.margin }}>
-                    <svg width={isMobile ? "15" : "20"} height={isMobile ? "15" : "20"} viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                  <div style={{ ...folderIconWrapperFrame, width: isMobile ? '28px' : folderIconWrapperFrame.width, height: isMobile ? '28px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '6px' : folderIconWrapperFrame.margin }}>
+                    <svg width={isMobile ? "12" : "20"} height={isMobile ? "12" : "20"} viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                   </div>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: isMobile ? '0.85rem' : '1.15rem', fontWeight: '600', color: '#1A1A2E' }}>{folder}</h3>
-                  <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#6B7280', margin: isMobile ? '0 0 8px 0' : '0 0 12px 0', fontWeight: '500' }}>Tracked inside dashboard stream.</p>
-                  <button type="button" className="nx-explore-btn" onClick={() => handleExploreRedirect(folder)} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '7px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.7rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
+                  <h3 style={{ margin: '0 0 2px 0', fontSize: isMobile ? '0.8rem' : '1.15rem', fontWeight: '600', color: '#1A1A2E' }}>{folder}</h3>
+                  <p style={{ fontSize: isMobile ? '0.64rem' : '0.8rem', color: '#6B7280', margin: isMobile ? '0 0 6px 0' : '0 0 12px 0', fontWeight: '500' }}>Tracked inside dashboard stream.</p>
+                  <button type="button" className="nx-explore-btn" onClick={() => handleExploreRedirect(folder)} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '6px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.66rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
                 </div>
               ))}
             </div>
