@@ -159,15 +159,6 @@ function App() {
     setShowLogoutModal(false);
   };
 
-  const handleGoBack = () => {
-    if (activeTab === 'dashboard') return; 
-    if (activeTab === 'tests' && testSeriesFolder) {
-      setTestSeriesFolder(null);
-    } else {
-      setActiveTab('dashboard');
-    }
-  };
-
   // --- DEEP LINK URL HANDLER ---
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -617,7 +608,7 @@ function App() {
       )}
 
       <main className="main-content" style={{ padding: (isTestActive || isAnalysisPortalActive) ? '0' : '20px' }}>
-        {!isTestActive && !isAnalysisPortalActive && (
+        {!isTestActive && !isAnalysisPortalActive && activeTab === 'dashboard' && (
           <header className="top-bar" style={{ display: 'flex', alignItems: 'center', gap: '20px', background: 'none', border: 'none', boxShadow: 'none' }}>
             {isMobile && (
               <button
@@ -631,20 +622,6 @@ function App() {
                 </svg>
               </button>
             )}
-
-            <button 
-              onClick={handleGoBack} 
-              disabled={activeTab === 'dashboard'} 
-              style={{
-                ...globalBackBtnStyle,
-                opacity: activeTab === 'dashboard' ? 0.3 : 1,
-                cursor: activeTab === 'dashboard' ? 'not-allowed' : 'pointer',
-                backgroundColor: '#fff'
-              }} 
-              title={activeTab === 'dashboard' ? "You are on home page" : "Go Back"}
-            >
-              ↩ Back
-            </button>
 
             <div style={{ flex: 1 }} />
 
@@ -773,7 +750,6 @@ function App() {
 }
 
 // --- HOUSING STYLE OBJECT ARCHITECTURES ---
-const globalBackBtnStyle = { background: '#fff', border: '1px solid #e2e8f0', padding: '8px 14px', borderRadius: '10px', fontWeight: '700', color: '#475569', display: 'flex', alignItems: 'center', fontSize: '0.82rem', transition: 'all 0.2s ease' };
 const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' };
 const inviteModal = { background: '#fff', padding: '30px', borderRadius: '20px', width: '380px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0', fontFamily: 'Inter, sans-serif' };
 const inviteCard = { background: '#f8fafc', padding: '15px', borderRadius: '12px', margin: '15px 0', border: '1px solid #e2e8f0' };
