@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; 
 import useAdmin from '../hooks/useAdmin'; // 🎯 Custom Hook Linked
 
+// --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
+const ACCENT = '#7065BA';
+const ENROLLED_GREEN = '#15803d';
+
 const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnalysis, session }) => {
   // 🎯 PASSING DOWN REGISTERED SESSION MATRIX TO PREVENT ADMIN VALUE DRIFTS
   const { isAdmin, loading: adminLoading } = useAdmin(session); 
@@ -45,6 +49,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
   // --- MODALS SNAPSHOT CONTEXT STATES ---
   const [showAddSectionModal, setShowAddSectionModal] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
+  const [showAddSubGroupModal, setShowAddSubGroupModal] = useState(false);
+  const [newSubGroupName, setNewSubGroupName] = useState('');
 
   const loadTestSeriesCloudData = async () => {
     try {
@@ -164,6 +170,94 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
     );
   };
 
+  // --- 🗂️ SUB-GROUP LAYER: optional deeper grouping inside a section tab
+  // (e.g. "Subject Test" tab split into "Maths" / "Reasoning" sub-groups).
+  // Tests with no sub_group render in a flat, ungrouped bucket for
+  // backward compatibility with existing data.
+  const getSubGroupsForActiveSection = () => {
+    const tests = getTestsForActiveSection();
+    return Array.from(new Set(tests.filter(t => t.sub_group).map(t => t.sub_group)));
+  };
+  const getTestsForSubGroup = (subGroup) => {
+    return getTestsForActiveSection().filter(t => t.sub_group === subGroup);
+  };
+  const getUngroupedTests = () => {
+    return getTestsForActiveSection().filter(t => !t.sub_group);
+  };
+
+  // 🃏 Single test card — used both for ungrouped tests and tests nested
+  // inside a sub-group, so both render identically.
+  const renderTestCard = (test) => {
+    const matchingAttempts = testHistory.filter(item => item.id === test.id);
+    const isAttempted = matchingAttempts.length > 0;
+    const bestScore = isAttempted ? Math.max(...matchingAttempts.map(a => parseFloat(a.score) || 0)) : 0;
+
+    return (
+      <div key={test.id} style={testItemInstanceRow} className="ts-item-row">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }} className="ts-item-header-row">
+          <div>
+            <h4 style={testTitleHeaderStyle} className="ts-item-title">{test.title}</h4>
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
+              <span style={statBadge} className="ts-stat-badge">Time: {test.time} Mins</span>
+              <span style={statBadge} className="ts-stat-badge">Questions: {test.questions}</span>
+              {isAttempted && (
+                <span style={{ ...statBadge, background: '#F1EFFA', color: ACCENT, fontWeight: '800' }} className="ts-stat-badge">
+                  Best Score: {bestScore.toFixed(2)} M
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {isAttempted && (
+              <button onClick={() => toggleAttemptsDropdown(test.id)} style={secondaryActionBtn}>
+                {expandedTestAttempts[test.id] ? "Hide Attempts" : `View Attempts (${matchingAttempts.length})`}
+              </button>
+            )}
+            <button onClick={() => handleStartTest(test)} style={monochromeLaunchTestBtn}>
+              {isAttempted ? "Reattempt Test" : "Start Test"}
+            </button>
+          </div>
+        </div>
+
+        {expandedTestAttempts[test.id] && isAttempted && (
+          <div style={nestedAttemptsScrollerContainer}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {matchingAttempts.map((attempt, index) => (
+                <div key={attempt.attemptId || index} style={attemptHistoryItemLine} className="ts-attempt-row">
+                  <div className="ts-attempt-top" style={{ display: 'contents' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>
+                      Run #{matchingAttempts.length - index} — Completed {attempt.date}
+                    </span>
+                    <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0f172a' }}>
+                      Score: {parseFloat(attempt.score).toFixed(2)} M ({attempt.accuracy})
+                    </span>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => handleViewDetailedReview(attempt)} 
+                    style={{
+                      background: ACCENT,
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      fontWeight: '700',
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      display: 'inline-block'
+                    }}
+                  >
+                    Detailed Review
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // --- ADMINISTRATIVE WRITE HOOKS INTO THE FLAT TREE ---
   const handleAddCategory = async () => {
     if (!newCatName.trim()) return;
@@ -226,6 +320,31 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
     }
   };
 
+  // 🗂️ Creates a new sub-group placeholder inside the current section tab —
+  // same "empty row until an actual test gets added under it" pattern as
+  // handleAddNewSectionTab, one nesting level deeper.
+  const handleAddNewSubGroup = async () => {
+    if (!newSubGroupName.trim()) return;
+    try {
+      const { error } = await supabase
+        .from('mock_tests')
+        .insert([{
+          id: "SUBGRP-" + Date.now(),
+          category_name: activeCategory,
+          series_name: activeSeries,
+          sub_section: activeSubSection,
+          sub_group: newSubGroupName.trim()
+        }]);
+
+      if (error) throw error;
+      setNewSubGroupName('');
+      setShowAddSubGroupModal(false);
+      loadTestSeriesCloudData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const toggleEnrollSeries = async (seriesName) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -243,14 +362,6 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
       localStorage.setItem(userKey, JSON.stringify(updatedSubs));
     } catch (err) {
       console.error(err);
-    }
-  };
-
-  const handleDeleteCategoryPath = async (e, catName) => {
-    e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete "${catName}" track entirely from the unified table?`)) {
-      await supabase.from('mock_tests').delete().eq('category_name', catName);
-      loadTestSeriesCloudData();
     }
   };
 
@@ -375,7 +486,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
           <div style={{ display: 'flex', gap: '12px' }}>
             {/* 🛡️ Admin Verification Wrapper */}
             {isAdmin && (
-              <button onClick={() => setIsModalOpen(true)} style={monochromeSolidDarkActionBtn}>
+              <button onClick={() => setIsModalOpen(true)} style={adminSubtleBtn}>
                 + Add Main Category
               </button>
             )}
@@ -415,8 +526,6 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                   <div className="ts-descriptor-top-row" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <h3 style={{ ...categoryHeadingText, fontSize: isMobile ? '1.05rem' : categoryHeadingText.fontSize, margin: isMobile ? 0 : categoryHeadingText.margin }}>{catName}</h3>
-                      {/* 🛡️ Admin Verification Wrapper */}
-                      {isAdmin && <button onClick={(e) => handleDeleteCategoryPath(e, catName)} style={deleteMinimalCrossLink}>✕</button>}
                     </div>
                     {/* 📱 "View All" — only rendered on mobile, opens the modal grid of every series in this category */}
                     {isMobile && seriesList.length > 0 && (
@@ -433,7 +542,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                   <p className="ts-descriptor-meta-line" style={{ ...subLabelMetaDataText, fontSize: isMobile ? '0.66rem' : subLabelMetaDataText.fontSize, marginBottom: isMobile ? '8px' : subLabelMetaDataText.marginBottom, marginTop: isMobile ? '4px' : subLabelMetaDataText.marginTop }}>{seriesList.length} Series Total</p>
                   {/* 🛡️ Admin Verification Wrapper */}
                   {isAdmin && (
-                    <button onClick={() => handleAddTestSeries(catName)} style={smallMonochromeOutlineWidgetBtn}>
+                    <button onClick={() => handleAddTestSeries(catName)} style={adminSubtleBtn}>
                       + Add Test Series
                     </button>
                   )}
@@ -471,8 +580,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                               onClick={() => toggleEnrollSeries(seriesName)} 
                               style={{ 
                                 ...seriesActionBtnStyle, 
-                                background: isEnrolled ? '#475569' : '#000000', 
-                                color: '#ffffff',
+                                background: isEnrolled ? '#DCFCE7' : ACCENT, 
+                                color: isEnrolled ? ENROLLED_GREEN : '#ffffff',
                                 border: 'none',
                                 padding: isMobile ? '7px 4px' : seriesActionBtnStyle.padding,
                                 fontSize: isMobile ? '0.66rem' : seriesActionBtnStyle.fontSize
@@ -492,8 +601,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                               style={{ 
                                 ...seriesActionBtnStyle, 
                                 background: '#ffffff', 
-                                color: '#000000', 
-                                border: '1px solid #000000',
+                                color: ACCENT, 
+                                border: `1px solid ${ACCENT}`,
                                 padding: isMobile ? '7px 4px' : seriesActionBtnStyle.padding,
                                 fontSize: isMobile ? '0.66rem' : seriesActionBtnStyle.fontSize
                               }}
@@ -552,7 +661,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                         <button
                           type="button"
                           onClick={() => toggleEnrollSeries(seriesName)}
-                          style={{ ...seriesActionBtnStyle, background: isEnrolled ? '#475569' : '#000000', color: '#ffffff', border: 'none' }}
+                          style={{ ...seriesActionBtnStyle, background: isEnrolled ? '#DCFCE7' : ACCENT, color: isEnrolled ? ENROLLED_GREEN : '#ffffff', border: 'none' }}
                         >
                           {isEnrolled ? "Enrolled ✓" : "Enroll in Series"}
                         </button>
@@ -566,7 +675,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                             setViewAllCategory(null);
                             setView('series-detail');
                           }}
-                          style={{ ...seriesActionBtnStyle, background: '#ffffff', color: '#000000', border: '1px solid #000000' }}
+                          style={{ ...seriesActionBtnStyle, background: '#ffffff', color: ACCENT, border: `1px solid ${ACCENT}` }}
                         >
                           Explore Test Series
                         </button>
@@ -618,7 +727,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '15px' }}>
             <div>
               <div className="ts-breadcrumb" style={breadcrumbTrailRow}>
-                <span>{activeCategory}</span> / <span style={{ color: '#000000' }}>{activeSeries}</span>
+                <span>{activeCategory}</span> / <span style={{ color: ACCENT }}>{activeSeries}</span>
               </div>
               <h2 className="ts-workspace-title" style={{ fontSize: '1.8rem', fontWeight: '900', color: '#0f172a', margin: '4px 0 0 0' }}>
                 {activeSeries} Workspace
@@ -632,8 +741,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                 onClick={() => toggleEnrollSeries(activeSeries)}
                 style={{
                   ...secondaryActionBtn,
-                  background: subscribedExams.includes(activeSeries) ? '#475569' : '#000000',
-                  color: '#ffffff',
+                  background: subscribedExams.includes(activeSeries) ? '#DCFCE7' : ACCENT,
+                  color: subscribedExams.includes(activeSeries) ? ENROLLED_GREEN : '#ffffff',
                   border: 'none'
                 }}
               >
@@ -641,7 +750,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
               </button>
               {/* 🛡️ Admin Verification Wrapper */}
               {isAdmin && (
-                <button onClick={() => setShowAddSectionModal(true)} style={secondaryActionBtn}>+ Add Section Tab</button>
+                <button onClick={() => setShowAddSectionModal(true)} style={adminSubtleBtn}>+ Add Section Tab</button>
               )}
             </div>
           </div>
@@ -649,21 +758,29 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
 
         {/* ADMIN DRIVEN SECTION TAB REEL BAR */}
         {tabsList.length > 0 && (
-          <div style={tabMenuBarRow} className="ts-tab-row">
-            {tabsList.map(tab => (
-              <button 
-                key={tab} 
-                className="ts-tab-btn"
-                onClick={() => setActiveSubSection(tab)} 
-                style={{
-                  ...tabElementBtn, 
-                  color: activeSubSection === tab ? '#000000' : '#94a3b8', 
-                  borderBottom: activeSubSection === tab ? '3px solid #000000' : 'none'
-                }}
-              >
-                {tab.toUpperCase()}
+          <div style={{ ...tabMenuBarRow, justifyContent: 'space-between', alignItems: 'center' }} className="ts-tab-row">
+            <div style={{ display: 'flex', gap: '30px' }}>
+              {tabsList.map(tab => (
+                <button 
+                  key={tab} 
+                  className="ts-tab-btn"
+                  onClick={() => setActiveSubSection(tab)} 
+                  style={{
+                    ...tabElementBtn, 
+                    color: activeSubSection === tab ? ACCENT : '#94a3b8', 
+                    borderBottom: activeSubSection === tab ? `3px solid ${ACCENT}` : 'none'
+                  }}
+                >
+                  {tab.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            {/* 🛡️ Admin Verification Wrapper */}
+            {isAdmin && activeSubSection && (
+              <button onClick={() => setShowAddSubGroupModal(true)} style={{ ...adminSubtleBtn, marginBottom: '6px', whiteSpace: 'nowrap' }}>
+                + Add Sub-section
               </button>
-            ))}
+            )}
           </div>
         )}
 
@@ -671,76 +788,17 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', minHeight: '300px' }}>
           {activeSubSection ? (
             renderActiveTests.length > 0 ? (
-              renderActiveTests.map((test) => {
-                const matchingAttempts = testHistory.filter(item => item.id === test.id);
-                const isAttempted = matchingAttempts.length > 0;
-                const bestScore = isAttempted ? Math.max(...matchingAttempts.map(a => parseFloat(a.score) || 0)) : 0;
-
-                return (
-                  <div key={test.id} style={testItemInstanceRow} className="ts-item-row">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }} className="ts-item-header-row">
-                      <div>
-                        <h4 style={testTitleHeaderStyle} className="ts-item-title">{test.title}</h4>
-                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
-                          <span style={statBadge} className="ts-stat-badge">Time: {test.time} Mins</span>
-                          <span style={statBadge} className="ts-stat-badge">Questions: {test.questions}</span>
-                          {isAttempted && (
-                            <span style={{ ...statBadge, background: '#f8fafc', color: '#000000', fontWeight: '800' }} className="ts-stat-badge">
-                              Best Score: {bestScore.toFixed(2)} M
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '10px' }}>
-                        {isAttempted && (
-                          <button onClick={() => toggleAttemptsDropdown(test.id)} style={secondaryActionBtn}>
-                            {expandedTestAttempts[test.id] ? "Hide Attempts" : `View Attempts (${matchingAttempts.length})`}
-                          </button>
-                        )}
-                        <button onClick={() => handleStartTest(test)} style={monochromeLaunchTestBtn}>
-                          {isAttempted ? "Reattempt Test" : "Start Test"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {expandedTestAttempts[test.id] && isAttempted && (
-                      <div style={nestedAttemptsScrollerContainer}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          {matchingAttempts.map((attempt, index) => (
-                            <div key={attempt.attemptId || index} style={attemptHistoryItemLine} className="ts-attempt-row">
-                              <div className="ts-attempt-top" style={{ display: 'contents' }}>
-                                <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>
-                                  Run #{matchingAttempts.length - index} — Completed {attempt.date}
-                                </span>
-                                <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#0f172a' }}>
-                                  Score: {parseFloat(attempt.score).toFixed(2)} M ({attempt.accuracy})
-                                </span>
-                              </div>
-                              <button 
-                                type="button"
-                                onClick={() => handleViewDetailedReview(attempt)} 
-                                style={{
-                                  background: '#000000',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  padding: '6px 12px',
-                                  borderRadius: '6px',
-                                  fontWeight: '700',
-                                  fontSize: '0.78rem',
-                                  cursor: 'pointer',
-                                  display: 'inline-block'
-                                }}
-                              >
-                                Detailed Review
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+              <>
+                {/* 🗂️ Sub-grouped tests — each group gets its own small header */}
+                {getSubGroupsForActiveSection().map((subGroup) => (
+                  <div key={subGroup} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    <h5 style={subGroupHeaderStyle}>{subGroup}</h5>
+                    {getTestsForSubGroup(subGroup).map((test) => renderTestCard(test))}
                   </div>
-                );
-              })
+                ))}
+                {/* Ungrouped tests — rendered flat, same as before sub-groups existed */}
+                {getUngroupedTests().map((test) => renderTestCard(test))}
+              </>
             ) : (
               <p style={emptyStateTextPlaceholder}>No mock test packets loaded into this path layer yet.</p>
             )
@@ -762,6 +820,21 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
             </div>
           </div>
         )}
+
+        {/* MODAL: INJECT NEW SUB-GROUP INSIDE THE ACTIVE SECTION TAB */}
+        {showAddSubGroupModal && (
+          <div style={modalOverlayStyle} onClick={() => setShowAddSubGroupModal(false)}>
+            <div style={modalContentCardStyle} onClick={e => e.stopPropagation()}>
+              <h3 style={{ margin: '0 0 4px 0', fontWeight: '900', color: '#0f172a' }}>Add Sub-section</h3>
+              <p style={{ margin: '0 0 15px 0', fontSize: '0.8rem', color: '#94a3b8', fontWeight: '600' }}>Nested inside "{activeSubSection}"</p>
+              <input style={inputStyle} placeholder="e.g. Maths, Reasoning, English" value={newSubGroupName} onChange={e => setNewSubGroupName(e.target.value)} />
+              <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
+                <button onClick={() => setShowAddSubGroupModal(false)} style={modalCancelBtn}>Cancel</button>
+                <button onClick={handleAddNewSubGroup} style={modalConfirmBtn}>Create Sub-section</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -770,9 +843,11 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
 };
 
 // --- STYLES ARCHITECTURE SCHEMAS MAP ---
-const containerStyle = { padding: '20px 10px', maxWidth: '1200px', margin: '0 auto' }; const headerPanelRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }; const monochromeSolidDarkActionBtn = { background: '#000000', color: '#ffffff', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer' }; const horizontalStackColumnLayout = { display: 'flex', flexDirection: 'column', gap: '28px' }; const horizontalCategorySpaceRow = { display: 'flex', flexDirection: 'row', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '24px', padding: '24px', alignItems: 'stretch', gap: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.005)' }; const categoryLeftDescriptorBlock = { width: '220px', flexShrink: 0, borderRight: '1px solid #f1f5f9', paddingRight: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }; const categoryHeadingText = { margin: '0 0 2px 0', fontSize: '1.4rem', fontWeight: '900', color: '#0f172a', letterSpacing: '-0.3px' }; const deleteMinimalCrossLink = { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }; const subLabelMetaDataText = { margin: '0 0 16px 0', fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }; const smallMonochromeOutlineWidgetBtn = { background: '#ffffff', border: '1px solid #000000', color: '#000000', padding: '8px 12px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', textAlign: 'center' }; const seriesHorizontalFlexScroller = { display: 'flex', flexDirection: 'row', gap: '16px', width: 'max-content', alignItems: 'center' }; const seriesChronologicalCardBox = { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '22px', width: '210px', flexShrink: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }; const seriesThemeTitleCardHeader = { margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: '900', color: '#0f172a', lineHeight: '1.3' }; const totalTestCountFooterText = { margin: '0 0 20px 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }; const seriesCardActionContainerLayout = { display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', marginTop: 'auto' }; const seriesActionBtnStyle = { width: '100%', padding: '10px', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '800', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s ease', boxSizing: 'border-box' }; const backDirectoryLinkBtn = { background: '#ffffff', border: '1px solid #000000', color: '#000000', padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer' }; const breadcrumbTrailRow = { fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }; const tabMenuBarRow = { display: 'flex', gap: '30px', borderBottom: '1px solid #e2e8f0', marginBottom: '25px' }; const tabElementBtn = { background: 'none', border: 'none', padding: '12px 6px', fontWeight: '800', cursor: 'pointer', fontSize: '0.88rem', letterSpacing: '0.3px' }; const testItemInstanceRow = { background: '#ffffff', padding: '20px 24px', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }; const testTitleHeaderStyle = { margin: 0, fontSize: '1.1rem', color: '#0f172a', fontWeight: '800' }; const statBadge = { fontSize: '0.8rem', color: '#475569', background: '#f1f5f9', padding: '4px 10px', borderRadius: '6px', fontWeight: '700' }; const secondaryActionBtn = { background: '#ffffff', border: '1px solid #cbd5e1', padding: '10px 18px', borderRadius: '10px', color: '#475569', fontWeight: '700', cursor: 'pointer', fontSize: '0.82rem' }; const monochromeLaunchTestBtn = { background: '#000000', color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: '800', fontSize: '0.82rem' }; const nestedAttemptsScrollerContainer = { background: '#f8fafc', padding: '16px', borderRadius: '14px', border: '1px dashed #000000', marginTop: '16px' }; const attemptHistoryItemLine = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }; const emptyStateTextPlaceholder = { textAlign: 'center', color: '#94a3b8', padding: '40px 0', fontSize: '0.88rem', fontWeight: '600', fontStyle: 'italic' }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }; const modalContentCardStyle = { background: '#ffffff', padding: '30px', borderRadius: '24px', width: '90%', maxWidth: '400px', border: '1px solid #e2e8f0' }; const inputStyle = { width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', marginBottom: '14px', fontWeight: '600' }; const modalConfirmBtn = { flex: 1.3, padding: '12px', background: '#000000', color: '#ffffff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const modalCancelBtn = { flex: 1, padding: '12px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const emptySeriesHorizontalPlaceholder = { color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic', fontWeight: '500', paddingLeft: '10px' };
+const containerStyle = { padding: '20px 10px', maxWidth: '1200px', margin: '0 auto' }; const headerPanelRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }; const monochromeSolidDarkActionBtn = { background: ACCENT, color: '#ffffff', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer' };
+const adminSubtleBtn = { background: '#F1F5F9', color: '#64748b', border: '1px dashed #cbd5e1', padding: '8px 14px', borderRadius: '8px', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer' }; const horizontalStackColumnLayout = { display: 'flex', flexDirection: 'column', gap: '28px' }; const horizontalCategorySpaceRow = { display: 'flex', flexDirection: 'row', background: '#ffffff', border: '1px solid #EDEBF5', borderRadius: '24px', padding: '24px', alignItems: 'stretch', gap: '24px', boxShadow: '0 4px 18px rgba(112, 101, 186, 0.08)' }; const categoryLeftDescriptorBlock = { width: '220px', flexShrink: 0, borderRight: '1px solid #f1f5f9', paddingRight: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }; const categoryHeadingText = { margin: '0 0 2px 0', fontSize: '1.4rem', fontWeight: '900', color: '#0f172a', letterSpacing: '-0.3px' }; const subLabelMetaDataText = { margin: '0 0 16px 0', fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }; const smallMonochromeOutlineWidgetBtn = { background: '#ffffff', border: `1px solid ${ACCENT}`, color: ACCENT, padding: '8px 12px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', textAlign: 'center' }; const seriesHorizontalFlexScroller = { display: 'flex', flexDirection: 'row', gap: '16px', width: 'max-content', alignItems: 'center' }; const seriesChronologicalCardBox = { background: '#ffffff', border: '1px solid #EDEBF5', borderRadius: '20px', padding: '22px', width: '210px', flexShrink: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', boxShadow: '0 4px 16px rgba(112, 101, 186, 0.10)' }; const seriesThemeTitleCardHeader = { margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: '900', color: '#0f172a', lineHeight: '1.3' }; const totalTestCountFooterText = { margin: '0 0 20px 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }; const seriesCardActionContainerLayout = { display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', marginTop: 'auto' }; const seriesActionBtnStyle = { width: '100%', padding: '10px', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '800', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s ease', boxSizing: 'border-box' }; const backDirectoryLinkBtn = { background: '#ffffff', border: `1px solid ${ACCENT}`, color: ACCENT, padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer' }; const breadcrumbTrailRow = { fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }; const tabMenuBarRow = { display: 'flex', gap: '30px', borderBottom: '1px solid #e2e8f0', marginBottom: '25px' }; const tabElementBtn = { background: 'none', border: 'none', padding: '12px 6px', fontWeight: '800', cursor: 'pointer', fontSize: '0.88rem', letterSpacing: '0.3px' }; const testItemInstanceRow = { background: '#ffffff', padding: '20px 24px', borderRadius: '20px', border: '1px solid #EDEBF5', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', boxShadow: '0 3px 12px rgba(112, 101, 186, 0.07)' }; const testTitleHeaderStyle = { margin: 0, fontSize: '1.1rem', color: '#0f172a', fontWeight: '800' }; const statBadge = { fontSize: '0.8rem', color: '#475569', background: '#f1f5f9', padding: '4px 10px', borderRadius: '6px', fontWeight: '700' }; const secondaryActionBtn = { background: '#ffffff', border: '1px solid #cbd5e1', padding: '10px 18px', borderRadius: '10px', color: '#475569', fontWeight: '700', cursor: 'pointer', fontSize: '0.82rem' }; const monochromeLaunchTestBtn = { background: ACCENT, color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: '800', fontSize: '0.82rem' }; const nestedAttemptsScrollerContainer = { background: '#F8F7FC', padding: '16px', borderRadius: '14px', border: `1px dashed ${ACCENT}`, marginTop: '16px' }; const attemptHistoryItemLine = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }; const emptyStateTextPlaceholder = { textAlign: 'center', color: '#94a3b8', padding: '40px 0', fontSize: '0.88rem', fontWeight: '600', fontStyle: 'italic' }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }; const modalContentCardStyle = { background: '#ffffff', padding: '30px', borderRadius: '24px', width: '90%', maxWidth: '400px', border: '1px solid #e2e8f0' }; const inputStyle = { width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', marginBottom: '14px', fontWeight: '600' }; const modalConfirmBtn = { flex: 1.3, padding: '12px', background: ACCENT, color: '#ffffff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const modalCancelBtn = { flex: 1, padding: '12px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const emptySeriesHorizontalPlaceholder = { color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic', fontWeight: '500', paddingLeft: '10px' };
+const subGroupHeaderStyle = { margin: '4px 0 0 0', fontSize: '0.78rem', fontWeight: '800', color: ACCENT, textTransform: 'uppercase', letterSpacing: '0.6px', paddingLeft: '2px' };
 const scrollArrowBtnStyle = { flexShrink: 0, width: '28px', height: '28px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', fontSize: '1.1rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 };
-const viewAllTriggerBtn = { background: 'none', border: '1px solid #000000', color: '#000000', padding: '8px 16px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
+const viewAllTriggerBtn = { background: 'none', border: `1px solid ${ACCENT}`, color: ACCENT, padding: '8px 16px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
 const viewAllCardStyle = { background: '#ffffff', borderRadius: '24px', padding: '24px', width: '90%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto', border: '1px solid #e2e8f0', boxSizing: 'border-box' };
 const viewAllGridStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' };
 
