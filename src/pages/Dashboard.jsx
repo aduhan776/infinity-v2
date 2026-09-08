@@ -172,48 +172,9 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
         }
         .nx-explore-btn:hover { background: #6157A8 !important; }
         .nx-folder-card:hover { border-color: #C6C2E8 !important; box-shadow: 0 10px 28px rgba(112, 101, 186, 0.28) !important; }
-        .nx-peek-card { position: relative; z-index: 1; }
-        .nx-peek-card::before {
-          content: '';
-          position: absolute;
-          top: -6px;
-          left: -6px;
-          width: 34px;
-          height: 34px;
-          border-top: 3px solid #7065BA;
-          border-left: 3px solid #7065BA;
-          border-radius: 8px 0 0 0;
-          z-index: -1;
-        }
-        .nx-folder-card.nx-peek-card::before {
-          width: 44px;
-          height: 44px;
-          top: -8px;
-          left: -8px;
-          border-top: 3px solid #7065BA;
-          border-left: 3px solid #7065BA;
-          border-radius: 10px 0 0 0;
-        }
       `}</style>
 
       <div style={{ ...mainSplitFlexLayoutContainer, flexDirection: isMobile ? 'column' : 'row', overflow: isMobile ? 'visible' : 'hidden', gap: isMobile ? '20px' : '24px' }}>
-        {isMobile && (
-          <div style={mobileStatsRowStyle}>
-            <div className="nx-peek-card" style={mobileStatChip}>
-              <div style={mobileStatChipNumber}>{brainFeedCount}</div>
-              <div style={mobileStatChipLabel}>BrainFeed</div>
-            </div>
-            <div className="nx-peek-card" style={mobileStatChip}>
-              <div style={mobileStatChipNumber}>{totalTests}</div>
-              <div style={mobileStatChipLabel}>Tests</div>
-            </div>
-            <div className="nx-peek-card" style={mobileStatChip}>
-              <div style={mobileStatChipNumber}>{streakCount}</div>
-              <div style={mobileStatChipLabel}>Streak</div>
-            </div>
-          </div>
-        )}
-
         <div style={{ ...leftMainScrollableColumn, height: isMobile ? 'auto' : '100%', overflowY: isMobile ? 'visible' : 'auto' }}>
           <div style={{ borderLeft: `3px solid ${ACCENT}`, paddingLeft: '14px' }}>
             <h2 style={{
@@ -229,9 +190,26 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
               Welcome back, {userName}!
             </h2>
             <p style={{ color: '#9691C4', margin: '4px 0 0 0', fontSize: isMobile ? '0.72rem' : '0.8rem', fontWeight: '600' }}>
-              Practice hard!!
+              Practice hard! 💪
             </p>
           </div>
+
+          {isMobile && (
+            <div style={{ ...mobileStatsRowStyle, marginTop: '18px' }}>
+              <div style={mobileStatChip}>
+                <div style={mobileStatChipNumber}>{brainFeedCount}</div>
+                <div style={mobileStatChipLabel}>BrainFeed</div>
+              </div>
+              <div style={mobileStatChip}>
+                <div style={mobileStatChipNumber}>{totalTests}</div>
+                <div style={mobileStatChipLabel}>Tests</div>
+              </div>
+              <div style={mobileStatChip}>
+                <div style={mobileStatChipNumber}>{streakCount}</div>
+                <div style={mobileStatChipLabel}>Streak</div>
+              </div>
+            </div>
+          )}
                   
           <div style={{ marginTop: isMobile ? '20px' : '30px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -245,7 +223,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(230px, 1fr))', gap: isMobile ? '12px' : '20px', paddingBottom: '20px' }}>
               
               {/* INDEPENDENT PRIVATE AI LAB GENERATED FOLDER snaps into Dashboard grid */}
-              <div className="nx-folder-card nx-peek-card" style={{ ...folderCardStyle, padding: isMobile ? '11px' : folderCardStyle.padding }} onClick={() => setShowAiFolderModal(true)}>
+              <div className="nx-folder-card" style={{ ...folderCardStyle, padding: isMobile ? '11px' : folderCardStyle.padding }} onClick={() => setShowAiFolderModal(true)}>
                 <div style={{ ...folderIconWrapperFrame, background: ACCENT, width: isMobile ? '28px' : folderIconWrapperFrame.width, height: isMobile ? '28px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '6px' : folderIconWrapperFrame.margin }}>
                   <svg width={isMobile ? "12" : "20"} height={isMobile ? "12" : "20"} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 2h4M12 2v7M5 21h14M5 21l6-12h2l6 12M7 17h10"/>
@@ -257,7 +235,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
               </div>
 
               {subscribedExams.map((folder) => (
-                <div key={folder} className="nx-folder-card nx-peek-card" style={{ ...folderCardStyle, padding: isMobile ? '11px' : folderCardStyle.padding }}>
+                <div key={folder} className="nx-folder-card" style={{ ...folderCardStyle, padding: isMobile ? '11px' : folderCardStyle.padding }}>
                   <button type="button" onClick={(e) => handleUnpinClick(e, folder)} style={unpinIconCloseWidget}>✕</button>
                   <div style={{ ...folderIconWrapperFrame, width: isMobile ? '28px' : folderIconWrapperFrame.width, height: isMobile ? '28px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '6px' : folderIconWrapperFrame.margin }}>
                     <svg width={isMobile ? "12" : "20"} height={isMobile ? "12" : "20"} viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -277,7 +255,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
           <p style={{ color: '#9CA3AF', fontSize: '0.7rem', margin: '0 0 16px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Live Platform Index</p>
 
           <div style={verticalMetricsStackGapLayout}>
-            <div className="nx-peek-card" style={glanceStatMetricCard}>
+            <div style={glanceStatMetricCard}>
               <div style={glanceCardHeaderLineRow}>
                 <span style={glanceCardTitleLabel}>BrainFeed Practice</span>
                 <div style={glanceIconWrapperCircle}>
@@ -288,7 +266,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
               <div style={glanceCardBottomTrendingIndicatorLine}><span style={{ color: '#0F6E56', marginRight: '4px' }}>Live</span> metrics track active</div>
             </div>
 
-            <div className="nx-peek-card" style={glanceStatMetricCard}>
+            <div style={glanceStatMetricCard}>
               <div style={glanceCardHeaderLineRow}>
                 <span style={glanceCardTitleLabel}>Tests Attempted</span>
                 <div style={glanceIconWrapperCircle}>
@@ -299,7 +277,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
               <div style={glanceCardBottomTrendingIndicatorLine}><span style={{ color: '#0F6E56', marginRight: '4px' }}>Sync</span> database node connected</div>
             </div>
 
-            <div className="nx-peek-card" style={glanceStatMetricCard}>
+            <div style={glanceStatMetricCard}>
               <div style={glanceCardHeaderLineRow}>
                 <span style={glanceCardTitleLabel}>Current Streak</span>
                 <div style={glanceIconWrapperCircle}>
