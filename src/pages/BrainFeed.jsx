@@ -3,6 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; 
 import LatexText from '../components/LatexText'; // 👈 YEH IMPORT GAYAB THA BHAI, AB FIXED HAI!
 
+// --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
+const ACCENT = '#7065BA';
+
+// --- 📏 DYNAMIC QUESTION FONT SIZE: longer questions shrink so options never overflow the card frame ---
+const getQuestionFontSize = (text, isMobile) => {
+  const len = (text || '').length;
+  const maxSize = isMobile ? 1.15 : 1.5;
+  const minSize = isMobile ? 0.85 : 0.95;
+  if (len <= 60) return `${maxSize}rem`;
+  if (len >= 220) return `${minSize}rem`;
+  const ratio = (len - 60) / (220 - 60);
+  const size = maxSize - ratio * (maxSize - minSize);
+  return `${size.toFixed(2)}rem`;
+};
+
 const BrainFeed = () => {
   const navigate = useNavigate();
   // --- CONFIGURATION FORM STATES ---
@@ -657,6 +672,9 @@ const BrainFeed = () => {
       <div style={{ ...feedWrapperStyle, height: isMobile ? '100dvh' : '100vh' }}>
         <div style={{ ...topBarFeedStyle, padding: isMobile ? '12px 16px' : '16px 40px' }}>
           <button style={exitBtnStyle} onClick={handleTriggerExit}>End Session</button>
+          {isMobile && (
+            <div style={scrollHintStyle}>Scroll up/down</div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
             <div style={counterBadgeStyle}>Card {currentIdx + 1} / {questions.length}</div>
             {sessionMode === 'revise' && <span style={modeHintTextStyle}>Revise mode — read only</span>}
@@ -664,17 +682,13 @@ const BrainFeed = () => {
           </div>
         </div>
 
-        {isMobile && (
-          <div style={scrollHintStyle}>Scroll up or down to move between questions</div>
-        )}
-
         <div style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           width: '100%',
-          height: isMobile ? 'calc(100dvh - 92px)' : '84vh',
-          marginTop: isMobile ? '92px' : '65px',
+          height: isMobile ? 'calc(100dvh - 68px)' : '84vh',
+          marginTop: isMobile ? '68px' : '65px',
           boxSizing: 'border-box',
           padding: isMobile ? '0' : '0 40px',
           gap: isMobile ? '0' : '14px'
@@ -729,9 +743,9 @@ const BrainFeed = () => {
                               style={{
                                 ...saveBtnStyle,
                                 opacity: itemChoice === undefined ? 0.5 : 1,
-                                background: savedStatus[idx] ? '#f8fafc' : '#000000',
+                                background: savedStatus[idx] ? '#f8fafc' : ACCENT,
                                 color: savedStatus[idx] ? '#10b981' : '#ffffff',
-                                borderColor: savedStatus[idx] ? '#10b981' : '#000000',
+                                borderColor: savedStatus[idx] ? '#10b981' : ACCENT,
                                 cursor: (itemChoice === undefined || savedStatus[idx]) ? 'not-allowed' : 'pointer'
                               }}
                             >
@@ -741,7 +755,7 @@ const BrainFeed = () => {
                         </div>
                         
                         <div style={{ ...scrollableCardContentBody, overflowY: isMobile ? 'visible' : 'auto', flex: isMobile ? 'none' : 1 }}>
-                          <h2 style={questionTextStyle}><LatexText text={q.question} /></h2>
+                          <h2 style={{ ...questionTextStyle, fontSize: getQuestionFontSize(q.question, isMobile) }}><LatexText text={q.question} /></h2>
 
                           {showWarning && idx === currentIdx && (
                             <div style={inlineCardWarningStyle}>
@@ -783,7 +797,6 @@ const BrainFeed = () => {
                                   {/* 💡 Explanation pops up directly above the correct option, once the server confirms it */}
                                   {resultData && isCorrectOption && (
                                     <div style={explanationPopupStyle}>
-                                      <div style={explanationPopupHeader}>Explanation</div>
                                       <p style={explanationPopupText}>
                                         <LatexText text={resultData.explanation} />
                                       </p>
@@ -866,13 +879,13 @@ const BrainFeed = () => {
                 </div>
                 <div style={{ ...metricRowItem, border: 'none', padding: 0, marginTop: '4px' }}>
                   <span style={{ ...metricLabelText, fontWeight: '700', color: '#0f172a' }}>Your New Overall Accuracy</span>
-                  <span style={{ ...metricValueBadge, color: '#ffffff', background: '#000000', fontWeight: '800' }}>{metricsSummary.newAccuracy}%</span>
+                  <span style={{ ...metricValueBadge, color: '#ffffff', background: ACCENT, fontWeight: '800' }}>{metricsSummary.newAccuracy}%</span>
                 </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '24px' }}>
                 {!hasLoadedMore ? (
-                  <button onClick={() => fetchBrainFeedPacket(true)} style={{ ...modalActionBtn, background: '#000000', color: '#ffffff' }}>
+                  <button onClick={() => fetchBrainFeedPacket(true)} style={{ ...modalActionBtn, background: ACCENT, color: '#ffffff' }}>
                     Load More Questions
                   </button>
                 ) : (
@@ -932,7 +945,7 @@ const BrainFeed = () => {
               </p>
               <button 
                 onClick={() => setCustomAlert({ show: false, title: '', message: '' })} 
-                style={{ ...modalActionBtn, background: '#000000' }}
+                style={{ ...modalActionBtn, background: ACCENT }}
               >
                 Dismiss
               </button>
@@ -959,7 +972,7 @@ const BrainFeed = () => {
             <p style={{ color: '#64748b', fontSize: '0.88rem', lineHeight: '1.6', fontWeight: '500', margin: '0 0 20px 0' }}>
               You were on question <strong>{(resumePrompt.currentIdx || 0) + 1}</strong> of <strong>{resumePrompt.questions.length}</strong> — {Object.keys(resumePrompt.selectedAnswers || {}).length} answered so far.
             </p>
-            <button onClick={handleResumeSession} style={{ ...modalActionBtn, background: '#000000', marginBottom: '10px' }}>
+            <button onClick={handleResumeSession} style={{ ...modalActionBtn, background: ACCENT, marginBottom: '10px' }}>
               Continue Session
             </button>
             <button onClick={handleDiscardSession} style={{ ...modalActionBtn, background: '#fff', color: '#ef4444', border: '1px solid #fee2e2' }}>
@@ -982,30 +995,30 @@ const BrainFeed = () => {
         padding: isMobile ? '18px' : '35px',
         ...(isMobile ? { width: '100%', maxWidth: '100%', height: '100%', border: 'none', borderRadius: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' } : {})
       }}>
-        <h2 style={{ color: '#0f172a', marginBottom: '5px', fontWeight: '900', letterSpacing: '-0.5px', fontSize: isMobile ? '1.1rem' : '1.5rem' }}>Start a BrainFeed Session</h2>
-        <p style={{ color: '#64748b', marginBottom: isMobile ? '12px' : '25px', fontSize: isMobile ? '0.76rem' : '0.9rem', fontWeight: '500' }}>
+        <h2 style={{ color: '#0f172a', marginBottom: '5px', fontWeight: '800', letterSpacing: '-0.5px', fontSize: isMobile ? '1.1rem' : '1.5rem', borderLeft: `3px solid ${ACCENT}`, paddingLeft: '12px' }}>Start a BrainFeed Session</h2>
+        <p style={{ color: '#64748b', marginBottom: isMobile ? '12px' : '25px', fontSize: isMobile ? '0.76rem' : '0.9rem', fontWeight: '500', paddingLeft: '15px' }}>
           Fill in the details to start practicing.
         </p>
         
         <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : flexRow.alignItems, gap: isMobile ? '0px' : '15px', marginBottom: isMobile ? '0' : flexRow.marginBottom }}>
           <div style={{ flex: 1 }}>
-            <label style={labelStyle}>Target Exam <span style={mandatoryStar}>*</span></label>
+            <label style={labelStyle}>🎓 Target Exam <span style={mandatoryStar}>*</span></label>
             <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. UPSC, SSC, Banking" value={exam} onChange={e => setExam(e.target.value)} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={labelStyle}>Subject / Section <span style={mandatoryStar}>*</span></label>
+            <label style={labelStyle}>📘 Subject / Section <span style={mandatoryStar}>*</span></label>
             <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Maths, English, GK" value={subjectSection} onChange={e => setSubjectSection(e.target.value)} />
           </div>
         </div>
 
         <div>
-          <label style={labelStyle}>Topic <span style={mandatoryStar}>*</span></label>
+          <label style={labelStyle}>🎯 Topic <span style={mandatoryStar}>*</span></label>
           <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Trigonometry, Mughal Empire" value={subject} onChange={e => setSubject(e.target.value)} />
         </div>
 
         <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : flexRow.alignItems, gap: isMobile ? '0px' : '15px' }}>
           <div style={{ flex: 1 }}>
-            <label style={labelStyle}>Difficulty</label>
+            <label style={labelStyle}>📊 Difficulty</label>
             <div style={{ ...horizontalDifficultyContainer, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }}>
               {difficultyLevels.map((level) => (
                 <button
@@ -1015,9 +1028,9 @@ const BrainFeed = () => {
                   style={{
                     ...difficultyTabOption,
                     flex: 1,
-                    background: difficulty === level.value ? '#000000' : '#f8fafc',
+                    background: difficulty === level.value ? ACCENT : '#f8fafc',
                     color: difficulty === level.value ? '#ffffff' : '#334155',
-                    borderColor: difficulty === level.value ? '#000000' : '#e2e8f0',
+                    borderColor: difficulty === level.value ? ACCENT : '#e2e8f0',
                   }}
                 >
                   {level.label}
@@ -1027,7 +1040,7 @@ const BrainFeed = () => {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }}>
-              <label style={{ ...labelStyle, marginBottom: 0, whiteSpace: 'nowrap' }}>Language</label>
+              <label style={{ ...labelStyle, marginBottom: 0, whiteSpace: 'nowrap' }}>🌐 Language</label>
               <select style={{ ...inputStyle, flex: 1, width: 'auto', padding: '11px', marginBottom: 0 }} value={language} onChange={e => setLanguage(e.target.value)}>
                 <option value="English">English</option>
                 <option value="Hindi">Hindi</option>
@@ -1044,7 +1057,7 @@ const BrainFeed = () => {
               ...actionBtn,
               padding: '14px',
               borderRadius: '10px',
-              background: cooldown > 0 ? '#94a3b8' : '#000000',
+              background: cooldown > 0 ? '#94a3b8' : ACCENT,
               cursor: cooldown > 0 ? 'not-allowed' : 'pointer'
             }}
           >
@@ -1059,6 +1072,6 @@ const BrainFeed = () => {
 // Styles Objects Matrix
 const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '35px', borderRadius: '20px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '620px' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const mandatoryStar = { color: '#ef4444', fontWeight: '900' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.95rem', outline: 'none', marginBottom: '15px', background: '#f8fafc', color: '#0f172a', fontWeight: '500' }; const flexRow = { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '5px' }; const actionBtn = { border: 'none', color: '#fff', width: '100%', fontWeight: '700', transition: '0.2s', fontSize: '0.92rem' }; const horizontalDifficultyContainer = { display: 'flex', gap: '8px', width: '100%', marginBottom: '15px' }; const difficultyTabOption = { flex: 1, padding: '11px 12px', borderRadius: '10px', border: '1px solid', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s ease', textAlign: 'center' }; const feedWrapperStyle = { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: 'Inter, sans-serif' }; const topBarFeedStyle = { position: 'absolute', top: 0, left: 0, width: '100%', padding: '16px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box', borderBottom: '1px solid #e2e8f0', background: '#ffffff', zIndex: 12 }; const exitBtnStyle = { background: '#fff', color: '#ef4444', border: '1px solid #fee2e2', padding: '10px 20px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.82rem' }; const counterBadgeStyle = { background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '8px 18px', borderRadius: '30px', fontSize: '0.82rem', fontWeight: '700' }; const mainControlRowStyle = { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '24px', width: '100%', justifyContent: 'center', height: '84vh', marginTop: '65px', boxSizing: 'border-box', padding: '0 40px' }; const sideNavBtnStyle = { width: '48px', height: '48px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', fontWeight: '800', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', flexShrink: 0, outline: 'none' }; const viewportContainerStyle = { width: '100%', height: '100%', overflow: 'hidden', position: 'relative', maxWidth: '980px', flexShrink: 0 }; const sliderTrackStyle = { display: 'flex', flexDirection: 'column', width: '100%', height: '100%', transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }; const cardSlideInstanceStyle = { width: '100%', height: '100%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', padding: '10px 0' }; const splitFlexContainerLayout = { display: 'flex', flexDirection: 'row', gap: '20px', width: '100%', height: '100%', alignItems: 'stretch', justifyContent: 'center' }; const fixedQuestionCardStyle = { background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '30px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '16px', width: '610px', maxHeight: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.015)', flexShrink: 0 }; const navBtnRect = { padding: '14px 26px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.92rem', fontWeight: '800', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer', gap: '8px', outline: 'none' }; const scrollableCardContentBody = { flex: 1, overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '16px' }; const explanationPopupStyle = { background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 16px', marginBottom: '2px', boxShadow: '0 4px 12px rgba(16,185,129,0.08)' }; const explanationPopupHeader = { fontSize: '0.68rem', fontWeight: '900', letterSpacing: '0.5px', color: '#166534', marginBottom: '6px' }; const explanationPopupText = { margin: 0, fontSize: '0.85rem', color: '#166534', lineHeight: '1.5', fontWeight: '500' }; const qHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }; const qTypeLabel = { background: '#f1f5f9', color: '#475569', padding: '5px 12px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase' }; const statusIndicator = { fontSize: '0.75rem', fontWeight: '700' }; const saveBtnStyle = { border: '1px solid #e2e8f0', padding: '8px 16px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700' }; const questionTextStyle = { color: '#0f172a', margin: '5px 0', fontSize: '1.2rem', fontWeight: '800', lineHeight: '1.45', flexShrink: 0 }; const optionsContainerStyle = { display: 'flex', flexDirection: 'column', gap: '10px', margin: '5px 0', flexShrink: 0 }; const optionButtonStyle = { width: '100%', textAlign: 'left', padding: '12px 18px', borderRadius: '10px', border: '1px solid', fontSize: '0.92rem', fontWeight: '600', display: 'flex', alignItems: 'center', transition: 'all 0.15s ease' }; const optLabelMarker = { color: '#94a3b8', marginRight: '10px', fontWeight: '700' }; const inlineCardWarningStyle = { background: '#fef2f2', border: '1px solid #fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', flexShrink: 0 }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }; const modalContentCardStyle = { background: '#fff', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '380px', textAlign: 'center', border: '1px solid #e2e8f0', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }; const modalActionBtn = { width: '100%', padding: '12px', border: 'none', color: '#fff', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.88rem' }; const accuracyMetricsDashboardBox = { display: 'flex', flexDirection: 'column', gap: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px', marginTop: '16px' }; const metricRowItem = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #edf2f7', paddingBottom: '10px' }; const metricLabelText = { fontSize: '0.82rem', fontWeight: '600', color: '#475569' }; const metricValueBadge = { fontSize: '0.78rem', fontWeight: '700', padding: '4px 10px', borderRadius: '6px' };
 const modeHintTextStyle = { fontSize: '0.65rem', color: '#f59e0b', fontWeight: '700' };
-const scrollHintStyle = { position: 'fixed', top: '78px', left: 0, right: 0, textAlign: 'center', fontSize: '0.72rem', color: '#94a3b8', fontWeight: '600', zIndex: 11, padding: '4px 0', pointerEvents: 'none' };
+const scrollHintStyle = { textAlign: 'center', fontSize: '0.68rem', color: '#94a3b8', fontWeight: '600', pointerEvents: 'none', flex: 1 };
 
 export default BrainFeed;
