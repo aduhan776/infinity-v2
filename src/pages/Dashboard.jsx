@@ -172,20 +172,39 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
         }
         .nx-explore-btn:hover { background: #6157A8 !important; }
         .nx-folder-card:hover { border-color: #C6C2E8 !important; box-shadow: 0 10px 28px rgba(112, 101, 186, 0.28) !important; }
+        .nx-peek-card { position: relative; z-index: 1; }
+        .nx-peek-card::before {
+          content: '';
+          position: absolute;
+          top: -6px;
+          left: -6px;
+          width: 40px;
+          height: 40px;
+          background: #7065BA;
+          border-radius: 10px 0 10px 0;
+          z-index: -1;
+        }
+        .nx-folder-card.nx-peek-card::before {
+          width: 56px;
+          height: 56px;
+          top: -8px;
+          left: -8px;
+          border-radius: 14px 0 14px 0;
+        }
       `}</style>
 
       <div style={{ ...mainSplitFlexLayoutContainer, flexDirection: isMobile ? 'column' : 'row', overflow: isMobile ? 'visible' : 'hidden', gap: isMobile ? '20px' : '24px' }}>
         {isMobile && (
           <div style={mobileStatsRowStyle}>
-            <div style={mobileStatChip}>
+            <div className="nx-peek-card" style={mobileStatChip}>
               <div style={mobileStatChipNumber}>{brainFeedCount}</div>
               <div style={mobileStatChipLabel}>BrainFeed</div>
             </div>
-            <div style={mobileStatChip}>
+            <div className="nx-peek-card" style={mobileStatChip}>
               <div style={mobileStatChipNumber}>{totalTests}</div>
               <div style={mobileStatChipLabel}>Tests</div>
             </div>
-            <div style={mobileStatChip}>
+            <div className="nx-peek-card" style={mobileStatChip}>
               <div style={mobileStatChipNumber}>{streakCount}</div>
               <div style={mobileStatChipLabel}>Streak</div>
             </div>
@@ -206,9 +225,6 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
             }}>
               Welcome back, {userName}!
             </h2>
-            <p style={{ color: '#6B7280', marginTop: '4px', fontSize: '0.8rem', fontWeight: '500' }}>
-              Your pinned exam series and quick stats, all in one place.
-            </p>
           </div>
                   
           <div style={{ marginTop: isMobile ? '20px' : '30px' }}>
@@ -223,25 +239,25 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(230px, 1fr))', gap: isMobile ? '12px' : '20px', paddingBottom: '20px' }}>
               
               {/* INDEPENDENT PRIVATE AI LAB GENERATED FOLDER snaps into Dashboard grid */}
-              <div className="nx-folder-card" style={{ ...folderCardStyle, padding: isMobile ? '14px' : folderCardStyle.padding }} onClick={() => setShowAiFolderModal(true)}>
+              <div className="nx-folder-card nx-peek-card" style={{ ...folderCardStyle, padding: isMobile ? '14px' : folderCardStyle.padding }} onClick={() => setShowAiFolderModal(true)}>
                 <div style={{ ...folderIconWrapperFrame, background: ACCENT, width: isMobile ? '34px' : folderIconWrapperFrame.width, height: isMobile ? '34px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '8px' : folderIconWrapperFrame.margin }}>
                   <svg width={isMobile ? "15" : "20"} height={isMobile ? "15" : "20"} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 2h4M12 2v7M5 21h14M5 21l6-12h2l6 12M7 17h10"/>
                   </svg>
                 </div>
                 <h3 style={{ margin: '0 0 4px 0', fontSize: isMobile ? '0.85rem' : '1.15rem', fontWeight: '700', color: '#1A1A2E' }}>AI Lab Generated</h3>
-                <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#6B7280', margin: isMobile ? '0 0 10px 0' : '0 0 20px 0', fontWeight: '500' }}>{aiLabTests.length} custom tests compiled.</p>
+                <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#6B7280', margin: isMobile ? '0 0 8px 0' : '0 0 12px 0', fontWeight: '500' }}>{aiLabTests.length} custom tests compiled.</p>
                 <button type="button" className="nx-explore-btn" onClick={(e) => { e.stopPropagation(); setShowAiFolderModal(true); }} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '7px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.7rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
               </div>
 
               {subscribedExams.map((folder) => (
-                <div key={folder} className="nx-folder-card" style={{ ...folderCardStyle, padding: isMobile ? '14px' : folderCardStyle.padding }}>
+                <div key={folder} className="nx-folder-card nx-peek-card" style={{ ...folderCardStyle, padding: isMobile ? '14px' : folderCardStyle.padding }}>
                   <button type="button" onClick={(e) => handleUnpinClick(e, folder)} style={unpinIconCloseWidget}>✕</button>
                   <div style={{ ...folderIconWrapperFrame, width: isMobile ? '34px' : folderIconWrapperFrame.width, height: isMobile ? '34px' : folderIconWrapperFrame.height, marginBottom: isMobile ? '8px' : folderIconWrapperFrame.margin }}>
                     <svg width={isMobile ? "15" : "20"} height={isMobile ? "15" : "20"} viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                   </div>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: isMobile ? '0.85rem' : '1.15rem', fontWeight: '600', color: '#1A1A2E' }}>{folder}</h3>
-                  <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#6B7280', margin: isMobile ? '0 0 10px 0' : '0 0 20px 0', fontWeight: '500' }}>Tracked inside dashboard stream.</p>
+                  <p style={{ fontSize: isMobile ? '0.68rem' : '0.8rem', color: '#6B7280', margin: isMobile ? '0 0 8px 0' : '0 0 12px 0', fontWeight: '500' }}>Tracked inside dashboard stream.</p>
                   <button type="button" className="nx-explore-btn" onClick={() => handleExploreRedirect(folder)} style={{ ...exploreSeriesSolidActionBtn, padding: isMobile ? '7px' : exploreSeriesSolidActionBtn.padding, fontSize: isMobile ? '0.7rem' : exploreSeriesSolidActionBtn.fontSize }}>Explore Series →</button>
                 </div>
               ))}
@@ -255,7 +271,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
           <p style={{ color: '#9CA3AF', fontSize: '0.7rem', margin: '0 0 16px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Live Platform Index</p>
 
           <div style={verticalMetricsStackGapLayout}>
-            <div style={glanceStatMetricCard}>
+            <div className="nx-peek-card" style={glanceStatMetricCard}>
               <div style={glanceCardHeaderLineRow}>
                 <span style={glanceCardTitleLabel}>BrainFeed Practice</span>
                 <div style={glanceIconWrapperCircle}>
@@ -266,7 +282,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
               <div style={glanceCardBottomTrendingIndicatorLine}><span style={{ color: '#0F6E56', marginRight: '4px' }}>Live</span> metrics track active</div>
             </div>
 
-            <div style={glanceStatMetricCard}>
+            <div className="nx-peek-card" style={glanceStatMetricCard}>
               <div style={glanceCardHeaderLineRow}>
                 <span style={glanceCardTitleLabel}>Tests Attempted</span>
                 <div style={glanceIconWrapperCircle}>
@@ -277,7 +293,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
               <div style={glanceCardBottomTrendingIndicatorLine}><span style={{ color: '#0F6E56', marginRight: '4px' }}>Sync</span> database node connected</div>
             </div>
 
-            <div style={glanceStatMetricCard}>
+            <div className="nx-peek-card" style={glanceStatMetricCard}>
               <div style={glanceCardHeaderLineRow}>
                 <span style={glanceCardTitleLabel}>Current Streak</span>
                 <div style={glanceIconWrapperCircle}>
@@ -382,7 +398,7 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
 const ACCENT = '#7065BA';
 
 // Styles Configuration Map
-const dashboardLayoutWrapper = { display: 'flex', flexDirection: 'column', height: '100%', width: '100%', fontFamily: 'Inter, sans-serif', boxSizing: 'border-box' }; const mainSplitFlexLayoutContainer = { display: 'flex', flex: 1, gap: '24px', width: '100%', height: '100%', overflow: 'hidden' }; const leftMainScrollableColumn = { flex: 1, overflowY: 'auto', paddingRight: '4px', height: '100%' }; const headerSectionViewAllLink = { background: 'none', border: 'none', color: ACCENT, fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline' }; const folderCardStyle = { background: '#fff', padding: '20px', borderRadius: '14px', border: '1px solid #EDEBF5', textAlign: 'center', position: 'relative', boxShadow: '0 6px 20px rgba(112, 101, 186, 0.22)', transition: 'border-color 0.15s ease, box-shadow 0.15s ease' }; const folderIconWrapperFrame = { width: '48px', height: '48px', borderRadius: '50%', background: '#F1EFFA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px auto' }; const exploreSeriesSolidActionBtn = { width: '100%', border: 'none', color: '#fff', background: ACCENT, padding: '10px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.82rem', transition: 'background 0.15s ease' }; const unpinIconCloseWidget = { position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.82rem', color: '#9CA3AF', fontWeight: 'bold' }; const rightSidebarMetricsFixedArea = { width: '240px', flexShrink: 0, borderLeft: '1px solid #EDEBF5', paddingLeft: '20px', height: '100%', overflowY: 'auto', boxSizing: 'border-box' }; const verticalMetricsStackGapLayout = { display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }; const glanceStatMetricCard = { background: '#fff', border: '1px solid #EFEDF7', padding: '14px 16px', borderRadius: '12px', textAlign: 'left', width: '100%', boxSizing: 'border-box', boxShadow: '0 5px 16px rgba(112, 101, 186, 0.16)' }; const glanceCardHeaderLineRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }; const glanceCardTitleLabel = { fontSize: '0.78rem', color: '#6B7280', fontWeight: '500' }; const glanceIconWrapperCircle = { width: '24px', height: '24px', borderRadius: '50%', background: '#F1EFFA', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none' }; const glanceCardLargeMetricNumber = { fontSize: '1.75rem', fontWeight: '600', color: '#1A1A2E', margin: '2px 0', letterSpacing: '-0.5px' }; const glanceCardBottomTrendingIndicatorLine = { fontSize: '0.68rem', color: '#6B7280', fontWeight: '500' }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(26, 26, 46, 0.4)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }; const modalCardStyle = { background: '#fff', padding: '28px', borderRadius: '20px', width: '90%', border: '1px solid #EDEBF5', fontFamily: 'Inter, sans-serif' }; const cancelBtnStyle = { flex: 1, padding: '11px', background: '#F3F2FA', color: '#4B4B63', border: 'none', borderRadius: '10px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' }; const confirmUnpinBtnStyle = { flex: 1.3, padding: '11px', background: '#A32D2D', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' };
+const dashboardLayoutWrapper = { display: 'flex', flexDirection: 'column', height: '100%', width: '100%', fontFamily: 'Inter, sans-serif', boxSizing: 'border-box' }; const mainSplitFlexLayoutContainer = { display: 'flex', flex: 1, gap: '24px', width: '100%', height: '100%', overflow: 'hidden' }; const leftMainScrollableColumn = { flex: 1, overflowY: 'auto', paddingRight: '4px', height: '100%' }; const headerSectionViewAllLink = { background: 'none', border: 'none', color: ACCENT, fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline' }; const folderCardStyle = { background: '#fff', padding: '16px', borderRadius: '14px', border: '1px solid #EDEBF5', textAlign: 'center', position: 'relative', boxShadow: '0 6px 20px rgba(112, 101, 186, 0.22)', transition: 'border-color 0.15s ease, box-shadow 0.15s ease' }; const folderIconWrapperFrame = { width: '48px', height: '48px', borderRadius: '50%', background: '#F1EFFA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px auto' }; const exploreSeriesSolidActionBtn = { width: '100%', border: 'none', color: '#fff', background: ACCENT, padding: '10px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.82rem', transition: 'background 0.15s ease' }; const unpinIconCloseWidget = { position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.82rem', color: '#9CA3AF', fontWeight: 'bold' }; const rightSidebarMetricsFixedArea = { width: '240px', flexShrink: 0, borderLeft: '1px solid #EDEBF5', paddingLeft: '20px', height: '100%', overflowY: 'auto', boxSizing: 'border-box' }; const verticalMetricsStackGapLayout = { display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }; const glanceStatMetricCard = { background: '#fff', border: '1px solid #EFEDF7', padding: '14px 16px', borderRadius: '12px', textAlign: 'left', width: '100%', boxSizing: 'border-box', boxShadow: '0 5px 16px rgba(112, 101, 186, 0.16)' }; const glanceCardHeaderLineRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }; const glanceCardTitleLabel = { fontSize: '0.78rem', color: '#6B7280', fontWeight: '500' }; const glanceIconWrapperCircle = { width: '24px', height: '24px', borderRadius: '50%', background: '#F1EFFA', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none' }; const glanceCardLargeMetricNumber = { fontSize: '1.75rem', fontWeight: '600', color: '#1A1A2E', margin: '2px 0', letterSpacing: '-0.5px' }; const glanceCardBottomTrendingIndicatorLine = { fontSize: '0.68rem', color: '#6B7280', fontWeight: '500' }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(26, 26, 46, 0.4)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }; const modalCardStyle = { background: '#fff', padding: '28px', borderRadius: '20px', width: '90%', border: '1px solid #EDEBF5', fontFamily: 'Inter, sans-serif' }; const cancelBtnStyle = { flex: 1, padding: '11px', background: '#F3F2FA', color: '#4B4B63', border: 'none', borderRadius: '10px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' }; const confirmUnpinBtnStyle = { flex: 1.3, padding: '11px', background: '#A32D2D', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' };
 const mobileStatsRowStyle = { display: 'flex', width: '100%', gap: '10px' };
 const mobileStatChip = { flex: 1, background: '#fff', border: '1px solid #EFEDF7', borderRadius: '12px', padding: '12px 6px', textAlign: 'center', boxShadow: '0 5px 16px rgba(112, 101, 186, 0.16)' };
 const mobileStatChipNumber = { fontSize: '1.25rem', fontWeight: '600', color: '#1A1A2E', letterSpacing: '-0.5px' };
