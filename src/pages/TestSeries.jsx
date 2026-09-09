@@ -170,13 +170,24 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
     );
   };
 
-  // --- 🗂️ SUB-GROUP LAYER: optional deeper grouping inside a section tab
-  // (e.g. "Subject Test" tab split into "Maths" / "Reasoning" sub-groups).
+  // --- 🗂️ SUB-GROUP LAYER: optional deeper grouping *inside* a Section tab
+  // (a "Section" is the sub_section column — e.g. "Subject Test", "Full Mock
+  // Test". A "Sub-section" here is one level deeper, stored in sub_group —
+  // e.g. "Subject Test" section split into "Maths" / "Reasoning" sub-groups).
   // Tests with no sub_group render in a flat, ungrouped bucket for
   // backward compatibility with existing data.
+  //
+  // 🐛 Must scan allMockTests directly (like getSectionsForSeries does for
+  // Section tabs), NOT go through getTestsForActiveSection() — a freshly
+  // created sub-group is a placeholder row with title=null, and
+  // getTestsForActiveSection() filters out rows without a title (it's meant
+  // for the actual test list), so a brand-new empty sub-group was silently
+  // invisible until a real test got added under it.
   const getSubGroupsForActiveSection = () => {
-    const tests = getTestsForActiveSection();
-    return Array.from(new Set(tests.filter(t => t.sub_group).map(t => t.sub_group)));
+    return Array.from(new Set(allMockTests
+      .filter(t => t.category_name === activeCategory && t.series_name === activeSeries && t.sub_section === activeSubSection && t.sub_group)
+      .map(t => t.sub_group)
+    ));
   };
   const getTestsForSubGroup = (subGroup) => {
     return getTestsForActiveSection().filter(t => t.sub_group === subGroup);
@@ -787,15 +798,23 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         {/* PAPERS SCOPE DISPLAY LIST CONTAINER */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', minHeight: '300px' }}>
           {activeSubSection ? (
-            renderActiveTests.length > 0 ? (
+            (renderActiveTests.length > 0 || getSubGroupsForActiveSection().length > 0) ? (
               <>
-                {/* 🗂️ Sub-grouped tests — each group gets its own small header */}
-                {getSubGroupsForActiveSection().map((subGroup) => (
-                  <div key={subGroup} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    <h5 style={subGroupHeaderStyle}>{subGroup}</h5>
-                    {getTestsForSubGroup(subGroup).map((test) => renderTestCard(test))}
-                  </div>
-                ))}
+                {/* 🗂️ Sub-groups — each renders its header even if empty, so admins
+                    can see a freshly-created sub-group before any test is added under it. */}
+                {getSubGroupsForActiveSection().map((subGroup) => {
+                  const groupTests = getTestsForSubGroup(subGroup);
+                  return (
+                    <div key={subGroup} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      <h5 style={subGroupHeaderStyle}>{subGroup}</h5>
+                      {groupTests.length > 0 ? (
+                        groupTests.map((test) => renderTestCard(test))
+                      ) : (
+                        <p style={{ ...emptyStateTextPlaceholder, padding: '16px 0', textAlign: 'left', paddingLeft: '2px' }}>No tests added here yet.</p>
+                      )}
+                    </div>
+                  );
+                })}
                 {/* Ungrouped tests — rendered flat, same as before sub-groups existed */}
                 {getUngroupedTests().map((test) => renderTestCard(test))}
               </>
