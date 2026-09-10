@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { deriveUsernameFromEmail } from '../utils/authHelpers';
 
 function Login() {
   const [authEmail, setAuthEmail] = useState('');
@@ -13,12 +14,8 @@ function Login() {
 
   // 🧠 Username is still auto-generated from the email — only the display
   // name is entered manually now, since that can't be reliably guessed.
-  const deriveUsernameFromEmail = (email) => {
-    const prefix = email.split('@')[0] || 'student';
-    const usernameBase = prefix.toLowerCase().replace(/[^a-z0-9]/g, '') || 'student';
-    const uniqueSuffix = Math.floor(1000 + Math.random() * 9000);
-    return `${usernameBase}${uniqueSuffix}`;
-  };
+  // (Logic lives in utils/authHelpers.js so Google sign-in's post-login
+  // fixer in App.jsx can reuse the exact same rule.)
 
   const handleGoogleSignIn = async () => {
     setNotification({ type: '', message: '' });

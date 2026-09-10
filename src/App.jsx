@@ -14,6 +14,7 @@ import Login from './pages/Login';
 import './App.css';
 import { supabase } from './supabaseClient'; 
 import useAdmin from './hooks/useAdmin'; // 🎯 REUSABLE CUSTOM HOOK LINKED
+import { deriveUsernameFromEmail } from './utils/authHelpers';
 
 function App() {
   // --- 🛰️ GLOBAL AUTH STATES ---
@@ -87,6 +88,44 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // --- 🔧 GOOGLE SIGN-IN USERNAME FIXER ---
+  // Google sign-ins can't derive a username from email at signup time (control
+  // passes to Google before we ever see the email), so the backend trigger
+  // falls back to `user_xxxxx` (first 5 chars of the UUID). This brings those
+  // accounts in line with the email-prefix rule used everywhere else, the
+  // first time such a user logs back in. Runs quietly in the background —
+  // never blocks login, never shows errors to the user.
+  const fixFallbackUsername = async (user) => {
+    try {
+      if (!user?.email) return;
+
+      const { data: profile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', user.id)
+        .single();
+
+      if (fetchError || !profile) return;
+      if (!profile.username || !profile.username.startsWith('user_')) return;
+
+      const MAX_ATTEMPTS = 3;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const candidateUsername = deriveUsernameFromEmail(user.email);
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ username: candidateUsername })
+          .eq('id', user.id);
+
+        if (!updateError) break; // success, stop retrying
+        // 23505 = unique_violation — another profile already has this
+        // exact random suffix, so loop again with a fresh suffix.
+        if (updateError.code !== '23505') break; // some other error, don't retry
+      }
+    } catch (err) {
+      console.error('Fallback username fix skipped (non-blocking):', err);
+    }
+  };
+
   // --- 🔄 SUPABASE AUTH LIFECYCLE LISTENER ---
   useEffect(() => {
     // 🚨 FIX: a hung or failing network call here used to leave the loading
@@ -129,11 +168,14 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
       try {
         if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-          const { error } = await withTimeout(supabase.auth.getUser());
+          const { data: { user }, error } = await withTimeout(supabase.auth.getUser());
           if (error) {
             await supabase.auth.signOut();
             setSession(null);
             return;
+          }
+          if (event === 'SIGNED_IN' && user) {
+            fixFallbackUsername(user); // fire-and-forget, non-blocking
           }
         }
         setSession(currentSession);
