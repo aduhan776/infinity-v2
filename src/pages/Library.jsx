@@ -44,10 +44,25 @@ const deleteFromLocalStore = async (storeName, id) => {
   });
 };
 
+// --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
+const ACCENT = '#7065BA';
+
+// --- 📏 DYNAMIC QUESTION FONT SIZE: longer saved questions shrink so the
+// popup (max 85% viewport) never has to grow past what's comfortable to read.
+const getQuestionFontSize = (text) => {
+  const len = (text || '').length;
+  if (len <= 60) return '1.3rem';
+  if (len >= 220) return '0.92rem';
+  const ratio = (len - 60) / (220 - 60);
+  const size = 1.3 - ratio * (1.3 - 0.92);
+  return `${size.toFixed(2)}rem`;
+};
+
 const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
   const [activeSubTab, setActiveSubTab] = useState('tests'); 
   const [testFilter, setTestFilter] = useState('attempted'); 
   const [selectedItem, setSelectedItem] = useState(null); 
+  const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedGroups, setExpandedGroups] = useState({});
 
@@ -289,6 +304,46 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
     setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
+  // --- 🧭 Navigation scope for the saved-question popup: the same filtered
+  // list the person sees on the Questions tab, so Next/Previous/swipe/arrow
+  // keys move through exactly what's visible (search included), and never
+  // jump outside it.
+  const visibleSavedQuestions = React.useMemo(() => {
+    return savedQuestions.filter(q => q.question.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [savedQuestions, searchQuery]);
+
+  const openQuestionAt = (index) => {
+    if (index < 0 || index >= visibleSavedQuestions.length) return;
+    setSelectedQuestionIndex(index);
+    setSelectedItem(visibleSavedQuestions[index]);
+  };
+
+  const goToNextQuestion = () => openQuestionAt(selectedQuestionIndex + 1);
+  const goToPrevQuestion = () => openQuestionAt(selectedQuestionIndex - 1);
+
+  // ⌨️ Arrow-key navigation (desktop) — only active while the question popup is open.
+  useEffect(() => {
+    if (!selectedItem || !selectedItem.question) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowRight') goToNextQuestion();
+      if (e.key === 'ArrowLeft') goToPrevQuestion();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedItem, selectedQuestionIndex, visibleSavedQuestions]);
+
+  // 👆 Swipe navigation (mobile) — left swipe = next, right swipe = previous.
+  const touchStartXRef = React.useRef(null);
+  const handleTouchStart = (e) => { touchStartXRef.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e) => {
+    if (touchStartXRef.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const SWIPE_THRESHOLD = 50;
+    if (deltaX < -SWIPE_THRESHOLD) goToNextQuestion();
+    else if (deltaX > SWIPE_THRESHOLD) goToPrevQuestion();
+    touchStartXRef.current = null;
+  };
+
   return (
     <div style={libContainer} className="lib-container">
       <style>{`
@@ -310,25 +365,49 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
           .lib-attempt-score { font-size: 0.75rem !important; }
           .lib-attempt-actions button { padding: 6px 4px !important; font-size: 0.62rem !important; }
           .lib-icon-box { width: 36px !important; height: 36px !important; font-size: 1rem !important; border-radius: 10px !important; }
+          .lib-modal-content { padding: 18px !important; border-radius: 20px !important; max-height: 85vh !important; width: 92% !important; }
         }
       `}</style>
       {selectedItem && selectedItem.question && (
         <div style={modalOverlay} onClick={() => setSelectedItem(null)}>
-          <div style={modalContent} onClick={e => e.stopPropagation()}>
+          <div 
+            style={{ ...modalContent, fontSize: getQuestionFontSize(selectedItem.question) }} 
+            className="lib-modal-content"
+            onClick={e => e.stopPropagation()}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
             <div style={modalHeader}>
               <span style={subjectTagSmall}>{selectedItem.topic || 'Saved Question'}</span>
               <button style={closeBtn} onClick={() => setSelectedItem(null)}>✕</button>
             </div>
             <div style={modalBody}>
-              <h2 style={modalQText}><LatexText text={selectedItem.question} /></h2>
+              <h2 style={{ ...modalQText, fontSize: '1em' }}><LatexText text={selectedItem.question} /></h2>
               <div style={correctAnswerBox}>Verified Correct Response: {selectedItem.answer}</div>
               <div style={explanationBoxModal}>
-                <strong style={{display: 'block', marginBottom: '8px', color: '#000000'}}>Conceptual Solution Framework:</strong>
-                <p style={{fontSize: '0.95rem', color: '#334155', lineHeight: '1.6', margin: 0}}><LatexText text={selectedItem.explanation || "No explanation provided."} /></p>
+                <strong style={{display: 'block', marginBottom: '8px', color: ACCENT}}>Simple Explanation:</strong>
+                <p style={{fontSize: '0.85em', color: '#334155', lineHeight: '1.6', margin: 0}}><LatexText text={selectedItem.explanation || "No explanation provided."} /></p>
               </div>
             </div>
             <div style={modalFooter}>
-              <p style={{fontSize: '0.75rem', color: '#94a3b8', margin: 0}}>Question Ref: {selectedItem.id}</p>
+              <div style={modalNavRow}>
+                <button 
+                  onClick={goToPrevQuestion} 
+                  disabled={selectedQuestionIndex === 0}
+                  style={{ ...modalNavBtn, opacity: selectedQuestionIndex === 0 ? 0.35 : 1, cursor: selectedQuestionIndex === 0 ? 'default' : 'pointer' }}
+                >
+                  ← Previous
+                </button>
+                <p style={{fontSize: '0.72rem', color: '#94a3b8', margin: 0, fontWeight: '600'}}>{selectedQuestionIndex + 1} / {visibleSavedQuestions.length}</p>
+                <button 
+                  onClick={goToNextQuestion} 
+                  disabled={selectedQuestionIndex >= visibleSavedQuestions.length - 1}
+                  style={{ ...modalNavBtn, opacity: selectedQuestionIndex >= visibleSavedQuestions.length - 1 ? 0.35 : 1, cursor: selectedQuestionIndex >= visibleSavedQuestions.length - 1 ? 'default' : 'pointer' }}
+                >
+                  Next →
+                </button>
+              </div>
+              <p style={{fontSize: '0.7rem', color: '#94a3b8', margin: '10px 0 0 0', textAlign: 'center'}}>Question Ref: {selectedItem.id}</p>
             </div>
           </div>
         </div>
@@ -340,15 +419,15 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
 
       <div style={tabRow} className="lib-tab-row">
         {['tests', 'questions'].map(tab => (
-           <button key={tab} className="lib-tab-btn" onClick={() => { setActiveSubTab(tab); setSearchQuery(''); }} style={{...tabStyle, color: activeSubTab === tab ? '#000000' : '#94a3b8', borderBottom: activeSubTab === tab ? '3px solid #000000' : 'none'}}>{tab === 'tests' ? "TEST SESSIONS" : tab.toUpperCase()}</button>
+           <button key={tab} className="lib-tab-btn" onClick={() => { setActiveSubTab(tab); setSearchQuery(''); }} style={{...tabStyle, color: activeSubTab === tab ? ACCENT : '#94a3b8', borderBottom: activeSubTab === tab ? `3px solid ${ACCENT}` : 'none'}}>{tab === 'tests' ? "TEST SESSIONS" : tab.toUpperCase()}</button>
         ))}
       </div>
 
       <div style={contentArea}>
         {activeSubTab === 'questions' && (
           <div style={verticalList}>
-            {savedQuestions.filter(q => q.question.toLowerCase().includes(searchQuery.toLowerCase())).map(q => (
-              <div key={q.id} style={{...itemCard, borderLeft: '5px solid #000000', cursor: 'pointer'}} onClick={() => setSelectedItem(q)} className="lib-item-card">
+            {visibleSavedQuestions.map((q, idx) => (
+              <div key={q.id} style={{...itemCard, borderLeft: `5px solid ${ACCENT}`, cursor: 'pointer'}} onClick={() => openQuestionAt(idx)} className="lib-item-card">
                 <div style={{flex: 1}}><h4 style={{...itemTitle, fontSize: '0.95rem'}}><LatexText text={q.question} /></h4></div>
                 <button onClick={(e) => { e.stopPropagation(); handleRemove(q.id, 'questions', null); }} style={{...actionBtn, color: '#ef4444', borderColor: '#fee2e2'}}>Remove</button>
               </div>
@@ -360,8 +439,8 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
         {activeSubTab === 'tests' && (
           <div>
             <div style={testToggleRow}>
-              <button onClick={() => setTestFilter('attempted')} style={{...testToggleBtn, background: testFilter === 'attempted' ? '#000000' : '#f1f5f9', color: testFilter === 'attempted' ? '#fff' : '#475569'}}>Evaluation History</button>
-              <button onClick={() => setTestFilter('saved')} style={{...testToggleBtn, background: testFilter === 'saved' ? '#000000' : '#f1f5f9', color: testFilter === 'saved' ? '#fff' : '#475569'}}>Paused Draft Snapshots</button>
+              <button onClick={() => setTestFilter('attempted')} style={{...testToggleBtn, background: testFilter === 'attempted' ? ACCENT : '#f1f5f9', color: testFilter === 'attempted' ? '#fff' : '#475569'}}>Evaluation History</button>
+              <button onClick={() => setTestFilter('saved')} style={{...testToggleBtn, background: testFilter === 'saved' ? ACCENT : '#f1f5f9', color: testFilter === 'saved' ? '#fff' : '#475569'}}>Paused Draft Snapshots</button>
             </div>
             
             <div style={verticalList}>
@@ -379,7 +458,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
                           {group.isSectional && <span style={secBadge}>Sectional</span>}
                         </div>
                         <p className="lib-group-sub" style={{ ...itemSubText, marginTop: '5px' }}>
-                          Total Session Attempts: <b>{group.attempts.length} records</b> | Performance Peak: <b style={{color:'#000000'}}>{highestHistoricScore.toFixed(2)} M</b>
+                          Total Session Attempts: <b>{group.attempts.length} records</b> | Performance Peak: <b style={{color: ACCENT}}>{highestHistoricScore.toFixed(2)} M</b>
                         </p>
                       </div>
 
@@ -398,7 +477,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
                             };
                             onStartTest?.(testPayload);
                           }} 
-                          style={{ ...actionBtn, background: '#000000', color: '#fff', border: 'none' }}
+                          style={{ ...actionBtn, background: ACCENT, color: '#fff', border: 'none' }}
                         >
                           Reattempt Test
                         </button>
@@ -408,7 +487,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
                       </div>
 
                       {isExpanded && (
-                        <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '14px', border: '1px dashed #000000' }}>
+                        <div style={{ background: '#F8F7FC', padding: '15px', borderRadius: '14px', border: `1px dashed ${ACCENT}` }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {group.attempts.map((attempt, idx) => (
                               <div key={attempt.attemptId || idx} className="lib-attempt-row" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
@@ -421,7 +500,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
                                   </span>
                                 </div>
                                 <div className="lib-attempt-actions" style={{ display: 'flex', gap: '8px' }}>
-                                  <button onClick={() => onViewAnalysis?.(attempt)} style={{ ...actionBtn, flex: 1, textAlign: 'center', background: '#000000', color: '#fff', border: 'none' }}>Detailed Review</button>
+                                  <button onClick={() => onViewAnalysis?.(attempt)} style={{ ...actionBtn, flex: 1, textAlign: 'center', background: ACCENT, color: '#fff', border: 'none' }}>Detailed Review</button>
                                   <button onClick={() => handleShareTest(attempt)} style={{ ...actionBtn, flex: 1, textAlign: 'center' }}>Share</button>
                                   <button onClick={() => handleRemove(null, 'history', attempt.attemptId)} style={{ ...actionBtn, flex: 1, textAlign: 'center', color: '#ef4444', borderColor: '#fee2e2' }}>Wipe Record</button>
                                 </div>
@@ -435,13 +514,13 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
                 })
               ) : (
                 savedTests.filter(draft => draft.title.toLowerCase().includes(searchQuery.toLowerCase())).map(draft => (
-                  <div key={draft.id} className="lib-group-card" style={{...itemCard, borderLeft: '5px solid #000000', flexDirection: 'column', alignItems: 'stretch', gap: '12px'}}>
+                  <div key={draft.id} className="lib-group-card" style={{...itemCard, borderLeft: `5px solid ${ACCENT}`, flexDirection: 'column', alignItems: 'stretch', gap: '12px'}}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                       <div style={{...iconBox, background: '#f1f5f9', flexShrink: 0}} className="lib-icon-box">⏳</div>
                       <div style={{flex: 1, minWidth: 0}}><h4 style={itemTitle} className="lib-group-title">{draft.title}</h4><p style={itemSubText} className="lib-group-sub">Suspended at assessment position: Q{draft.lastIndex + 1} ({draft.timeLeft} mins left)</p></div>
                     </div>
                     <div className="lib-group-actions" style={{display: 'flex', gap: '10px'}}>
-                       <button onClick={() => onResumeTest?.(draft)} style={{...actionBtn, flex: 1, textAlign: 'center', background: '#000000', color: '#fff', border: 'none'}}>Resume Session</button>
+                       <button onClick={() => onResumeTest?.(draft)} style={{...actionBtn, flex: 1, textAlign: 'center', background: ACCENT, color: '#fff', border: 'none'}}>Resume Session</button>
                        <button onClick={() => handleRemove(draft.id, 'drafts', null)} style={{...actionBtn, flex: 1, textAlign: 'center', color: '#ef4444', borderColor: '#fee2e2'}}>Discard Draft</button>
                     </div>
                   </div>
@@ -457,7 +536,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
   );
 };
 
-const libContainer = { padding: '40px', maxWidth: '950px', margin: '0 auto' }; const libHeader = { marginBottom: '40px' }; const searchWrapper = { width: '300px' }; const searchField = { width: '100%', padding: '12px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#fff', fontSize: '1rem', fontWeight: '600' }; const tabRow = { display: 'flex', gap: '30px', borderBottom: '1px solid #e2e8f0', marginBottom: '30px' }; const tabStyle = { background: 'none', border: 'none', padding: '15px 10px', fontWeight: '800', cursor: 'pointer', fontSize: '0.95rem', textTransform: 'uppercase' }; const testToggleRow = { display: 'flex', gap: '15px', marginBottom: '20px' }; const testToggleBtn = { padding: '10px 20px', borderRadius: '10px', border: 'none', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' }; const contentArea = { minHeight: '400px' }; const verticalList = { display: 'flex', flexDirection: 'column', gap: '15px' }; const itemCard = { background: 'white', padding: '20px 25px', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.01)' }; const iconBox = { width: '50px', height: '50px', background: '#f1f5f9', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem' }; const itemTitle = { margin: 0, fontSize: '1.05rem', color: '#1e293b', fontWeight: '800' }; const itemSubText = { margin: '6px 0 0 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }; const actionBtn = { padding: '9px 18px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontWeight: '800', fontSize: '0.8rem' }; const subjectTagSmall = { background: '#f1f5f9', color: '#000000', padding: '4px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '900', border: '1px solid #e2e8f0' }; const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }; const modalContent = { background: 'white', width: '90%', maxWidth: '650px', padding: '35px', borderRadius: '30px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }; const closeBtn = { background: '#f1f5f9', border: 'none', width: '35px', height: '35px', borderRadius: '50%', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }; const modalQText = { fontSize: '1.4rem', color: '#1e293b', padding: '15px 0 25px 0', fontWeight: '800', lineHeight: '1.4' }; const correctAnswerBox = { background: '#f8fafc', padding: '18px', borderRadius: '15px', color: '#000000', fontWeight: '900', marginBottom: '20px', border: '1px solid #e2e8f0' }; const explanationBoxModal = { padding: '22px', background: '#f8fafc', borderRadius: '20px', borderLeft: '5px solid #000000', border: '1px solid #e2e8f0' }; const modalHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' }; const modalBody = { padding: '10px 0' }; const modalFooter = { borderTop: '1px solid #f1f5f9', paddingTop: '15px', marginTop: '15px' }; const emptyStateText = { textAlign: 'center', color: '#94a3b8', padding: '40px 0', fontSize: '0.9rem', fontWeight: '600', fontStyle: 'italic' }; const aiBadge = { fontSize: '0.72rem', background: '#f1f5f9', color: '#000000', padding: '3px 10px', borderRadius: '6px', fontWeight: '800', border: '1px solid #cbd5e1' }; const secBadge = { fontSize: '0.72rem', background: '#000000', color: '#ffffff', padding: '3px 10px', borderRadius: '6px', fontWeight: '800' };
+const libContainer = { padding: '40px', maxWidth: '950px', margin: '0 auto' }; const libHeader = { marginBottom: '40px' }; const searchWrapper = { width: '300px' }; const searchField = { width: '100%', padding: '12px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#fff', fontSize: '1rem', fontWeight: '600' }; const tabRow = { display: 'flex', gap: '30px', borderBottom: '1px solid #e2e8f0', marginBottom: '30px' }; const tabStyle = { background: 'none', border: 'none', padding: '15px 10px', fontWeight: '800', cursor: 'pointer', fontSize: '0.95rem', textTransform: 'uppercase' }; const testToggleRow = { display: 'flex', gap: '15px', marginBottom: '20px' }; const testToggleBtn = { padding: '10px 20px', borderRadius: '10px', border: 'none', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' }; const contentArea = { minHeight: '400px' }; const verticalList = { display: 'flex', flexDirection: 'column', gap: '15px' }; const itemCard = { background: 'white', padding: '20px 25px', borderRadius: '20px', border: '1px solid #EDEBF5', display: 'flex', alignItems: 'center', gap: '20px', boxShadow: '0 3px 12px rgba(112, 101, 186, 0.07)' }; const iconBox = { width: '50px', height: '50px', background: '#F1EFFA', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem' }; const itemTitle = { margin: 0, fontSize: '1.05rem', color: '#1e293b', fontWeight: '800' }; const itemSubText = { margin: '6px 0 0 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }; const actionBtn = { padding: '9px 18px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontWeight: '800', fontSize: '0.8rem' }; const subjectTagSmall = { background: '#F1EFFA', color: ACCENT, padding: '4px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '900', border: '1px solid #E4E1F5' }; const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px', boxSizing: 'border-box' }; const modalContent = { background: 'white', width: '90%', maxWidth: '560px', maxHeight: '85vh', overflowY: 'auto', padding: '28px', borderRadius: '26px', boxShadow: '0 20px 40px rgba(112, 101, 186, 0.18)', boxSizing: 'border-box' }; const closeBtn = { background: '#F1EFFA', border: 'none', width: '35px', height: '35px', borderRadius: '50%', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold', color: ACCENT }; const modalQText = { fontSize: '1.4rem', color: '#1e293b', padding: '15px 0 25px 0', fontWeight: '800', lineHeight: '1.4' }; const correctAnswerBox = { background: '#ECFBF3', padding: '16px', borderRadius: '15px', color: '#0f7a4f', fontWeight: '800', marginBottom: '18px', border: '1px solid #C8F0DC', fontSize: '0.92em' }; const explanationBoxModal = { padding: '20px', background: '#F8F7FC', borderRadius: '18px', borderLeft: `5px solid ${ACCENT}`, border: '1px solid #E4E1F5' }; const modalHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' }; const modalBody = { padding: '10px 0' }; const modalFooter = { borderTop: '1px solid #f1f5f9', paddingTop: '15px', marginTop: '15px' }; const modalNavRow = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }; const modalNavBtn = { background: '#F1EFFA', color: ACCENT, border: 'none', padding: '9px 16px', borderRadius: '10px', fontWeight: '800', fontSize: '0.8rem' }; const emptyStateText = { textAlign: 'center', color: '#94a3b8', padding: '40px 0', fontSize: '0.9rem', fontWeight: '600', fontStyle: 'italic' }; const aiBadge = { fontSize: '0.72rem', background: '#F1EFFA', color: ACCENT, padding: '3px 10px', borderRadius: '6px', fontWeight: '800', border: '1px solid #E4E1F5' }; const secBadge = { fontSize: '0.72rem', background: ACCENT, color: '#ffffff', padding: '3px 10px', borderRadius: '6px', fontWeight: '800' };
 const privacyNoticeBanner = { display: 'flex', gap: '15px', background: '#fafafb', border: '1px solid #e2e8f0', padding: '16px 20px', borderRadius: '16px', marginBottom: '30px', alignItems: 'center' };
 const privacyIconFrame = { width: '40px', height: '40px', background: '#f1f5f9', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '1.2rem' };
 
