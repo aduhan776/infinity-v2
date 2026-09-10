@@ -39,6 +39,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
   const [activeCategory, setActiveCategory] = useState('');
   const [activeSeries, setActiveSeries] = useState('');
   const [activeSubSection, setActiveSubSection] = useState('');
+  const [activeSubGroup, setActiveSubGroup] = useState('');
 
   // --- SINGLE TABLE CORE DATA REPOSITORIES ---
   const [allMockTests, setAllMockTests] = useState([]);
@@ -348,6 +349,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
         }]);
 
       if (error) throw error;
+      setActiveSubGroup(newSubGroupName.trim());
       setNewSubGroupName('');
       setShowAddSubGroupModal(false);
       loadTestSeriesCloudData();
@@ -775,7 +777,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                 <button 
                   key={tab} 
                   className="ts-tab-btn"
-                  onClick={() => setActiveSubSection(tab)} 
+                  onClick={() => { setActiveSubSection(tab); setActiveSubGroup(''); }} 
                   style={{
                     ...tabElementBtn, 
                     color: activeSubSection === tab ? ACCENT : '#94a3b8', 
@@ -795,32 +797,61 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
           </div>
         )}
 
+        {/* 🗂️ SUB-SECTION TAB BAR — one level deeper than the Section tabs above.
+            Fully separates content: opening one sub-section shows only its own
+            tests, exactly like the Section tabs above it. A "General" tab
+            covers any ungrouped tests so nothing gets orphaned. */}
+        {activeSubSection && getSubGroupsForActiveSection().length > 0 && (
+          <div style={subGroupTabBarRow} className="ts-subgroup-tab-row">
+            {getUngroupedTests().length > 0 && (
+              <button
+                onClick={() => setActiveSubGroup('')}
+                style={{
+                  ...subGroupTabBtn,
+                  color: activeSubGroup === '' ? ACCENT : '#94a3b8',
+                  borderBottom: activeSubGroup === '' ? `2px solid ${ACCENT}` : 'none'
+                }}
+              >
+                GENERAL
+              </button>
+            )}
+            {getSubGroupsForActiveSection().map((subGroup) => (
+              <button
+                key={subGroup}
+                onClick={() => setActiveSubGroup(subGroup)}
+                style={{
+                  ...subGroupTabBtn,
+                  color: activeSubGroup === subGroup ? ACCENT : '#94a3b8',
+                  borderBottom: activeSubGroup === subGroup ? `2px solid ${ACCENT}` : 'none'
+                }}
+              >
+                {subGroup.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* PAPERS SCOPE DISPLAY LIST CONTAINER */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', minHeight: '300px' }}>
           {activeSubSection ? (
-            (renderActiveTests.length > 0 || getSubGroupsForActiveSection().length > 0) ? (
-              <>
-                {/* 🗂️ Sub-groups — each renders its header even if empty, so admins
-                    can see a freshly-created sub-group before any test is added under it. */}
-                {getSubGroupsForActiveSection().map((subGroup) => {
-                  const groupTests = getTestsForSubGroup(subGroup);
-                  return (
-                    <div key={subGroup} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                      <h5 style={subGroupHeaderStyle}>{subGroup}</h5>
-                      {groupTests.length > 0 ? (
-                        groupTests.map((test) => renderTestCard(test))
-                      ) : (
-                        <p style={{ ...emptyStateTextPlaceholder, padding: '16px 0', textAlign: 'left', paddingLeft: '2px' }}>No tests added here yet.</p>
-                      )}
-                    </div>
-                  );
-                })}
-                {/* Ungrouped tests — rendered flat, same as before sub-groups existed */}
-                {getUngroupedTests().map((test) => renderTestCard(test))}
-              </>
-            ) : (
-              <p style={emptyStateTextPlaceholder}>No mock test packets loaded into this path layer yet.</p>
-            )
+            (() => {
+              const hasSubGroups = getSubGroupsForActiveSection().length > 0;
+              // No sub-groups exist in this Section at all — behave exactly like before this feature existed.
+              if (!hasSubGroups) {
+                return renderActiveTests.length > 0 ? (
+                  renderActiveTests.map((test) => renderTestCard(test))
+                ) : (
+                  <p style={emptyStateTextPlaceholder}>No mock test packets loaded into this path layer yet.</p>
+                );
+              }
+              // Sub-groups exist — show only the active one's tests (or ungrouped, if "General" is selected).
+              const testsToShow = activeSubGroup ? getTestsForSubGroup(activeSubGroup) : getUngroupedTests();
+              return testsToShow.length > 0 ? (
+                testsToShow.map((test) => renderTestCard(test))
+              ) : (
+                <p style={emptyStateTextPlaceholder}>No tests added here yet.</p>
+              );
+            })()
           ) : (
             <p style={emptyStateTextPlaceholder}>No sections added to this test series yet.</p>
           )}
@@ -864,7 +895,8 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
 // --- STYLES ARCHITECTURE SCHEMAS MAP ---
 const containerStyle = { padding: '20px 10px', maxWidth: '1200px', margin: '0 auto' }; const headerPanelRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }; const monochromeSolidDarkActionBtn = { background: ACCENT, color: '#ffffff', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer' };
 const adminSubtleBtn = { background: '#F1F5F9', color: '#64748b', border: '1px dashed #cbd5e1', padding: '8px 14px', borderRadius: '8px', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer' }; const horizontalStackColumnLayout = { display: 'flex', flexDirection: 'column', gap: '28px' }; const horizontalCategorySpaceRow = { display: 'flex', flexDirection: 'row', background: '#ffffff', border: '1px solid #EDEBF5', borderRadius: '24px', padding: '24px', alignItems: 'stretch', gap: '24px', boxShadow: '0 4px 18px rgba(112, 101, 186, 0.08)' }; const categoryLeftDescriptorBlock = { width: '220px', flexShrink: 0, borderRight: '1px solid #f1f5f9', paddingRight: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }; const categoryHeadingText = { margin: '0 0 2px 0', fontSize: '1.4rem', fontWeight: '900', color: '#0f172a', letterSpacing: '-0.3px' }; const subLabelMetaDataText = { margin: '0 0 16px 0', fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }; const smallMonochromeOutlineWidgetBtn = { background: '#ffffff', border: `1px solid ${ACCENT}`, color: ACCENT, padding: '8px 12px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', textAlign: 'center' }; const seriesHorizontalFlexScroller = { display: 'flex', flexDirection: 'row', gap: '16px', width: 'max-content', alignItems: 'center' }; const seriesChronologicalCardBox = { background: '#ffffff', border: '1px solid #EDEBF5', borderRadius: '20px', padding: '22px', width: '210px', flexShrink: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', boxShadow: '0 4px 16px rgba(112, 101, 186, 0.10)' }; const seriesThemeTitleCardHeader = { margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: '900', color: '#0f172a', lineHeight: '1.3' }; const totalTestCountFooterText = { margin: '0 0 20px 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }; const seriesCardActionContainerLayout = { display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', marginTop: 'auto' }; const seriesActionBtnStyle = { width: '100%', padding: '10px', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '800', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s ease', boxSizing: 'border-box' }; const backDirectoryLinkBtn = { background: '#ffffff', border: `1px solid ${ACCENT}`, color: ACCENT, padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer' }; const breadcrumbTrailRow = { fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }; const tabMenuBarRow = { display: 'flex', gap: '30px', borderBottom: '1px solid #e2e8f0', marginBottom: '25px' }; const tabElementBtn = { background: 'none', border: 'none', padding: '12px 6px', fontWeight: '800', cursor: 'pointer', fontSize: '0.88rem', letterSpacing: '0.3px' }; const testItemInstanceRow = { background: '#ffffff', padding: '20px 24px', borderRadius: '20px', border: '1px solid #EDEBF5', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', boxShadow: '0 3px 12px rgba(112, 101, 186, 0.07)' }; const testTitleHeaderStyle = { margin: 0, fontSize: '1.1rem', color: '#0f172a', fontWeight: '800' }; const statBadge = { fontSize: '0.8rem', color: '#475569', background: '#f1f5f9', padding: '4px 10px', borderRadius: '6px', fontWeight: '700' }; const secondaryActionBtn = { background: '#ffffff', border: '1px solid #cbd5e1', padding: '10px 18px', borderRadius: '10px', color: '#475569', fontWeight: '700', cursor: 'pointer', fontSize: '0.82rem' }; const monochromeLaunchTestBtn = { background: ACCENT, color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: '800', fontSize: '0.82rem' }; const nestedAttemptsScrollerContainer = { background: '#F8F7FC', padding: '16px', borderRadius: '14px', border: `1px dashed ${ACCENT}`, marginTop: '16px' }; const attemptHistoryItemLine = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }; const emptyStateTextPlaceholder = { textAlign: 'center', color: '#94a3b8', padding: '40px 0', fontSize: '0.88rem', fontWeight: '600', fontStyle: 'italic' }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }; const modalContentCardStyle = { background: '#ffffff', padding: '30px', borderRadius: '24px', width: '90%', maxWidth: '400px', border: '1px solid #e2e8f0' }; const inputStyle = { width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none', boxSizing: 'border-box', marginBottom: '14px', fontWeight: '600' }; const modalConfirmBtn = { flex: 1.3, padding: '12px', background: ACCENT, color: '#ffffff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const modalCancelBtn = { flex: 1, padding: '12px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const emptySeriesHorizontalPlaceholder = { color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic', fontWeight: '500', paddingLeft: '10px' };
-const subGroupHeaderStyle = { margin: '4px 0 0 0', fontSize: '0.78rem', fontWeight: '800', color: ACCENT, textTransform: 'uppercase', letterSpacing: '0.6px', paddingLeft: '2px' };
+const subGroupTabBarRow = { display: 'flex', gap: '20px', borderBottom: '1px solid #f1f5f9', marginBottom: '20px', overflowX: 'auto' };
+const subGroupTabBtn = { background: 'none', border: 'none', padding: '8px 2px', fontWeight: '800', cursor: 'pointer', fontSize: '0.76rem', letterSpacing: '0.4px', whiteSpace: 'nowrap' };
 const scrollArrowBtnStyle = { flexShrink: 0, width: '28px', height: '28px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', fontSize: '1.1rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 };
 const viewAllTriggerBtn = { background: 'none', border: `1px solid ${ACCENT}`, color: ACCENT, padding: '8px 16px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
 const viewAllCardStyle = { background: '#ffffff', borderRadius: '24px', padding: '24px', width: '90%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto', border: '1px solid #e2e8f0', boxSizing: 'border-box' };
