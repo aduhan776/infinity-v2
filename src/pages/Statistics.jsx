@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 
+// --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
+const ACCENT = '#7065BA';
+
 const Statistics = () => {
   const [stats, setStats] = useState({
     totalAttempts: 0,
     avgScore: 0,
     highestScore: 0,
+    meanAccuracy: 0,
+    peakAccuracy: 0,
     overallAccuracy: 0,
     brainAttempted: 0,
     brainAccuracy: 0,
@@ -47,6 +52,7 @@ const Statistics = () => {
         let totalScoreSum = 0;
         let totalAccuracySum = 0;
         let peakScore = 0;
+        let peakAccuracy = 0;
         let aiCount = 0;
         let flatCount = 0;
         let historyLogList = [];
@@ -59,6 +65,7 @@ const Statistics = () => {
 
             const accPct = parseInt(run.accuracy) || 0;
             totalAccuracySum += accPct;
+            if (accPct > peakAccuracy) peakAccuracy = accPct;
 
             const tId = String(run.test_id || '');
             if (tId.startsWith('INF-AI') || tId.startsWith('ai_') || tId.startsWith('AI-')) {
@@ -84,6 +91,8 @@ const Statistics = () => {
           totalAttempts: totalCount,
           avgScore: totalCount > 0 ? (totalScoreSum / totalCount) : 0,
           highestScore: peakScore,
+          meanAccuracy: totalCount > 0 ? Math.round(totalAccuracySum / totalCount) : 0,
+          peakAccuracy: peakAccuracy,
           overallAccuracy: totalCount > 0 ? Math.round(totalAccuracySum / totalCount) : 0,
           brainAttempted: profile?.brainfeed_count || 0,
           brainAccuracy: profile?.brainfeed_accuracy || 0,
@@ -131,28 +140,28 @@ const Statistics = () => {
       </header>
 
       <div style={statsGrid} className="stat-grid">
-        <div className="stat-card" style={{ ...cardStyle, background: 'linear-gradient(135deg, #000000, #475569)', color: '#fff', border: 'none' }}>
-          <span className="stat-card-label" style={{ ...cardLabel, color: '#cbd5e1' }}>BrainFeed Practice</span>
-          <h2 className="stat-card-metric" style={cardMetric}>Fed {stats.brainAttempted} Times</h2>
-          <p className="stat-card-sub" style={{ ...cardSubText, color: '#cbd5e1' }}>Accuracy index: <b>{stats.brainAccuracy}%</b></p>
+        <div className="stat-card" style={{ ...cardStyle, background: `linear-gradient(135deg, ${ACCENT}, #4A4380)`, color: '#fff', border: 'none' }}>
+          <span className="stat-card-label" style={{ ...cardLabel, color: '#D8D5EE' }}>BrainFeed Practice</span>
+          <h2 className="stat-card-metric" style={{ ...cardMetric, color: '#ffffff' }}>Fed {stats.brainAttempted} Times</h2>
+          <p className="stat-card-sub" style={{ ...cardSubText, color: '#D8D5EE' }}>Accuracy index: <b>{stats.brainAccuracy}%</b></p>
         </div>
 
-        <div className="stat-card" style={{ ...cardStyle, borderTop: '6px solid #000000' }}>
+        <div className="stat-card" style={{ ...cardStyle, borderTop: `6px solid ${ACCENT}` }}>
           <span className="stat-card-label" style={cardLabel}>Total Test Runs</span>
           <h2 className="stat-card-metric" style={cardMetric}>{stats.totalAttempts}</h2>
           <p className="stat-card-sub" style={cardSubText}>Mock exams executed</p>
         </div>
 
-        <div className="stat-card" style={{ ...cardStyle, borderTop: '6px solid #475569' }}>
+        <div className="stat-card" style={{ ...cardStyle, borderTop: '6px solid #A39CD1' }}>
           <span className="stat-card-label" style={cardLabel}>Mean Test Score</span>
-          <h2 className="stat-card-metric" style={cardMetric}>{stats.avgScore.toFixed(2)}<span style={{ fontSize: '0.9rem', color: '#64748b' }}> M</span></h2>
-          <p className="stat-card-sub" style={cardSubText}>Average yield across sessions</p>
+          <h2 className="stat-card-metric" style={cardMetric}>{stats.meanAccuracy}<span style={{ fontSize: '0.9rem', color: '#64748b' }}> %</span></h2>
+          <p className="stat-card-sub" style={cardSubText}>Average accuracy across sessions</p>
         </div>
 
-        <div className="stat-card" style={{ ...cardStyle, borderTop: '6px solid #94a3b8' }}>
+        <div className="stat-card" style={{ ...cardStyle, borderTop: '6px solid #C6C2E8' }}>
           <span className="stat-card-label" style={cardLabel}>Peak Mock Score</span>
-          <h2 className="stat-card-metric" style={cardMetric}>{stats.highestScore.toFixed(2)}<span style={{ fontSize: '0.9rem', color: '#64748b' }}> M</span></h2>
-          <p className="stat-card-sub" style={cardSubText}>Highest score registered</p>
+          <h2 className="stat-card-metric" style={cardMetric}>{stats.peakAccuracy}<span style={{ fontSize: '0.9rem', color: '#64748b' }}> %</span></h2>
+          <p className="stat-card-sub" style={cardSubText}>Highest accuracy registered</p>
         </div>
       </div>
 
@@ -165,30 +174,30 @@ const Statistics = () => {
 
           <div style={{ marginBottom: '25px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.88rem', fontWeight: 'bold' }}>
-              <span style={{ color: '#000000' }}>AI Generated Laboratory Sessions</span>
+              <span style={{ color: ACCENT }}>AI Generated Laboratory Sessions</span>
               <span>{stats.aiTestsCount} Tests ({Math.round(aiRatioWidth)}%)</span>
             </div>
             <div style={progressBarContainer}>
-              <div style={{ ...progressBarFill, width: `${aiRatioWidth}%`, background: '#000000' }}></div>
+              <div style={{ ...progressBarFill, width: `${aiRatioWidth}%`, background: ACCENT }}></div>
             </div>
           </div>
 
           <div style={{ marginBottom: '30px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.88rem', fontWeight: 'bold' }}>
-              <span style={{ color: '#475569' }}>Standard Reference Full Mocks</span>
+              <span style={{ color: '#A39CD1' }}>Standard Reference Full Mocks</span>
               <span>{stats.flatTestsCount} Tests ({Math.round(flatRatioWidth)}%)</span>
             </div>
             <div style={progressBarContainer}>
-              <div style={{ ...progressBarFill, width: `${flatRatioWidth}%`, background: '#475569' }}></div>
+              <div style={{ ...progressBarFill, width: `${flatRatioWidth}%`, background: '#A39CD1' }}></div>
             </div>
           </div>
 
           <div style={{ display: 'flex', gap: '20px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
-            <div style={{ flex: 1, background: '#f8fafc', padding: '15px', borderRadius: '14px', textAlign: 'center' }}>
+            <div style={{ flex: 1, background: '#F8F7FC', padding: '15px', borderRadius: '14px', textAlign: 'center' }}>
               <h4 style={{ margin: '5px 0 2px 0', color: '#1e293b', fontWeight: '800' }}>{stats.docsCount} Items</h4>
               <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>LIBRARY DOSSIERS</p>
             </div>
-            <div style={{ flex: 1, background: '#f8fafc', padding: '15px', borderRadius: '14px', textAlign: 'center' }}>
+            <div style={{ flex: 1, background: '#F8F7FC', padding: '15px', borderRadius: '14px', textAlign: 'center' }}>
               <h4 style={{ margin: '5px 0 2px 0', color: '#1e293b', fontWeight: '800' }}>{stats.savedQsCount} Qs</h4>
               <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>SAVED QUESTION VAULT</p>
             </div>
@@ -214,7 +223,7 @@ const Statistics = () => {
                     <span style={{ display: 'block', fontSize: '0.95rem', fontWeight: '900', color: '#1e293b' }}>
                       {parseFloat(run.score).toFixed(2)} M
                     </span>
-                    <span style={{ fontSize: '0.75rem', color: '#000000', fontWeight: 'bold', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
+                    <span style={{ fontSize: '0.75rem', color: ACCENT, fontWeight: 'bold', background: '#F1EFFA', padding: '2px 6px', borderRadius: '4px' }}>
                       {run.accuracy}
                     </span>
                   </div>
@@ -233,6 +242,6 @@ const Statistics = () => {
 };
 
 // Styles Schemas
-const containerStyle = { padding: '20px 30px', maxWidth: '1150px', margin: '0 auto', fontFamily: 'Inter, sans-serif' }; const statsGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '25px', marginBottom: '35px' }; const cardStyle = { background: 'white', padding: '25px 20px', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.01)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }; const cardLabel = { fontSize: '0.72rem', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }; const cardMetric = { margin: 0, fontSize: '1.8rem', fontWeight: '900', color: '#1e293b', lineHeight: '1.2' }; const cardSubText = { margin: '8px 0 0 0', fontSize: '0.8rem', color: '#94a3b8', fontWeight: '600' }; const splitLayoutGrid = { display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '30px', alignItems: 'start' }; const largeCardBase = { background: 'white', padding: '30px', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.01)' }; const sectionHeading = { margin: '0 0 4px 0', fontSize: '1.25rem', color: '#1e293b', fontWeight: '800' }; const progressBarContainer = { width: '100%', height: '10px', background: '#f1f5f9', borderRadius: '20px', overflow: 'hidden' }; const progressBarFill = { height: '100%', borderRadius: '20px', transition: 'width 0.5s ease-out' }; const timelineRow = { display: 'flex', alignItems: 'center', background: '#f8fafc', padding: '12px 18px', borderRadius: '15px', border: '1px solid #e2e8f0' }; const timelineBullet = { width: '8px', height: '8px', background: '#000000', borderRadius: '50%', boxShadow: '0 0 0 4px rgba(0,0,0,0.05)' };
+const containerStyle = { padding: '20px 30px', maxWidth: '1150px', margin: '0 auto', fontFamily: 'Inter, sans-serif' }; const statsGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '25px', marginBottom: '35px' }; const cardStyle = { background: 'white', padding: '25px 20px', borderRadius: '20px', boxShadow: '0 4px 16px rgba(112, 101, 186, 0.08)', border: '1px solid #EDEBF5', display: 'flex', flexDirection: 'column' }; const cardLabel = { fontSize: '0.72rem', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }; const cardMetric = { margin: 0, fontSize: '1.8rem', fontWeight: '900', color: '#1e293b', lineHeight: '1.2' }; const cardSubText = { margin: '8px 0 0 0', fontSize: '0.8rem', color: '#94a3b8', fontWeight: '600' }; const splitLayoutGrid = { display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '30px', alignItems: 'start' }; const largeCardBase = { background: 'white', padding: '30px', borderRadius: '24px', border: '1px solid #EDEBF5', boxShadow: '0 4px 16px rgba(112, 101, 186, 0.08)' }; const sectionHeading = { margin: '0 0 4px 0', fontSize: '1.25rem', color: '#1e293b', fontWeight: '800' }; const progressBarContainer = { width: '100%', height: '10px', background: '#F1EFFA', borderRadius: '20px', overflow: 'hidden' }; const progressBarFill = { height: '100%', borderRadius: '20px', transition: 'width 0.5s ease-out' }; const timelineRow = { display: 'flex', alignItems: 'center', background: '#F8F7FC', padding: '12px 18px', borderRadius: '15px', border: '1px solid #EDEBF5' }; const timelineBullet = { width: '8px', height: '8px', background: ACCENT, borderRadius: '50%', boxShadow: `0 0 0 4px rgba(112, 101, 186, 0.12)` };
 
 export default Statistics;
