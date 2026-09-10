@@ -43,6 +43,9 @@ const ConfirmRow = ({ label, value }) => (
   </div>
 );
 
+// --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
+const ACCENT = '#7065BA';
+
 const AiTests = ({ onStartTest }) => {
   const [view, setView] = useState('selection'); // selection, config-full, config-topic, ai-summary, admin-preview, admin-push-cloud
   const [aiTestDetails, setAiTestDetails] = useState(null);
@@ -318,7 +321,14 @@ const AiTests = ({ onStartTest }) => {
             sec.difficulty, 
             sec.language, 
             sec.marks, 
-            sec.neg
+            sec.neg,
+            sec.name // 🐛 FIX: backend's /api/pool/build-test requires `subject`
+                     // and rejects the request with "Subject/Section missing"
+                     // when it's blank. This call never passed the 10th
+                     // (subject) argument, so it always fell through to the
+                     // fetchInBatches default of '' — silently failing the
+                     // whole Multi-Section generation. The section name is
+                     // the closest equivalent to a subject here.
           );
           compiledSections.push({
             name: sec.name,
@@ -370,7 +380,12 @@ const AiTests = ({ onStartTest }) => {
           fullDifficulty,
           fullLanguage,
           fullMarks,
-          fullNeg
+          fullNeg,
+          testTitle // 🐛 FIX: same missing-subject bug as the sectional path above —
+                    // this call never passed the 10th (subject) argument either,
+                    // so build-test always rejected it with "Subject/Section
+                    // missing". A flat paper has no section name, so the exam
+                    // title itself is the closest stand-in for a subject.
         );
 
         finalStructure.time = parseInt(fullDuration);
@@ -589,7 +604,8 @@ const AiTests = ({ onStartTest }) => {
           .content-view { padding-left: 0 !important; padding-right: 0 !important; }
           .ai-container { padding: 16px 0px !important; }
           .ai-selection-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
-          .ai-flex-row { gap: 8px !important; }
+          .ai-flex-row { gap: 8px !important; flex-wrap: wrap !important; }
+          .ai-flex-row > div { flex: 1 1 calc(50% - 4px) !important; min-width: calc(50% - 4px) !important; box-sizing: border-box !important; }
           .ai-form-wrapper { padding: 0 !important; min-height: auto !important; align-items: stretch !important; }
           .ai-form-card { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; border: none !important; padding: 4px !important; box-shadow: none !important; box-sizing: border-box !important; background: transparent !important; }
           .ai-form-wrapper { background: transparent !important; }
@@ -644,8 +660,8 @@ const AiTests = ({ onStartTest }) => {
           fontFamily: 'Inter, sans-serif'
         }}>
           <div style={{ background: '#fff', padding: '40px', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 20px 40px rgba(0,0,0,0.06)', width: '90%', maxWidth: '460px', textAlign: 'center' }}>
-            <div style={{ width: '50px', height: '50px', border: '5px solid #f1f5f9', borderTop: '5px solid #000000', borderRadius: '50%', margin: '0 auto 20px auto', animation: 'spin 1s linear infinite' }}></div>
-            <h3 style={{ color: '#000000', fontWeight: '900', fontSize: '1.4rem', margin: 0 }}>Project Infinity AI Lab</h3>
+            <div style={{ width: '50px', height: '50px', border: '5px solid #f1f5f9', borderTop: `5px solid ${ACCENT}`, borderRadius: '50%', margin: '0 auto 20px auto', animation: 'spin 1s linear infinite' }}></div>
+            <h3 style={{ color: '#1e293b', fontWeight: '900', fontSize: '1.4rem', margin: 0 }}>Project Infinity AI Lab</h3>
             <p style={{ color: '#64748b', fontSize: '0.92rem', marginTop: '12px', lineHeight: '1.6', fontWeight: '600' }}>
               {loadingMessage || "Assembling questions datasets layers..."}
             </p>
@@ -738,14 +754,14 @@ const AiTests = ({ onStartTest }) => {
       {view === 'config-full' && (
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
-            <h2 className="ai-form-title" style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Full Scale Exam Blueprint</h2>
+            <h2 className="ai-form-title" style={{ color: '#1e293b', marginBottom: '5px', fontWeight: '900' }}>Full Scale Exam Blueprint</h2>
             <p className="ai-form-subtitle" style={{ color: '#64748b', marginBottom: '16px', fontSize: '0.9rem', fontWeight: '500' }}>Configure structure evaluation parameters and let AI model the questions.</p>
                        
+            <div style={{ marginBottom: '2px' }}>
+              <label style={labelStyle}>Exam / Paper Reference Title</label>
+              <input style={inputStyle} placeholder="e.g. UPSC Prelims Mock" value={testTitle} onChange={e => setTestTitle(e.target.value)} />
+            </div>
             <div style={flexRow} className="ai-flex-row">
-              <div style={{ flex: 1.5 }}>
-                <label style={labelStyle}>Exam / Paper Reference Title</label>
-                <input style={inputStyle} placeholder="e.g. UPSC Prelims Mock" value={testTitle} onChange={e => setTestTitle(e.target.value)} />
-              </div>
               <div style={{ flex: 0.8 }}>
                 <label style={labelStyle}>Difficulty Level</label>
                 <select style={{ ...inputStyle, padding: '11px' }} value={fullDifficulty} onChange={e => setFullDifficulty(e.target.value)}>
@@ -768,10 +784,10 @@ const AiTests = ({ onStartTest }) => {
             <div style={{ marginBottom: '20px' }}>
               <label style={labelStyle}>Paper Architecture Structure</label>
               <div style={modeToggleRow}>
-                <button type="button" onClick={() => setFullHasSections(false)} style={{ ...modeBtn, background: !fullHasSections ? '#000000' : '#f1f5f9', color: !fullHasSections ? 'white' : '#000000' }}>
+                <button type="button" onClick={() => setFullHasSections(false)} style={{ ...modeBtn, background: !fullHasSections ? ACCENT : '#F1EFFA', color: !fullHasSections ? 'white' : ACCENT }}>
                   Single Flat Paper
                 </button>
-                <button type="button" onClick={() => setFullHasSections(true)} style={{ ...modeBtn, background: fullHasSections ? '#000000' : '#f1f5f9', color: fullHasSections ? 'white' : '#000000' }}>
+                <button type="button" onClick={() => setFullHasSections(true)} style={{ ...modeBtn, background: fullHasSections ? ACCENT : '#F1EFFA', color: fullHasSections ? 'white' : ACCENT }}>
                   Multi-Section Paper
                 </button>
               </div>
@@ -831,7 +847,7 @@ const AiTests = ({ onStartTest }) => {
 
             {!fullHasSections ? (
               <div style={nestedBox}>
-                <h4 style={{ margin: '0 0 15px 0', color: '#000000', fontWeight: '800' }}>Configure Full Paper Metrics</h4>
+                <h4 style={{ margin: '0 0 15px 0', color: '#1e293b', fontWeight: '800' }}>Configure Full Paper Metrics</h4>
                 <div style={flexRow} className="ai-flex-row">
                   <div style={{ flex: 1 }}><label style={miniLabel}>Total Questions (Max 100)</label><input style={inputStyle} type="number" min="1" placeholder="e.g. 100" value={fullQCount} onChange={e => setFullQCount(e.target.value)} /></div>
                   <div style={{ flex: 1 }}><label style={miniLabel}>Total Duration (Mins)</label><input style={inputStyle} type="number" min="1" placeholder="e.g. 120" value={fullDuration} onChange={e => setFullDuration(e.target.value)} /></div>
@@ -849,11 +865,14 @@ const AiTests = ({ onStartTest }) => {
               </div>
             ) : (
               <div style={nestedBox}>
-                <h4 style={{ margin: '0 0 15px 0', color: '#000000', fontWeight: '800' }}>
+                <h4 style={{ margin: '0 0 15px 0', color: '#1e293b', fontWeight: '800' }}>
                   {editingSecIdx !== null ? `Modify Section Component #${editingSecIdx + 1}` : "Configure Section Module (Maximum 5)"}
                 </h4>
+                <div style={{ marginBottom: '2px' }}>
+                  <label style={miniLabel}>Section Name</label>
+                  <input style={inputStyle} placeholder="e.g. History & Culture" value={secName} onChange={e => setSecName(e.target.value)} />
+                </div>
                 <div style={flexRow} className="ai-flex-row">
-                  <div style={{ flex: 1.2 }}><label style={miniLabel}>Section Name</label><input style={inputStyle} placeholder="e.g. History & Culture" value={secName} onChange={e => setSecName(e.target.value)} /></div>
                   <div style={{ flex: 0.6 }}><label style={miniLabel}>Duration (Mins)</label><input style={inputStyle} type="number" min="1" placeholder="20" value={secTime} onChange={e => setSecTime(e.target.value)} /></div>
                   <div style={{ flex: 0.6 }}><label style={miniLabel}>Questions (Max 50)</label><input style={inputStyle} type="number" min="1" placeholder="50" value={secQCount} onChange={e => setSecQCount(e.target.value)} /></div>
                 </div>
@@ -900,8 +919,8 @@ const AiTests = ({ onStartTest }) => {
             )}
             
             {fullHasSections && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '20px 0', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 'bold', color: '#000000' }}>
-                <input type="checkbox" checked={hasSectionalTiming} onChange={e => setHasSectionalTiming(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: '#000000' }} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '20px 0', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 'bold', color: '#1e293b' }}>
+                <input type="checkbox" checked={hasSectionalTiming} onChange={e => setHasSectionalTiming(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: ACCENT }} />
                 Enforce Strict Sectional Timing Rules?
               </label>
             )}
@@ -914,7 +933,7 @@ const AiTests = ({ onStartTest }) => {
                    ...actionBtn, 
                    padding: '14px', 
                    borderRadius: '12px', 
-                   background: '#000000',
+                   background: ACCENT,
                   cursor: 'pointer'
                 }}
               >
@@ -928,7 +947,7 @@ const AiTests = ({ onStartTest }) => {
       {view === 'config-topic' && (
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
-            <h2 className="ai-form-title" style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Targeted Topic Drill</h2>
+            <h2 className="ai-form-title" style={{ color: '#1e293b', marginBottom: '5px', fontWeight: '900' }}>Targeted Topic Drill</h2>
             <p className="ai-form-subtitle" style={{ color: '#64748b', marginBottom: '16px', fontSize: '0.9rem', fontWeight: '500' }}>Specify single concepts and set direct evaluation criteria.</p>
                        
             <div style={flexRow} className="ai-flex-row">
@@ -982,7 +1001,7 @@ const AiTests = ({ onStartTest }) => {
                    ...actionBtn, 
                    padding: '14px', 
                    borderRadius: '12px', 
-                   background: '#000000',
+                   background: ACCENT,
                   cursor: 'pointer'
                 }}
               >
@@ -996,7 +1015,7 @@ const AiTests = ({ onStartTest }) => {
       {view === 'confirm-full' && (
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
-            <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Confirm Your Test</h2>
+            <h2 style={{ color: '#1e293b', marginBottom: '5px', fontWeight: '900' }}>Confirm Your Test</h2>
             <p style={{ color: '#64748b', marginBottom: '20px', fontSize: '0.9rem', fontWeight: '500' }}>Double-check everything below before we generate the questions.</p>
 
             <ConfirmRow label="Test Title" value={testTitle || '—'} />
@@ -1038,7 +1057,7 @@ const AiTests = ({ onStartTest }) => {
               <button onClick={() => setView('config-full')} style={cancelBtn}>Edit</button>
               <button
                 onClick={handleGenerateFullTest}
-                style={{ ...actionBtn, padding: '14px', borderRadius: '12px', background: '#000000', cursor: 'pointer' }}
+                style={{ ...actionBtn, padding: '14px', borderRadius: '12px', background: ACCENT, cursor: 'pointer' }}
               >
                 Proceed & Generate
               </button>
@@ -1050,7 +1069,7 @@ const AiTests = ({ onStartTest }) => {
       {view === 'confirm-topic' && (
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
-            <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}>Confirm Your Drill</h2>
+            <h2 style={{ color: '#1e293b', marginBottom: '5px', fontWeight: '900' }}>Confirm Your Drill</h2>
             <p style={{ color: '#64748b', marginBottom: '20px', fontSize: '0.9rem', fontWeight: '500' }}>Double-check everything below before we generate the questions.</p>
 
             <ConfirmRow label="Target Exam" value={targetExam || '—'} />
@@ -1068,7 +1087,7 @@ const AiTests = ({ onStartTest }) => {
               <button onClick={() => setView('config-topic')} style={cancelBtn}>Edit</button>
               <button
                 onClick={handleGenerateTopicTest}
-                style={{ ...actionBtn, padding: '14px', borderRadius: '12px', background: '#000000', cursor: 'pointer' }}
+                style={{ ...actionBtn, padding: '14px', borderRadius: '12px', background: ACCENT, cursor: 'pointer' }}
               >
                 Proceed & Generate
               </button>
@@ -1080,8 +1099,8 @@ const AiTests = ({ onStartTest }) => {
       {view === 'ai-summary' && (
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={{ ...formCard, maxWidth: '460px', textAlign: 'center' }}>
-            <h2 style={{ color: '#000000', margin: 0, fontWeight: '900' }}>AI Compilation Successful</h2>
-            <p style={{ fontSize: '0.82rem', color: '#000000', fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '4px' }}>ROOM ID: {aiTestDetails.id}</p>
+            <h2 style={{ color: '#1e293b', margin: 0, fontWeight: '900' }}>AI Compilation Successful</h2>
+            <p style={{ fontSize: '0.82rem', color: ACCENT, fontWeight: 'bold', letterSpacing: '0.5px', marginTop: '4px' }}>ROOM ID: {aiTestDetails.id}</p>
             <div style={summaryVaultBox}>
               <div style={sumLine}><span>Blueprint Title:</span> <strong>{aiTestDetails.title}</strong></div>
               <div style={sumLine}><span>Evaluation Format:</span> <strong>{aiTestDetails.mode}</strong></div>
@@ -1089,7 +1108,7 @@ const AiTests = ({ onStartTest }) => {
               <div style={sumLine}><span>Cumulative Timer:</span> <strong>{aiTestDetails.time} Allotted Mins</strong></div>
             </div>
                        
-            <button onClick={() => onStartTest(aiTestDetails)} style={{ ...actionBtn, background: '#000000', padding: '14px', fontSize: '1rem', marginBottom: '12px', width: '100%', borderRadius: '12px' }}>
+            <button onClick={() => onStartTest(aiTestDetails)} style={{ ...actionBtn, background: ACCENT, padding: '14px', fontSize: '1rem', marginBottom: '12px', width: '100%', borderRadius: '12px' }}>
               Launch AI Engine Test Portal 
             </button>
             {isAdmin && (
@@ -1132,7 +1151,7 @@ const AiTests = ({ onStartTest }) => {
               <h2 style={{ margin: 0, color: '#0f172a', fontWeight: '900', letterSpacing: '-0.5px' }}> Admin Blueprint Review</h2>
               <p style={{ color: '#64748b', margin: '4px 0 0 0', fontSize: '0.9rem', fontWeight: '500' }}>Reviewing questions, right choices, and evaluation metrics mapping.</p>
             </div>
-            <button onClick={() => setView('ai-summary')} style={{ ...cancelBtn, background: '#000000', color: '#ffffff', borderRadius: '10px' }}>Back to Summary</button>
+            <button onClick={() => setView('ai-summary')} style={{ ...cancelBtn, background: ACCENT, color: '#ffffff', borderRadius: '10px' }}>Back to Summary</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
             {aiTestDetails && aiTestDetails.sections ? (
@@ -1196,7 +1215,7 @@ const AiTests = ({ onStartTest }) => {
       {view === 'admin-push-cloud' && (
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
-            <h2 style={{ color: '#000000', marginBottom: '5px', fontWeight: '900' }}> Deploy to Official Series</h2>
+            <h2 style={{ color: '#1e293b', marginBottom: '5px', fontWeight: '900' }}> Deploy to Official Series</h2>
             <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem', fontWeight: '500' }}>Rename and position this AI generated exam blueprint inside official routing matrices.</p>
                        
             <div style={{ marginBottom: '16px' }}>
@@ -1242,7 +1261,7 @@ const AiTests = ({ onStartTest }) => {
 // --- STYLES SCHEMA ---
 const containerStyle = { padding: '40px 20px', maxWidth: '1050px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }; 
 const selectionGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop: '35px' }; 
-const cardHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '14px' }; const leftCardTitle = { margin: '0 0 8px 0', fontSize: '1.4rem', color: '#0f172a', fontWeight: '800', letterSpacing: '-0.5px' }; const cleanBulletList = { listStyleType: 'none', padding: 0, margin: '0 0 20px 0', display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', flex: 1 }; const bulletItemRow = { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.92rem', color: '#475569', fontWeight: '500', lineHeight: '1.5' }; const fullMockCardStyle = { background: '#ffffff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(79, 70, 229, 0.03)' }; const indigoIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff', border: '1px solid #c7d2fe' }; const indigoBadge = { background: '#e0e7ff', color: '#4f46e5', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const indigoActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }; const topicMockCardStyle = { background: '#ffffff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 4px 20px rgba(16, 185, 129, 0.03)' }; const emeraldIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d1fae5', border: '1px solid #a7f3d0' }; const emeraldBadge = { background: '#d1fae5', color: '#065f46', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const emeraldActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' }; const actionBtn = { border: 'none', color: '#fff', padding: '11px 24px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', width: '100%' }; const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '600px', boxShadow: '0 10px 30px rgba(0,0,0,0.01)' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const mandatoryStar = { color: '#ef4444', fontWeight: '900' }; const miniLabel = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }; const inputStyle = { width: '100%', padding: '11px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '1rem', outline: 'none', marginBottom: '12px', background: '#f8fafc', fontWeight: '600', color: '#000000', boxSizing: 'border-box' }; const flexRow = { display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '2px' }; const nestedBox = { background: '#f8fafc', padding: '14px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '16px' }; const addSecBtn = { width: '100%', padding: '10px', background: '#000000', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const secBadgeRow = { display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: '600' }; const cancelBtn = { padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }; const summaryVaultBox = { background: '#f8fafc', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '16px', textAlign: 'left', margin: '20px 0 30px 0' }; const sumLine = { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.9rem', fontWeight: '500' }; const modeToggleRow = { display: 'flex', gap: '10px', background: '#f1f5f9', padding: '5px', borderRadius: '12px', marginBottom: '15px' }; const modeBtn = { flex: 1, padding: '10px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem', transition: '0.3s' }; 
+const cardHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '14px' }; const leftCardTitle = { margin: '0 0 8px 0', fontSize: '1.4rem', color: '#0f172a', fontWeight: '800', letterSpacing: '-0.5px' }; const cleanBulletList = { listStyleType: 'none', padding: 0, margin: '0 0 20px 0', display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', flex: 1 }; const bulletItemRow = { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.92rem', color: '#475569', fontWeight: '500', lineHeight: '1.5' }; const fullMockCardStyle = { background: '#ffffff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 6px 24px rgba(79, 70, 229, 0.14)' }; const indigoIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff', border: '1px solid #c7d2fe' }; const indigoBadge = { background: '#e0e7ff', color: '#4f46e5', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const indigoActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }; const topicMockCardStyle = { background: '#ffffff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 6px 24px rgba(16, 185, 129, 0.14)' }; const emeraldIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d1fae5', border: '1px solid #a7f3d0' }; const emeraldBadge = { background: '#d1fae5', color: '#065f46', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const emeraldActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' }; const actionBtn = { border: 'none', color: '#fff', padding: '11px 24px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', width: '100%' }; const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '26px', borderRadius: '24px', border: '1px solid #EDEBF5', width: '100%', maxWidth: '600px', boxShadow: '0 10px 30px rgba(112, 101, 186, 0.08)' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const mandatoryStar = { color: '#ef4444', fontWeight: '900' }; const miniLabel = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }; const inputStyle = { width: '100%', padding: '11px', borderRadius: '10px', border: '1px solid #E4E1F5', fontSize: '1rem', outline: 'none', marginBottom: '12px', background: '#F8F7FC', fontWeight: '600', color: '#1e293b', boxSizing: 'border-box' }; const flexRow = { display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '2px' }; const nestedBox = { background: '#F8F7FC', padding: '14px', borderRadius: '16px', border: '1px solid #E4E1F5', marginBottom: '16px' }; const addSecBtn = { width: '100%', padding: '10px', background: ACCENT, color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const secBadgeRow = { display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #E4E1F5', fontSize: '0.85rem', fontWeight: '600' }; const cancelBtn = { padding: '12px 24px', background: '#F1EFFA', color: '#475569', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }; const summaryVaultBox = { background: '#F8F7FC', border: '1px solid #E4E1F5', padding: '20px', borderRadius: '16px', textAlign: 'left', margin: '20px 0 30px 0' }; const sumLine = { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.9rem', fontWeight: '500' }; const modeToggleRow = { display: 'flex', gap: '10px', background: '#F1EFFA', padding: '5px', borderRadius: '12px', marginBottom: '15px' }; const modeBtn = { flex: 1, padding: '10px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem', transition: '0.3s' }; 
 
 const miniSectionActionControlBtn = {
   padding: '4px 10px',
