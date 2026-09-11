@@ -248,6 +248,33 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedQIdx, setSelectedQIdx] = useState(null);
+
+  // 🔙 Make the device/browser back button close the Detailed Review popup
+  // instead of leaving the page entirely. We push one extra history entry
+  // when the popup opens; if the person hits back, popstate fires and we
+  // just close the popup (no page navigation happens). If they close via
+  // the on-screen Close button instead, we undo that extra history entry
+  // ourselves so a *second* back press still behaves normally afterwards.
+  useEffect(() => {
+    if (selectedQIdx === null) return;
+    window.history.pushState({ analysisPopup: true }, '');
+    const handlePopState = () => {
+      setSelectedQIdx(null);
+      setShowExplanation(false);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedQIdx]);
+
+  const closeDetailedReview = () => {
+    setSelectedQIdx(null);
+    setShowExplanation(false);
+    // Undo the extra history entry pushed when the popup opened, so back
+    // navigation continues to behave normally instead of stacking up.
+    if (window.history.state && window.history.state.analysisPopup) {
+      window.history.back();
+    }
+  };
   const [showExplanation, setShowExplanation] = useState(false); 
   const [savedStatus, setSavedStatus] = useState({}); 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -715,7 +742,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
       </div>
 
       {selectedQIdx !== null && questions[selectedQIdx] && (
-        <div style={styles.overlay}>
+        <div style={{ ...styles.overlay, ...(isMobile ? styles.overlayMobile : {}) }}>
           <div
             style={{ ...styles.detailContainer, ...(isMobile ? styles.detailContainerMobile : {}) }}
             onTouchStart={handleTouchStart}
@@ -726,7 +753,10 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                 <h3 style={{margin:0, fontSize: isMobile ? '1rem' : '1.17rem'}}>Q. {selectedQIdx + 1} Detailed Review</h3>
                 {!isMobile && <span style={styles.topicTag}>#EXAM_ANALYSIS</span>}
               </div>
-              <button onClick={() => { setSelectedQIdx(null); setShowExplanation(false); }} style={styles.closeBtn}>❌ Close</button>
+              <button onClick={closeDetailedReview} style={styles.closeBtn}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Close
+              </button>
             </div>
 
             {isMobile && (
@@ -741,7 +771,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                     <span style={styles.metaItem}>⏱️ <strong>Your Time:</strong> {formatTime(timeTracker[selectedQIdx])}</span>
                     <span style={styles.metaItem}>📈 <strong>Score Given:</strong> {questions[selectedQIdx].type === 'Subjective' ? `${questions[selectedQIdx].score_given || 0} Marks` : ''}</span>
                   </div>
-                  <p style={{...styles.detailText, fontSize: isMobile ? '1rem' : '1.2rem'}}><LatexText text={questions[selectedQIdx].question} /> </p>
+                  <p style={{...styles.detailText, fontSize: isMobile ? '0.95rem' : '1.05rem'}}><LatexText text={questions[selectedQIdx].question} compactSpacing /> </p>
                    
                   {questions[selectedQIdx].type === 'Objective' ? (
                     <div style={styles.detailOptions}>
@@ -766,7 +796,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                             border: borderStyle,
                             background: bgStyle
                           }}>
-                            <span>{String.fromCharCode(64 + oIdx + 1)}. <LatexText text={opt} /> </span>
+                            <span>{String.fromCharCode(64 + oIdx + 1)}. <LatexText text={opt} compactSpacing /> </span>
                             {isCorrect && isUserChoice && <span style={{ color: '#22c55e', fontWeight: 'bold' }}>✨ Correct Answer & Your Choice</span>}
                             {isCorrect && !isUserChoice && <span style={{ color: '#16a34a', fontWeight: 'bold' }}>🎯 Correct Answer</span>}
                             {isUserChoice && !isCorrect && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>❌ Your Wrong Choice</span>}
@@ -966,15 +996,16 @@ const styles = {
   listGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px', width: '100%', boxSizing: 'border-box' },
   listGridMobile: { gridTemplateColumns: '1fr', gap: '8px' },
 
-  qCardSmall: { padding: '15px', borderRadius: '12px', border: '2px solid', cursor: 'pointer', transition: '0.3s', width: '100%', boxSizing: 'border-box' },
-  qCardSmallMobile: { padding: '10px', borderRadius: '10px' },
+  qCardSmall: { padding: '15px', borderRadius: '12px', border: '2px solid', cursor: 'pointer', transition: '0.3s', width: '100%', maxWidth: '520px', margin: '0 auto', boxSizing: 'border-box' },
+  qCardSmallMobile: { padding: '12px', borderRadius: '10px', maxWidth: '100%' },
 
   cardHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px', gap: '8px' },
   qNum: { fontWeight: '800', color: '#64748b', fontSize: '0.75rem' },
-  qTruncated: { fontSize: '0.9rem', fontWeight: '600', margin: '0 0 10px 0', height: '2.4em', overflow: 'hidden' },
+  qTruncated: { fontSize: '0.8rem', fontWeight: '600', margin: '0 0 10px 0', height: '2.3em', lineHeight: '1.15em', overflow: 'hidden' },
   smallTime: { fontSize: '0.7rem', color: '#94a3b8', fontWeight: '700' },
 
   overlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' },
+  overlayMobile: { padding: 0 },
 
   detailContainer: { background: '#fff', width: '100%', maxWidth: '1100px', height: '85vh', borderRadius: '20px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' },
   detailContainerMobile: { height: '100vh', maxHeight: '100vh', width: '100vw', maxWidth: '100vw', borderRadius: 0 },
@@ -985,7 +1016,7 @@ const styles = {
   swipeHint: { textAlign: 'center', fontSize: '0.7rem', color: '#94a3b8', padding: '4px 0', background: '#fcfdfe', borderBottom: '1px solid #f1f5f9' },
 
   topicTag: { fontSize: '0.7rem', background: '#e0e7ff', color: '#4338ca', padding: '4px 12px', borderRadius: '15px', fontWeight: 'bold' },
-  closeBtn: { background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer' },
+  closeBtn: { background: '#F1EFFA', border: 'none', color: '#7065BA', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '20px' },
 
   detailBody: { display: 'flex', flex: 1, overflow: 'hidden' },
   detailBodyMobile: { flexDirection: 'column' },
@@ -1005,11 +1036,11 @@ const styles = {
 
   metaRow: { display: 'flex', gap: '20px', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px', flexWrap: 'wrap' },
   metaItem: { fontSize: '0.8rem', color: '#475569' },
-  detailText: { fontSize: '1.2rem', fontWeight: '600', marginBottom: '25px', lineHeight: '1.5' },
+  detailText: { fontSize: '1.05rem', fontWeight: '600', marginBottom: '20px', lineHeight: '1.35' },
 
   detailOptions: { display: 'grid', gap: '10px', boxSizing: 'border-box' },
-  detailOpt: { padding: '15px', borderRadius: '10px', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box' },
-  detailOptMobile: { padding: '12px', flexDirection: 'column', alignItems: 'flex-start', gap: '6px', fontSize: '0.85rem' },
+  detailOpt: { padding: '12px 14px', borderRadius: '10px', fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box', maxWidth: '560px', margin: '0 auto', width: '100%' },
+  detailOptMobile: { padding: '10px 12px', flexDirection: 'column', alignItems: 'flex-start', gap: '5px', fontSize: '0.8rem', maxWidth: '100%' },
 
   navBtn: { flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', fontWeight: 'bold', cursor: 'pointer' },
   doubtBtn: { flex: 1.5, background: '#1e293b', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s ease' },

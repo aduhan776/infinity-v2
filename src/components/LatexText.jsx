@@ -1,11 +1,18 @@
 import React from 'react';
 import katex from 'katex';
 
-const LatexText = ({ text }) => {
+const LatexText = ({ text, compactSpacing = false }) => {
   if (!text) return null;
 
+  // 🧹 Optional: collapse 2+ consecutive blank lines down to one. Some
+  // AI-generated questions with numbered statements (1. ... 2. ... 3. ...)
+  // come with extra blank lines between each, which — combined with
+  // `pre-wrap` below — renders as very tall gaps. Only applied where the
+  // caller opts in, so normal question rendering elsewhere is untouched.
+  const normalizedText = compactSpacing ? text.replace(/\n{2,}/g, '\n\n') : text;
+
   // 🚨 ROBUST MATCHING BOUNDARY: Strict paired expressions filtering pattern prevents currency line crashes
-  const tokens = text.split(/(\$[^\$]+\$)/g);
+  const tokens = normalizedText.split(/(\$[^\$]+\$)/g);
 
   return (
     <span style={{ whiteSpace: 'pre-wrap', display: 'inline-block', width: '100%' }}>

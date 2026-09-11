@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { deriveUsernameFromEmail } from '../utils/authHelpers';
 
+// --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
+const ACCENT = '#7065BA';
+
 function Login() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -99,9 +102,9 @@ function Login() {
         <div style={brandingWrapper}>
           <div style={{ marginBottom: '25px' }}>
             <svg width="70" height="70" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="42" stroke="#1e293b" strokeWidth="6" fill="white" />
-              <circle cx="50" cy="50" r="28" stroke="#1e293b" strokeWidth="6" fill="white" />
-              <circle cx="50" cy="50" r="14" stroke="#1e293b" strokeWidth="6" fill="white" />
+              <circle cx="50" cy="50" r="42" stroke={ACCENT} strokeWidth="6" fill="white" />
+              <circle cx="50" cy="50" r="28" stroke={ACCENT} strokeWidth="6" fill="white" />
+              <circle cx="50" cy="50" r="14" stroke={ACCENT} strokeWidth="6" fill="white" />
             </svg>
           </div>
           <h1 style={brandingTitle}>NEUXENT<span>.</span></h1>
@@ -110,19 +113,19 @@ function Login() {
           <div style={featureMatrixList}>
             <div style={featureItemRow}>
               <span style={featureIconBox}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
               </span> 
               <div><h5 style={featTitle}>AI-Powered Practice</h5><p style={featSub}>Personalized questions and insights powered by AI.</p></div>
             </div>
             <div style={featureItemRow}>
               <span style={featureIconBox}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               </span> 
               <div><h5 style={featTitle}>Track Your Progress</h5><p style={featSub}>Monitor performance and improve consistently.</p></div>
             </div>
             <div style={featureItemRow}>
               <span style={featureIconBox}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               </span> 
               <div><h5 style={featTitle}>Secure & Private</h5><p style={featSub}>Your data is safe with enterprise-grade security.</p></div>
             </div>
@@ -139,9 +142,9 @@ function Login() {
 
           <div className="login-mobile-brand" style={{ display: 'none', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <svg width="34" height="34" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="42" stroke="#1e293b" strokeWidth="6" fill="white" />
-              <circle cx="50" cy="50" r="28" stroke="#1e293b" strokeWidth="6" fill="white" />
-              <circle cx="50" cy="50" r="14" stroke="#1e293b" strokeWidth="6" fill="white" />
+              <circle cx="50" cy="50" r="42" stroke={ACCENT} strokeWidth="6" fill="white" />
+              <circle cx="50" cy="50" r="28" stroke={ACCENT} strokeWidth="6" fill="white" />
+              <circle cx="50" cy="50" r="14" stroke={ACCENT} strokeWidth="6" fill="white" />
             </svg>
             <span style={{ fontSize: '1.3rem', fontWeight: '900', color: '#1e293b', letterSpacing: '-0.5px' }}>NEUXENT.</span>
           </div>
@@ -218,21 +221,21 @@ function Login() {
             {!isSignUpMode && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" id="rememberMe" style={{ accentColor: '#000', width: '15px', height: '15px', cursor: 'pointer' }} />
+                  <input type="checkbox" id="rememberMe" style={{ accentColor: ACCENT, width: '15px', height: '15px', cursor: 'pointer' }} />
                   <label htmlFor="rememberMe" style={{ color: '#475569', cursor: 'pointer', fontWeight: '500' }}>Remember me</label>
                 </div>
-                <a href="#" style={{ color: '#000', fontWeight: '600', textDecoration: 'underline' }}>Forgot password?</a>
+                <a href="#" style={{ color: ACCENT, fontWeight: '600', textDecoration: 'underline' }}>Forgot password?</a>
               </div>
             )}
             
-            <button type="submit" disabled={isSubmitting} style={{ ...actionBtnSolidDark, background: isSubmitting ? '#94a3b8' : '#000' }}>
+            <button type="submit" disabled={isSubmitting} style={{ ...actionBtnSolidDark, background: isSubmitting ? '#94a3b8' : ACCENT }}>
               {isSubmitting ? 'Please wait...' : (isSignUpMode ? 'Create Account' : 'Sign In')}
             </button>
           </form>
 
           <div style={{ textAlign: 'center', marginTop: '25px', color: '#64748b', fontSize: '0.88rem' }}>
             {isSignUpMode ? 'Already have an account?' : "Don't have an account?"} 
-            <button type="button" onClick={handleToggleMode} style={{ background: 'none', border: 'none', color: '#000', fontWeight: '700', marginLeft: '5px', fontSize: 'inherit', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+            <button type="button" onClick={handleToggleMode} style={{ background: 'none', border: 'none', color: ACCENT, fontWeight: '700', marginLeft: '5px', fontSize: 'inherit', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
               {isSignUpMode ? 'Sign in' : 'Create one'}
             </button>
           </div>
@@ -244,26 +247,26 @@ function Login() {
 }
 
 const fullScreenContainer = { display: 'flex', height: '100vh', background: '#fff', fontFamily: 'Inter, sans-serif' };
-const leftShowcasePanel = { flex: 1, background: '#f8fafc', padding: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative', borderRight: '1px solid #e2e8f0' };
+const leftShowcasePanel = { flex: 1, background: '#F8F7FC', padding: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative', borderRight: '1px solid #E4E1F5' };
 const rightAuthPanel = { flex: 1.1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' };
 const brandingWrapper = { maxWidth: '450px', margin: '0 auto', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' };
-const brandingTitle = { fontSize: '2.5rem', fontWeight: '900', color: '#000', margin: 0, letterSpacing: '-1px', marginBottom: '10px' };
+const brandingTitle = { fontSize: '2.5rem', fontWeight: '900', color: '#1e293b', margin: 0, letterSpacing: '-1px', marginBottom: '10px' };
 const brandingSubtitle = { fontSize: '0.95rem', color: '#64748b', margin: 0, fontWeight: '500', lineHeight: '1.6' };
 const brandingFooter = { position: 'absolute', bottom: '30px', left: '30px', fontSize: '0.8rem', color: '#94a3b8' };
 const featureMatrixList = { textAlign: 'left', marginTop: '40px', display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' };
 const featureItemRow = { display: 'flex', gap: '15px', alignItems: 'center' };
-const featureIconBox = { fontSize: '1.4rem', display: 'flex', alignItems: 'center' };
+const featureIconBox = { fontSize: '1.4rem', display: 'flex', alignItems: 'center', width: '38px', height: '38px', background: '#F1EFFA', borderRadius: '10px', justifyContent: 'center', flexShrink: 0 };
 const featTitle = { margin: 0, color: '#1e293b', fontWeight: '700', fontSize: '0.95rem' };
 const featSub = { margin: '2px 0 0 0', color: '#64748b', fontSize: '0.85rem', fontWeight: '500' };
-const formCardMinimal = { background: '#fff', padding: '40px', borderRadius: '24px', width: '100%', maxWidth: '400px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' };
-const formHeading = { fontSize: '1.8rem', fontWeight: '800', color: '#000', margin: 0 };
+const formCardMinimal = { background: '#fff', padding: '40px', borderRadius: '24px', width: '100%', maxWidth: '400px', border: '1px solid #EDEBF5', boxShadow: '0 6px 24px rgba(112, 101, 186, 0.10)' };
+const formHeading = { fontSize: '1.8rem', fontWeight: '800', color: '#1e293b', margin: 0 };
 const formSubHeading = { fontSize: '0.88rem', color: '#64748b', marginTop: '6px', marginBottom: '25px', fontWeight: '500' };
 const notificationBanner = { padding: '12px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: '600', textAlign: 'left', marginBottom: '20px' };
-const googleBtnCardStyle = { width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #cbd5e1', background: '#fff', color: '#334155', fontWeight: '600', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: 'pointer' };
-const orDividerMinimalRow = { display: 'flex', alignItems: 'center', margin: '20px 0', color: '#e2e8f0' };
-const orDividerMinimalLine = { flex: 1, height: '1px', background: '#e2e8f0' };
+const googleBtnCardStyle = { width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #E4E1F5', background: '#fff', color: '#334155', fontWeight: '600', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: 'pointer' };
+const orDividerMinimalRow = { display: 'flex', alignItems: 'center', margin: '20px 0', color: '#E4E1F5' };
+const orDividerMinimalLine = { flex: 1, height: '1px', background: '#E4E1F5' };
 const orDividerMinimalText = { padding: '0 10px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8' };
-const inputCardStyle = { width: '100%', padding: '12px 16px 12px 48px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none', background: '#fff', fontWeight: '500' };
+const inputCardStyle = { width: '100%', padding: '12px 16px 12px 48px', borderRadius: '12px', border: '1px solid #E4E1F5', fontSize: '1rem', outline: 'none', background: '#F8F7FC', fontWeight: '500' };
 const inputIconLeftStyle = { position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' };
 const eyeToggleIconBtnStyle = { position: 'absolute', right: '14px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' };
 const actionBtnSolidDark = { width: '100%', border: 'none', color: '#fff', padding: '14px', borderRadius: '12px', fontWeight: '700', fontSize: '0.95rem', marginTop: '10px', cursor: 'pointer' };

@@ -1275,13 +1275,13 @@ const TestPortal = ({ testData, onExit }) => {
           <div style={{...styles.qContentScroll, ...(isMobile ? {paddingBottom:'80px'} : {})}} onTouchStart={isMobile ? handleTouchStart : undefined} onTouchEnd={isMobile ? handleTouchEnd : undefined}>
             {questions[currentQ] ? (
               <div style={{...styles.qInnerFrame, ...(isMobile ? styles.qInnerFrameMobile : {})}}>
-                <p style={{...styles.qText, ...(isMobile ? styles.qTextMobile : {})}}><LatexText text={questions[currentQ].question} /></p>
+                <p style={{...styles.qText, ...(isMobile ? styles.qTextMobile : {})}}><LatexText text={questions[currentQ].question} compactSpacing /></p>
                 {questions[currentQ].type === 'Objective' ? (
                   <div style={styles.optionsGrid}>
                     {(questions[currentQ].options || []).map((opt, idx) => (
                       <div key={idx} style={{...styles.optCard, ...(isMobile ? styles.optCardMobile : {}), border: answers[currentQ] === idx ? '2px solid #6366f1' : '1px solid #e2e8f0', background: answers[currentQ] === idx ? '#f5f7ff' : '#fff'} } onClick={() => handleOptionSelect(idx)}>
                         <span style={{...styles.optLabel, background: answers[currentQ] === idx ? '#6366f1' : '#f1f5f9', color: answers[currentQ] === idx ? '#fff' : '#1e293b'}}>{String.fromCharCode(65 + idx)}</span>
-                        <LatexText text={opt} />
+                        <LatexText text={opt} compactSpacing />
                       </div>
                     ))}
                   </div>
@@ -1527,7 +1527,7 @@ const styles = {
   timerLabel: { fontSize:'0.55rem', color:'#94a3b8', display:'block', fontWeight:'800' }, 
   pauseBtn: { padding:'8px 15px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'#fff', cursor:'pointer', fontWeight:'600' }, 
   submitBtn: { padding:'10px 20px', borderRadius:'8px', background:'#22c55e', color:'#fff', border:'none', cursor: 'pointer', fontWeight:'800' }, 
-  controlCenterFrame: { background: '#fcfdfe', borderBottom: '1px solid #e2e8f0', padding: '15px 40px', flexShrink: 0 }, 
+  controlCenterFrame: { background: '#fcfdfe', borderBottom: '1px solid #e2e8f0', padding: '15px 40px', flexShrink: 0, position: 'sticky', top: 0, zIndex: 20 }, 
   qInfoLine: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }, 
   qBadge: { fontWeight:'800', color:'#6366f1', fontSize:'0.9rem' }, 
   marksGroup: { display:'flex', gap:'15px', fontWeight:'800', fontSize:'0.75rem' }, 
@@ -1596,7 +1596,7 @@ const styles = {
   mobileHamburger: { width: '38px', height: '38px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0, cursor: 'pointer' },
 
   // --- 📱 MOBILE PER-QUESTION INFO ROW ---
-  mobileQInfoRow: { padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 },
+  mobileQInfoRow: { padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #f1f5f9', flexShrink: 0, position: 'sticky', top: 0, zIndex: 20, background: '#fff' },
   mobileQNumBadge: { width: '32px', height: '32px', borderRadius: '8px', background: '#6366f1', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '0.85rem', flexShrink: 0 },
   mobileDivider: { width: '1px', height: '22px', background: '#e2e8f0' },
   mobileStopwatch: { fontSize: '0.82rem', color: '#64748b', fontWeight: '700' },
