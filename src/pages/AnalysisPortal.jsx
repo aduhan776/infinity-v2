@@ -187,16 +187,18 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
           return;
         }
 
-        const { data: poolRows, error: poolErr } = await supabase
-          .from('question_pool')
-          .select('*')
-          .in('id', poolIds);
+        const poolRes = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/questions-by-ids`, {
+          method: 'POST',
+          body: JSON.stringify({ attemptId: cloudRow.id, questionIds: poolIds })
+        });
+        const poolJson = await poolRes.json();
         if (cancelled) return;
-        if (poolErr) {
-          setResolveError("Could not load this attempt's questions from the question bank.");
+        if (!poolJson.success) {
+          setResolveError(poolJson.error || "Could not load this attempt's questions from the question bank.");
           setIsResolving(false);
           return;
         }
+        const poolRows = poolJson.questions;
 
         const poolById = {};
         (poolRows || []).forEach(p => { poolById[p.id] = p; });
