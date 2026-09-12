@@ -779,14 +779,54 @@ const TestPortal = ({ testData, onExit }) => {
     const finalAccuracyRate = totalObjectiveAttempted > 0 ? Math.round((correctCount / totalObjectiveAttempted) * 100) : 0;
     const finalScoreString = finalAggregateScore.toFixed(2);
 
+    // 📤 Upload subjective answer images to Supabase Storage (private bucket)
+    // instead of keeping only a local placeholder. We store the storage
+    // PATH (not a public URL, since the bucket is private) — AnalysisPortal
+    // will request a short-lived signed URL from the backend when it needs
+    // to actually display an image.
+    const uniqueAttemptTimestampId = new Date().getTime();
+    const attemptIdForUpload = data.id + "_" + uniqueAttemptTimestampId;
     const optimizedLocalUploads = {};
-    Object.keys(snapshot.uploads).forEach(qKey => {
-      optimizedLocalUploads[qKey] = (snapshot.uploads[qKey] || []).map(file => ({
-        name: file.name,
-        type: file.type,
-        url: "[Attached & Uploaded via Local Sandbox]" 
-      }));
-    });
+    for (const qKey of Object.keys(snapshot.uploads)) {
+      const filesForQ = snapshot.uploads[qKey] || [];
+      const uploadedMeta = [];
+      for (let fi = 0; fi < filesForQ.length; fi++) {
+        const file = filesForQ[fi];
+        try {
+          // file.url is a base64 data URL (e.g. "data:image/png;base64,...").
+          const matches = /^data:(.+);base64,(.*)$/.exec(file.url || '');
+          if (!matches) {
+            uploadedMeta.push({ name: file.name, type: file.type, path: null });
+            continue;
+          }
+          const mimeType = matches[1];
+          const base64Data = matches[2];
+          const byteChars = atob(base64Data);
+          const byteNumbers = new Array(byteChars.length);
+          for (let bi = 0; bi < byteChars.length; bi++) byteNumbers[bi] = byteChars.charCodeAt(bi);
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: mimeType });
+
+          const safeName = (file.name || `upload_${fi}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `${studentId}/${attemptIdForUpload}/${qKey}_${fi}_${safeName}`;
+
+          const { error: uploadErr } = await supabase.storage
+            .from('subjective-uploads')
+            .upload(storagePath, blob, { contentType: mimeType, upsert: true });
+
+          if (uploadErr) {
+            console.error("Image upload failed for", storagePath, uploadErr);
+            uploadedMeta.push({ name: file.name, type: file.type, path: null });
+          } else {
+            uploadedMeta.push({ name: file.name, type: file.type, path: storagePath });
+          }
+        } catch (uploadEx) {
+          console.error("Image upload exception:", uploadEx);
+          uploadedMeta.push({ name: file.name, type: file.type, path: null });
+        }
+      }
+      optimizedLocalUploads[qKey] = uploadedMeta;
+    }
 
     // 🌐 Cross-device reconstruction support (AI Labs tests only — Test
     // Series tests reconstruct via the mock_tests join instead and don't
@@ -806,10 +846,9 @@ const TestPortal = ({ testData, onExit }) => {
         ai_remark: q.ai_evaluation || null
       }));
 
-    const uniqueAttemptTimestampId = new Date().getTime();
     const finalReport = {
       id: data.id,
-      attemptId: data.id + "_" + uniqueAttemptTimestampId,
+      attemptId: attemptIdForUpload,
       title: data.title,
       date: new Date().toLocaleDateString('en-GB'),
       score: finalScoreString, 
@@ -823,32 +862,27 @@ const TestPortal = ({ testData, onExit }) => {
       time: data.time || 180 
     };
 
+    // 🧹 Draft cleanup — the in-progress draft (saved under the ORIGINAL
+    // test id, status:'draft') is no longer needed once submitted. We do
+    // NOT write a new permanent IndexedDB record here anymore — the cloud
+    // insert below is now the single source of truth for a submitted
+    // attempt, matching AnalysisPortal's fully cloud-based resolution path.
+    // IndexedDB is only used as a last-resort fallback if the cloud insert
+    // itself fails (e.g. no network at the moment of submit) — otherwise
+    // the attempt would be lost entirely.
     try {
-      await deleteFromLocalStore("test_sessions", data.id); 
-      
-      await saveToLocalStore("test_sessions", {
-        id: finalReport.attemptId, 
-        test_id: data.id,
-        title: data.title,
-        status: 'submitted',
-        score: finalScoreString, 
-        accuracy: finalAccuracyRate, 
-        time_left: Math.floor(snapshot.globalTimeLeft / 60),
-        raw_seconds: snapshot.globalTimeLeft,
-        answers: snapshot.answers,
-        uploads: optimizedLocalUploads, 
-        time_tracker: snapshot.timeTracker,
-        created_at: uniqueAttemptTimestampId
-      });
+      await deleteFromLocalStore("test_sessions", data.id);
     } catch (err) {
-      console.error("Local sandbox compilation fault:", err);
+      console.error("Local draft cleanup fault (non-blocking):", err);
     }
 
-    // 🌐 Lightweight cloud sync — just the summary (score/accuracy/date/time),
-    // never the full questions or uploaded files. This is what lets
-    // Dashboard, Statistics, Profile, and Test Series' attempt history work
-    // across devices, without duplicating the heavy local-only data.
-    // Best-effort: failure here never blocks the student's local save above.
+    // 🌐 Cloud sync — this is now the ONLY permanent record of a submitted
+    // attempt. Images are uploaded to Supabase Storage separately (see
+    // uploadPendingImages), so `uploads` here holds public URLs, not raw
+    // file data — safe and lightweight to store in the row itself.
+    // Best-effort with a fallback: if this fails, we keep the local copy
+    // as a safety net so the student's attempt isn't silently lost.
+    let cloudSyncSucceeded = false;
     if (studentId) {
       try {
         await supabase.from('test_sessions').insert({
@@ -867,8 +901,35 @@ const TestPortal = ({ testData, onExit }) => {
           question_ids: questionIdsForCloud,
           subjective_results: subjectiveResultsForCloud
         });
+        cloudSyncSucceeded = true;
       } catch (cloudErr) {
-        console.warn("Cloud test session sync skipped (non-blocking):", cloudErr);
+        console.warn("Cloud test session sync failed:", cloudErr);
+      }
+    }
+
+    // 🛟 Fallback safety net: ONLY if the cloud insert above did not
+    // succeed (no network, transient error, etc.) do we fall back to
+    // saving the full record locally — so the student's attempt is never
+    // silently lost. In the normal/expected case (cloud succeeds), nothing
+    // is written to IndexedDB here at all.
+    if (!cloudSyncSucceeded) {
+      try {
+        await saveToLocalStore("test_sessions", {
+          id: finalReport.attemptId,
+          test_id: data.id,
+          title: data.title,
+          status: 'submitted',
+          score: finalScoreString,
+          accuracy: finalAccuracyRate,
+          time_left: Math.floor(snapshot.globalTimeLeft / 60),
+          raw_seconds: snapshot.globalTimeLeft,
+          answers: snapshot.answers,
+          uploads: optimizedLocalUploads,
+          time_tracker: snapshot.timeTracker,
+          created_at: uniqueAttemptTimestampId
+        });
+      } catch (err) {
+        console.error("Local fallback save also failed:", err);
       }
     }
 

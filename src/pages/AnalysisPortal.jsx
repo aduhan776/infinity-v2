@@ -251,6 +251,36 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedQIdx, setSelectedQIdx] = useState(null);
+  const [viewingImageFor, setViewingImageFor] = useState(null); // storage path currently being fetched
+
+  // 🖼️ Fetch a short-lived signed URL for a private subjective-upload and
+  // open it in a new tab. The bucket is private, so `file.path` alone can't
+  // be rendered directly — the backend verifies ownership and hands back a
+  // temporary link (10 min expiry) via /api/storage/signed-url.
+  const handleViewUploadedImage = async (path) => {
+    if (!path) {
+      alert("This image could not be found — it may not have uploaded successfully at submit time.");
+      return;
+    }
+    setViewingImageFor(path);
+    try {
+      const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/storage/signed-url`, {
+        method: 'POST',
+        body: JSON.stringify({ path })
+      });
+      const data = await res.json();
+      if (data.success && data.signedUrl) {
+        window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        alert(data.error || "Could not load this image right now.");
+      }
+    } catch (err) {
+      console.error("Signed URL fetch failed:", err);
+      alert("Network error — could not load this image.");
+    } finally {
+      setViewingImageFor(null);
+    }
+  };
 
   // 🔙 Make the device/browser back button close the Detailed Review popup
   // instead of leaving the page entirely. We push one extra history entry
@@ -815,7 +845,17 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                               {uploads[selectedQIdx].map((file, fi) => (
                                 <div key={fi} style={{textAlign:'center', background:'#f8fafc', padding:'5px', borderRadius:'6px', border:'1px solid #e2e8f0'}}>
                                   <span style={{fontSize:'0.7rem', fontWeight:'bold', display:'block', color:'#64748b', marginBottom:'4px'}}>{file.name || "Handwritten Sheet"}</span>
-                                  <span style={{fontSize:'0.72rem', background:'#e0e7ff', color:'#4338ca', padding:'4px 8px', borderRadius:'4px', fontWeight:'bold'}}>Local Vault Synced ✓</span>
+                                  {file.path ? (
+                                    <button
+                                      onClick={() => handleViewUploadedImage(file.path)}
+                                      disabled={viewingImageFor === file.path}
+                                      style={{fontSize:'0.72rem', background:'#e0e7ff', color:'#4338ca', padding:'4px 8px', borderRadius:'4px', fontWeight:'bold', border:'none', cursor: viewingImageFor === file.path ? 'wait' : 'pointer'}}
+                                    >
+                                      {viewingImageFor === file.path ? "Loading..." : "🖼️ View Image"}
+                                    </button>
+                                  ) : (
+                                    <span style={{fontSize:'0.72rem', background:'#fee2e2', color:'#991b1b', padding:'4px 8px', borderRadius:'4px', fontWeight:'bold'}}>Upload unavailable</span>
+                                  )}
                                 </div>
                               ))}
                             </div>
