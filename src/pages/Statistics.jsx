@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
+import { authFetch } from '../utils/apiClient';
 
 // --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
 const ACCENT = '#7065BA';
@@ -36,7 +37,7 @@ const Statistics = () => {
           .order('created_at', { ascending: false });
 
         // 2. Fetch total count of saved questions from the shared cloud pool
-        const savedRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/saved-questions?studentId=${user.id}`);
+        const savedRes = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/saved-questions`);
         const savedData = await savedRes.json();
         const qCount = savedData.success ? savedData.count : 0;
 

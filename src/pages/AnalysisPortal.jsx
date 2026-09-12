@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; 
+import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; 
 
 // --- 🌐 LOCAL STORAGE STORAGE ENGINE MAPPINGS ---
@@ -409,11 +410,9 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
         return;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/toggle-save`, {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/toggle-save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentId: user.id,
           questionId: q.id,
           saved: true
         })

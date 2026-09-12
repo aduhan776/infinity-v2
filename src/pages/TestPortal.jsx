@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; 
+import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText';
 
 // --- 🌐 LOCAL STORAGE STORAGE ENGINE MAPPINGS ---
@@ -673,16 +674,14 @@ const TestPortal = ({ testData, onExit }) => {
       const q = evaluatedQuestions[i];
       if (q.type === 'Subjective' && (snapshot.answers[i] || (snapshot.uploads[i] && snapshot.uploads[i].length > 0))) {
         try {
-          const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/evaluate-subjective`, {
+          const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/evaluate-subjective`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               question: q.question,
               userAnswer: snapshot.answers[i] || "",
               uploadedFiles: snapshot.uploads[i] || [],
               testTitle: data.title,
               maxMarks: parseFloat(String(q.marks || '10').replace('+', '')) || 10,
-              studentId,
               questionId: q.id
             })
           });
@@ -729,11 +728,9 @@ const TestPortal = ({ testData, onExit }) => {
     let gradingResultsById = {};
     if (objectiveAnswersPayload.length > 0) {
       try {
-        const gradeRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/grade-test`, {
+        const gradeRes = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/grade-test`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            studentId,
             testId: data.id,
             answers: objectiveAnswersPayload
           })

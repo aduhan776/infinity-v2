@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; 
+import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; // 👈 YEH IMPORT GAYAB THA BHAI, AB FIXED HAI!
 
 // --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
@@ -362,11 +363,9 @@ const BrainFeed = () => {
         return;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/build-test`, {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/build-test`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentId: user.id,
           exam: exam,
           subject: subjectSection,
           topic: subject,
@@ -479,18 +478,13 @@ const BrainFeed = () => {
     // We DO keep a handle on this promise (pendingLedgerWritesRef) purely so
     // "Load More" can await in-flight writes before re-querying the ledger —
     // see fetchBrainFeedPacket. This doesn't delay anything the student sees.
-    const ledgerWritePromise = supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      return fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/submit-attempt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: user.id,
-          questionId: q.id,
-          selectedOptionIndex: optIdx
-        })
-      }).catch(err => console.warn("Ledger update skipped for this question (non-blocking):", err));
-    }).catch(err => console.warn("Could not resolve user for ledger logging (non-blocking):", err));
+    const ledgerWritePromise = authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/submit-attempt`, {
+      method: 'POST',
+      body: JSON.stringify({
+        questionId: q.id,
+        selectedOptionIndex: optIdx
+      })
+    }).catch(err => console.warn("Ledger update skipped for this question (non-blocking):", err));
 
     pendingLedgerWritesRef.current.push(ledgerWritePromise);
 
@@ -570,11 +564,9 @@ const BrainFeed = () => {
         return;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/toggle-save`, {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/toggle-save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentId: user.id,
           questionId: currentQ.id,
           saved: true
         })

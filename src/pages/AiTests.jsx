@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; 
+import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; 
 
 // --- 🌐 INLINE BULLETPROOF INDEXEDDB STORAGE SYSTEM INITIALIZER ---
@@ -169,7 +170,7 @@ const AiTests = ({ onStartTest }) => {
   // ======================================================================
   // ⚡ HARDENED BATCHING ENGINE WITH DYNAMIC PARSER EXTRACTIONS
   // ======================================================================
-  const fetchInBatches = async (studentId, exam, topic, targetCount, type, difficulty, language, marks, neg, subject = '') => {
+  const fetchInBatches = async (exam, topic, targetCount, type, difficulty, language, marks, neg, subject = '') => {
     let remaining = targetCount;
     let masterQuestionsArray = [];
     
@@ -189,11 +190,9 @@ const AiTests = ({ onStartTest }) => {
       // gets stuck at the first 15 questions repeated over and over.
       const excludeIds = masterQuestionsArray.map(q => q.id).filter(Boolean);
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/build-test`, {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/build-test`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          studentId,
           exam,
           subject,
           topic,
@@ -313,7 +312,6 @@ const AiTests = ({ onStartTest }) => {
 
         for (const sec of aiSections) {
           const sectionalQuestions = await fetchInBatches(
-            user.id,
             testTitle, 
             sec.name, 
             parseInt(sec.qCount), 
@@ -372,7 +370,6 @@ const AiTests = ({ onStartTest }) => {
         if (targetQCount > 100) { alert("Maximum limit is 100 questions for a single paper flat configuration."); setLoading(false); processingRef.current = false; return; }
         
         const flatPaperQuestionsList = await fetchInBatches(
-          user.id,
           testTitle,
           testTitle,
           targetQCount,
@@ -456,7 +453,6 @@ const AiTests = ({ onStartTest }) => {
       }
 
       const topicQuestionsList = await fetchInBatches(
-        user.id,
         targetExam,
         topicName,
         targetQCount,

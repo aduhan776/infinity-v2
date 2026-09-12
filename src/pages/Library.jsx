@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
+import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; 
 
 // --- 🌐 LIGHTWEIGHT INLINE INDEXEDDB ENGINE FOR DEVICE STORAGE ---
@@ -77,7 +78,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
       // 1. Fetch Saved Questions from the shared cloud pool (attempts_ledger + question_pool)
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const savedRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/saved-questions?studentId=${user.id}`);
+        const savedRes = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/saved-questions`);
         const savedData = await savedRes.json();
         if (savedData.success) {
           const mappedSaved = savedData.savedQuestions.map(q => ({
@@ -250,10 +251,9 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
             return;
           }
 
-          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/toggle-save`, {
+          const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/toggle-save`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ studentId: user.id, questionId: id, saved: false })
+            body: JSON.stringify({ questionId: id, saved: false })
           });
           const data = await response.json();
 
