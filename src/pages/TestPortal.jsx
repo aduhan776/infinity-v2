@@ -670,40 +670,128 @@ const TestPortal = ({ testData, onExit }) => {
     let correctCount = 0;
     let incorrectCount = 0;
 
-    for (let i = 0; i < evaluatedQuestions.length; i++) {
-      const q = evaluatedQuestions[i];
-      if (q.type === 'Subjective' && (snapshot.answers[i] || (snapshot.uploads[i] && snapshot.uploads[i].length > 0))) {
-        try {
-          const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/evaluate-subjective`, {
-            method: 'POST',
-            body: JSON.stringify({
-              question: q.question,
-              userAnswer: snapshot.answers[i] || "",
-              uploadedFiles: snapshot.uploads[i] || [],
-              testTitle: data.title,
-              maxMarks: parseFloat(String(q.marks || '10').replace('+', '')) || 10,
-              questionId: q.id
-            })
-          });
+    // Generated early — used both as the idempotency key for batch
+    // subjective evaluation below, AND as the storage-path prefix for
+    // uploaded images, AND as the final attemptId for the cloud row.
+    const uniqueAttemptTimestampId = new Date().getTime();
+    const attemptIdForUpload = data.id + "_" + uniqueAttemptTimestampId;
 
-          const resData = await res.json();
-          if (resData.success && resData.evaluation) {
-            evaluatedQuestions[i] = {
-              ...q,
-              score_given: parseFloat(resData.evaluation.score_given) || 0,
-              ai_evaluation: resData.evaluation.ai_evaluation
-            };
-          } else {
-            throw new Error(resData.error || "Evaluation layer breakdown.");
+    // 📤 Upload subjective answer images to Supabase Storage (private bucket)
+    // FIRST — before evaluation — so the batch evaluation call below can
+    // reference each image by its storage PATH (the backend turns that
+    // into a short-lived signed URL for Gemini) instead of sending raw
+    // base64 inline, which bloats the request for no benefit.
+    const optimizedLocalUploads = {};
+    for (const qKey of Object.keys(snapshot.uploads)) {
+      const filesForQ = snapshot.uploads[qKey] || [];
+      const uploadedMeta = [];
+      for (let fi = 0; fi < filesForQ.length; fi++) {
+        const file = filesForQ[fi];
+        try {
+          // file.url is a base64 data URL (e.g. "data:image/png;base64,...").
+          const matches = /^data:(.+);base64,(.*)$/.exec(file.url || '');
+          if (!matches) {
+            uploadedMeta.push({ name: file.name, type: file.type, path: null });
+            continue;
           }
-        } catch (err) {
-          setIsSubmitting(false);
-          isSubmittingRef.current = false;
-          alert("Busy server, failed to submit test responses. Please try again.");
-          return; 
+          const mimeType = matches[1];
+          const base64Data = matches[2];
+          const byteChars = atob(base64Data);
+          const byteNumbers = new Array(byteChars.length);
+          for (let bi = 0; bi < byteChars.length; bi++) byteNumbers[bi] = byteChars.charCodeAt(bi);
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: mimeType });
+
+          const safeName = (file.name || `upload_${fi}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `${studentId}/${attemptIdForUpload}/${qKey}_${fi}_${safeName}`;
+
+          const { error: uploadErr } = await supabase.storage
+            .from('subjective-uploads')
+            .upload(storagePath, blob, { contentType: mimeType, upsert: true });
+
+          if (uploadErr) {
+            console.error("Image upload failed for", storagePath, uploadErr);
+            uploadedMeta.push({ name: file.name, type: file.type, path: null });
+          } else {
+            uploadedMeta.push({ name: file.name, type: file.type, path: storagePath });
+          }
+        } catch (uploadEx) {
+          console.error("Image upload exception:", uploadEx);
+          uploadedMeta.push({ name: file.name, type: file.type, path: null });
         }
       }
+      optimizedLocalUploads[qKey] = uploadedMeta;
     }
+
+    // 📝 Batch subjective evaluation — collect every attempted Subjective
+    // question first, then send them to the backend in chunks of at most
+    // BATCH_SIZE_LIMIT (10, matching the backend's cap) instead of firing
+    // one Gemini call per question. A test with, say, 25 Subjective
+    // questions becomes 3 batch calls (10+10+5) instead of 25 individual
+    // ones — much friendlier to both cost and rate-limiting.
+    const BATCH_SIZE_LIMIT = 10;
+    const subjectiveIndices = [];
+    evaluatedQuestions.forEach((q, i) => {
+      if (q.type === 'Subjective' && (snapshot.answers[i] || (snapshot.uploads[i] && snapshot.uploads[i].length > 0))) {
+        subjectiveIndices.push(i);
+      }
+    });
+
+    for (let chunkStart = 0; chunkStart < subjectiveIndices.length; chunkStart += BATCH_SIZE_LIMIT) {
+      const chunkIndices = subjectiveIndices.slice(chunkStart, chunkStart + BATCH_SIZE_LIMIT);
+
+      const questionsPayload = chunkIndices.map(i => {
+        const q = evaluatedQuestions[i];
+        // Reference the already-uploaded Storage paths (from optimizedLocalUploads)
+        // instead of raw base64 — the backend will turn each path into a
+        // short-lived signed URL for Gemini to fetch directly.
+        const uploadedFiles = (optimizedLocalUploads[i] || [])
+          .filter(f => f.path)
+          .map(f => ({ path: f.path, type: f.type }));
+        return {
+          questionId: q.id,
+          question: q.question,
+          userAnswer: snapshot.answers[i] || "",
+          uploadedFiles,
+          maxMarks: parseFloat(String(q.marks || '10').replace('+', '')) || 10
+        };
+      });
+
+      try {
+        const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/evaluate-subjective`, {
+          method: 'POST',
+          body: JSON.stringify({
+            attemptId: attemptIdForUpload,
+            testTitle: data.title,
+            questions: questionsPayload
+          })
+        });
+
+        const resData = await res.json();
+        if (resData.success && Array.isArray(resData.evaluations)) {
+          const evalById = new Map(resData.evaluations.map(e => [String(e.questionId), e]));
+          chunkIndices.forEach(i => {
+            const q = evaluatedQuestions[i];
+            const evalEntry = evalById.get(String(q.id));
+            if (evalEntry) {
+              evaluatedQuestions[i] = {
+                ...q,
+                score_given: parseFloat(evalEntry.score_given) || 0,
+                ai_evaluation: evalEntry.ai_evaluation
+              };
+            }
+          });
+        } else {
+          throw new Error(resData.error || "Evaluation layer breakdown.");
+        }
+      } catch (err) {
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
+        alert("Busy server, failed to submit test responses. Please try again.");
+        return;
+      }
+    }
+
 
     // 🔒 Secure Test Delivery: this question set never received answers
     // from the server, so grading MUST happen server-side. We send back
@@ -778,55 +866,6 @@ const TestPortal = ({ testData, onExit }) => {
     const totalObjectiveAttempted = correctCount + incorrectCount;
     const finalAccuracyRate = totalObjectiveAttempted > 0 ? Math.round((correctCount / totalObjectiveAttempted) * 100) : 0;
     const finalScoreString = finalAggregateScore.toFixed(2);
-
-    // 📤 Upload subjective answer images to Supabase Storage (private bucket)
-    // instead of keeping only a local placeholder. We store the storage
-    // PATH (not a public URL, since the bucket is private) — AnalysisPortal
-    // will request a short-lived signed URL from the backend when it needs
-    // to actually display an image.
-    const uniqueAttemptTimestampId = new Date().getTime();
-    const attemptIdForUpload = data.id + "_" + uniqueAttemptTimestampId;
-    const optimizedLocalUploads = {};
-    for (const qKey of Object.keys(snapshot.uploads)) {
-      const filesForQ = snapshot.uploads[qKey] || [];
-      const uploadedMeta = [];
-      for (let fi = 0; fi < filesForQ.length; fi++) {
-        const file = filesForQ[fi];
-        try {
-          // file.url is a base64 data URL (e.g. "data:image/png;base64,...").
-          const matches = /^data:(.+);base64,(.*)$/.exec(file.url || '');
-          if (!matches) {
-            uploadedMeta.push({ name: file.name, type: file.type, path: null });
-            continue;
-          }
-          const mimeType = matches[1];
-          const base64Data = matches[2];
-          const byteChars = atob(base64Data);
-          const byteNumbers = new Array(byteChars.length);
-          for (let bi = 0; bi < byteChars.length; bi++) byteNumbers[bi] = byteChars.charCodeAt(bi);
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: mimeType });
-
-          const safeName = (file.name || `upload_${fi}`).replace(/[^a-zA-Z0-9._-]/g, '_');
-          const storagePath = `${studentId}/${attemptIdForUpload}/${qKey}_${fi}_${safeName}`;
-
-          const { error: uploadErr } = await supabase.storage
-            .from('subjective-uploads')
-            .upload(storagePath, blob, { contentType: mimeType, upsert: true });
-
-          if (uploadErr) {
-            console.error("Image upload failed for", storagePath, uploadErr);
-            uploadedMeta.push({ name: file.name, type: file.type, path: null });
-          } else {
-            uploadedMeta.push({ name: file.name, type: file.type, path: storagePath });
-          }
-        } catch (uploadEx) {
-          console.error("Image upload exception:", uploadEx);
-          uploadedMeta.push({ name: file.name, type: file.type, path: null });
-        }
-      }
-      optimizedLocalUploads[qKey] = uploadedMeta;
-    }
 
     // 🌐 Cross-device reconstruction support (AI Labs tests only — Test
     // Series tests reconstruct via the mock_tests join instead and don't
