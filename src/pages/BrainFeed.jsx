@@ -44,6 +44,14 @@ const FieldLabel = ({ icon, children }) => (
   </label>
 );
 
+// --- 🆕 Checkmark bullet used by the BrainFeed choice-screen cards ---
+const ChecklistItem = ({ children }) => (
+  <li style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.88rem', fontWeight: '500', color: '#334155' }}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+    {children}
+  </li>
+);
+
 const BrainFeed = () => {
   const navigate = useNavigate();
   // --- CONFIGURATION FORM STATES ---
@@ -97,6 +105,139 @@ const BrainFeed = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // --- 🆕 LANDING VIEW: 'choice' (2 cards) -> 'form' (existing config form) or 'history' (past sessions list) ---
+  const [landingView, setLandingView] = useState('choice');
+  const [brainfeedCredits, setBrainfeedCredits] = useState(null); // null = not loaded yet
+  const [historySessions, setHistorySessions] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [pastSessionLoadingId, setPastSessionLoadingId] = useState(null); // which history row's "Revise" button is loading
+
+  // --- 🆕 SESSION UUID: client-generated, used as both the credit_transactions
+  // "reference" (for both the fresh-load and Load More deductions) and as the
+  // brainfeed_sessions row's own id when the session is eventually saved. ---
+  const [sessionUUID, setSessionUUID] = useState(null);
+  const sessionUUIDRef = useRef(null); // avoids stale-closure issues inside async handlers
+
+  // --- 🆕 Fetch current BrainFeed credit balance for the top-right quota badge on the choice screen ---
+  const fetchBrainfeedCredits = async () => {
+    try {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/history`, {
+        method: 'GET'
+      });
+      const data = await response.json();
+      if (data.success) {
+        setBrainfeedCredits(typeof data.brainfeedCredits === 'number' ? data.brainfeedCredits : 0);
+      }
+    } catch (err) {
+      console.warn("Could not fetch BrainFeed credits (non-blocking):", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchBrainfeedCredits();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- 🆕 Fetch the list of past BrainFeed sessions for the "Revise Previous Sessions" screen ---
+  const fetchBrainfeedHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/history`, {
+        method: 'GET'
+      });
+      const data = await response.json();
+      if (data.success) {
+        setHistorySessions(data.sessions || []);
+        setBrainfeedCredits(typeof data.brainfeedCredits === 'number' ? data.brainfeedCredits : 0);
+      } else {
+        setHistoryError(data.error || 'Could not load your past sessions.');
+      }
+    } catch (err) {
+      console.error("Failed to fetch BrainFeed history:", err);
+      setHistoryError('Network error — could not load your past sessions.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleOpenHistory = () => {
+    setLandingView('history');
+    fetchBrainfeedHistory();
+  };
+
+  const handleOpenNewSessionForm = () => {
+    setLandingView('form');
+  };
+
+  const handleBackToChoice = () => {
+    setLandingView('choice');
+    fetchBrainfeedCredits(); // keep the badge fresh in case a session just completed
+  };
+
+  // --- 🆕 REVISE A PAST SESSION (from history list): fetch full question content by id
+  // (answers hidden nowhere here — this is explicitly a review, so we ask the backend for
+  // the same question rows AnalysisPortal uses) and reconstruct answerResults locally,
+  // same pattern as AI Labs' AnalysisPortal. Read-only: no attempts_ledger writes, no
+  // credit consumption, no profile stat changes — this is purely viewing history. ---
+  const handleRevisePastSession = async (session) => {
+    setPastSessionLoadingId(session.id);
+    try {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/questions-by-ids`, {
+        method: 'POST',
+        body: JSON.stringify({ sessionId: session.id, questionIds: session.questionIdsRaw })
+      });
+      const data = await response.json();
+      if (!data.success || !Array.isArray(data.questions)) {
+        setCustomAlert({ show: true, title: 'Could Not Load Session', message: data.error || 'This session\'s questions could not be loaded.' });
+        return;
+      }
+
+      // Reconstruct in the same order as the stored question_ids / answers arrays.
+      const questionMap = {};
+      data.questions.forEach(q => { questionMap[q.id] = q; });
+
+      const orderedQuestions = session.questionIdsRaw.map(qid => {
+        const q = questionMap[qid];
+        if (!q) return null;
+        return {
+          id: q.id,
+          question: q.question_text || q.question,
+          options: q.options || ["A", "B", "C", "D"],
+          correct: q.correct_option_index,
+          explanation: q.explanation || "Verified conceptual reference."
+        };
+      }).filter(Boolean);
+
+      const restoredAnswers = {};
+      const restoredResults = {};
+      session.answersRaw.forEach((optIdx, idx) => {
+        if (optIdx === null || optIdx === undefined) return;
+        const q = orderedQuestions[idx];
+        if (!q) return;
+        restoredAnswers[idx] = optIdx;
+        restoredResults[idx] = {
+          isCorrect: optIdx === q.correct,
+          correctOptionIndex: q.correct,
+          explanation: q.explanation
+        };
+      });
+
+      setQuestions(orderedQuestions);
+      setSelectedAnswers(restoredAnswers);
+      setAnswerResults(restoredResults);
+      setCurrentIdx(0);
+      setSessionMode('revise');
+      setIsFeedActive(true);
+    } catch (err) {
+      console.error("Failed to load past session for revise:", err);
+      setCustomAlert({ show: true, title: 'Network Error', message: 'Could not load this session. Please try again.' });
+    } finally {
+      setPastSessionLoadingId(null);
+    }
+  };
+
   // --- 🔁 SESSION MODE: 'live' (normal), 'reattempt' (redo, stats not saved), 'revise' (read-only scroll-through) ---
   const [sessionMode, setSessionMode] = useState('live');
   const viewportRef = useRef(null);
@@ -138,6 +279,13 @@ const BrainFeed = () => {
     setSubject(saved.subject || '');
     setDifficulty(saved.difficulty || 'Medium');
     setLanguage(saved.language || 'English');
+    // 🆕 Restore the same sessionUUID this saved session was using, so that
+    // completing it now updates the same brainfeed_sessions row (and any
+    // future deduct-credit calls, e.g. Load More, reference the same session)
+    // instead of creating a duplicate.
+    const restoredUUID = saved.sessionUUID || crypto.randomUUID();
+    sessionUUIDRef.current = restoredUUID;
+    setSessionUUID(restoredUUID);
     setIsFeedActive(true);
     setSessionMode('live');
     // 📱 MOBILE: position is driven by native scroll (scroll-snap), not the
@@ -196,6 +344,11 @@ const BrainFeed = () => {
 
   const handleDiscardSession = () => {
     clearSavedBrainFeedSession();
+    // 🆕 The old sessionUUID (and its already-saved partial brainfeed_sessions
+    // row, if any) is left as-is — it already accounted for the credit(s)
+    // that were deducted for it. We just stop referencing it going forward.
+    sessionUUIDRef.current = null;
+    setSessionUUID(null);
     setResumePrompt(false);
   };
 
@@ -205,7 +358,8 @@ const BrainFeed = () => {
     try {
       localStorage.setItem(BRAINFEED_SESSION_KEY, JSON.stringify({
         questions, selectedAnswers, answerResults, currentIdx,
-        exam, subjectSection, subject, difficulty, language
+        exam, subjectSection, subject, difficulty, language,
+        sessionUUID: sessionUUIDRef.current
       }));
     } catch (e) {
       console.error("Failed to save BrainFeed session locally:", e);
@@ -363,6 +517,29 @@ const BrainFeed = () => {
         return;
       }
 
+      // 🆕 CREDIT DEDUCTION AT LOAD TIME (not at completion) — a fresh load
+      // generates a brand-new sessionUUID; Load More reuses the same one so
+      // both deductions reference the same logical session.
+      const activeSessionUUID = isLoadMore ? sessionUUIDRef.current : crypto.randomUUID();
+      if (!isLoadMore) {
+        sessionUUIDRef.current = activeSessionUUID;
+        setSessionUUID(activeSessionUUID);
+      }
+
+      try {
+        const creditResponse = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/deduct-credit`, {
+          method: 'POST',
+          body: JSON.stringify({ sessionUUID: activeSessionUUID, exam, subjectSection, subject })
+        });
+        const creditData = await creditResponse.json();
+        if (creditData.success && typeof creditData.updatedBrainfeedCredits === 'number') {
+          setBrainfeedCredits(creditData.updatedBrainfeedCredits);
+        }
+      } catch (creditErr) {
+        // Non-blocking: don't stop the student from practicing over a credit-tracking hiccup.
+        console.warn("Could not deduct BrainFeed credit (non-blocking):", creditErr);
+      }
+
       const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/build-test`, {
         method: 'POST',
         body: JSON.stringify({
@@ -501,7 +678,12 @@ const BrainFeed = () => {
     }
   };
 
-  // 🎯 REALIGNED DATABASE PIPELINE: profiles table ke exact columns (brainfeed_count, brainfeed_accuracy) use honge!
+  // 🎯 SECURED: this used to write directly to profiles from the client.
+  // Now it calls the backend, which does the exact same aggregation math
+  // (same output — sessionAccuracy/beforeAccuracy/newAccuracy/attempted/correct
+  // populate metricsSummary exactly as before) but also atomically saves the
+  // brainfeed_sessions record and logs the credit_transactions ledger row —
+  // neither of which a client-side write could safely do.
   const saveSessionMetricsToProfile = async (answersOverride, resultsOverride) => {
     const answersData = answersOverride || selectedAnswers;
     const resultsData = resultsOverride || answerResults;
@@ -509,44 +691,32 @@ const BrainFeed = () => {
     if (attempted === 0) return;
 
     const correct = Object.values(resultsData).filter(r => r.isCorrect).length;
-    const sessionAccuracy = attempted > 0 ? Math.round((correct / attempted) * 100) : 0;
+
+    // question_ids / answers arrays, index-aligned (index = question position in this session).
+    const questionIds = questions.map(q => q.id);
+    const answersArray = questions.map((_, idx) => (answersData[idx] !== undefined ? answersData[idx] : null));
+
+    // Fall back to a fresh UUID only if somehow no credit-deduction call ever ran
+    // for this session (shouldn't normally happen — defensive only).
+    const activeSessionUUID = sessionUUIDRef.current || crypto.randomUUID();
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // 1. Read the real column names that exist in the profiles table
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('brainfeed_count, brainfeed_accuracy')
-          .eq('id', user.id)
-          .single();
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/complete-session`, {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionUUID: activeSessionUUID,
+          questionIds,
+          answers: answersArray,
+          attempted,
+          correct
+        })
+      });
+      const data = await response.json();
 
-        const oldAttempted = profile?.brainfeed_count || 0;
-        const oldAccuracy = profile?.brainfeed_accuracy || 0;
-        const oldCorrect = Math.round((oldAccuracy / 100) * oldAttempted);
-
-        // 2. Perform cumulative aggregations
-        const newTotalQuestions = oldAttempted + attempted;
-        const newTotalCorrect = oldCorrect + correct;
-        const newOverallAccuracy = newTotalQuestions > 0 ? Math.round((newTotalCorrect / newTotalQuestions) * 100) : 0;
-
-        // 3. Write to the real column names
-        await supabase
-          .from('profiles')
-          .update({
-            brainfeed_count: newTotalQuestions,
-            brainfeed_accuracy: newOverallAccuracy
-          })
-          .eq('id', user.id);
-
-          // Summary hooks update
-          setMetricsSummary({
-            sessionAccuracy,
-            beforeAccuracy: oldAccuracy,
-            newAccuracy: newOverallAccuracy,
-            attempted,
-            correct
-          });
+      if (data.success) {
+        setMetricsSummary(data.metricsSummary);
+      } else {
+        console.error("Failed to save session:", data.error);
       }
     } catch (err) {
       console.error("Failed to update profile statistics:", err);
@@ -644,6 +814,16 @@ const BrainFeed = () => {
     // The saved session should only ever be cleared when the student
     // explicitly chooses "Start Fresh" on the resume modal (see
     // handleDiscardSession) — never as a side effect of leaving the screen.
+    // Note: sessionUUID is intentionally NOT cleared here for the same reason
+    // — "Save and Exit" needs it preserved so a later "Continue Session" can
+    // finish updating the same brainfeed_sessions row. It's only reset in
+    // handleDiscardSession (Start Fresh) and freshly regenerated the next
+    // time fetchBrainFeedPacket(false) runs for a genuinely new session.
+
+    // 🆕 Back to the 2-card choice screen (not straight into the form) —
+    // and refresh the quota badge in case a session/credit just got consumed.
+    setLandingView('choice');
+    fetchBrainfeedCredits();
   };
 
   // --- 📖 REVISE: re-open the same finished session, read-only, so the person can scroll back through it ---
@@ -1007,81 +1187,182 @@ const BrainFeed = () => {
           }
         `}</style>
       )}
-      <div style={{
-        ...formCard,
-        padding: isMobile ? '18px' : '35px',
-        ...(isMobile ? { width: '100%', maxWidth: '100%', height: '100%', border: 'none', borderRadius: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' } : {})
-      }}>
-        <h2 style={{ color: '#0f172a', marginBottom: '5px', fontWeight: '800', letterSpacing: '-0.5px', fontSize: isMobile ? '1.1rem' : '1.5rem', borderLeft: `3px solid ${ACCENT}`, paddingLeft: '12px' }}>Start a BrainFeed Session</h2>
-        <p style={{ color: '#64748b', marginBottom: isMobile ? '12px' : '25px', fontSize: isMobile ? '0.76rem' : '0.9rem', fontWeight: '500', paddingLeft: '15px' }}>
-          Fill in the details to start practicing.
-        </p>
-        
-        <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : flexRow.alignItems, gap: isMobile ? '0px' : '15px', marginBottom: isMobile ? '0' : flexRow.marginBottom }}>
-          <div style={{ flex: 1 }}>
-            <FieldLabel icon="exam">Target Exam <span style={mandatoryStar}>*</span></FieldLabel>
-            <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. UPSC, SSC, Banking" value={exam} onChange={e => setExam(e.target.value)} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <FieldLabel icon="subject">Subject / Section <span style={mandatoryStar}>*</span></FieldLabel>
-            <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Maths, English, GK" value={subjectSection} onChange={e => setSubjectSection(e.target.value)} />
-          </div>
-        </div>
 
-        <div>
-          <FieldLabel icon="topic">Topic <span style={mandatoryStar}>*</span></FieldLabel>
-          <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Trigonometry, Mughal Empire" value={subject} onChange={e => setSubject(e.target.value)} />
-        </div>
-
-        <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : flexRow.alignItems, gap: isMobile ? '0px' : '15px' }}>
-          <div style={{ flex: 1 }}>
-            <FieldLabel icon="difficulty">Difficulty</FieldLabel>
-            <div style={{ ...horizontalDifficultyContainer, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }}>
-              {difficultyLevels.map((level) => (
-                <button
-                  key={level.value}
-                  type="button"
-                  onClick={() => setDifficulty(level.value)}
-                  style={{
-                    ...difficultyTabOption,
-                    flex: 1,
-                    background: difficulty === level.value ? ACCENT : '#f8fafc',
-                    color: difficulty === level.value ? '#ffffff' : '#334155',
-                    borderColor: difficulty === level.value ? ACCENT : '#e2e8f0',
-                  }}
-                >
-                  {level.label}
-                </button>
-              ))}
+      {/* 🆕 CHOICE SCREEN — same card layout/shape/colors as the AI Test Lab page */}
+      {landingView === 'choice' && (
+        <div style={{ width: '100%', maxWidth: '620px', boxSizing: 'border-box', padding: isMobile ? '18px' : '0' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
+            <div style={quotaBadgeStyle}>
+              {brainfeedCredits === null ? 'Loading...' : `${brainfeedCredits} session${brainfeedCredits === 1 ? '' : 's'} left`}
             </div>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }}>
-              <div style={{ marginBottom: 0 }}><FieldLabel icon="language"><span style={{ whiteSpace: 'nowrap' }}>Language</span></FieldLabel></div>
-              <select style={{ ...inputStyle, flex: 1, width: 'auto', padding: '11px', marginBottom: 0 }} value={language} onChange={e => setLanguage(e.target.value)}>
-                <option value="English">English</option>
-                <option value="Hindi">Hindi</option>
-              </select>
+
+          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+            <h2 style={{ color: '#0f172a', fontWeight: '900', fontSize: isMobile ? '1.4rem' : '1.8rem', margin: '0 0 8px 0' }}>BrainFeed</h2>
+            <p style={{ color: '#64748b', fontSize: isMobile ? '0.85rem' : '0.95rem', fontWeight: '500', margin: 0 }}>
+              Choose how you want to practice today
+            </p>
+          </div>
+
+          <div style={labCardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
+              <div style={{ ...labIconBoxStyle, background: '#d1fae5' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.2" fill="#10b981" /></svg>
+              </div>
+              <div style={{ ...labBadgeStyle, background: '#d1fae5', color: '#065f46' }}>Daily Practice</div>
             </div>
+            <h3 style={labTitleStyle}>Start New Session</h3>
+            <ul style={labChecklistStyle}>
+              <ChecklistItem>15 adaptive questions per session</ChecklistItem>
+              <ChecklistItem>Focuses on your weak areas</ChecklistItem>
+              <ChecklistItem>Instant feedback after each answer</ChecklistItem>
+            </ul>
+            <button style={{ ...labButtonStyle, background: '#10b981' }} onClick={handleOpenNewSessionForm}>
+              Start Practice
+            </button>
+          </div>
+
+          <div style={{ ...labCardStyle, marginTop: '18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
+              <div style={{ ...labIconBoxStyle, background: '#e0e7ff' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /><path d="M12 8v4l3 3" /></svg>
+              </div>
+              <div style={{ ...labBadgeStyle, background: '#e0e7ff', color: ACCENT }}>Session History</div>
+            </div>
+            <h3 style={labTitleStyle}>Revise Previous Sessions</h3>
+            <ul style={labChecklistStyle}>
+              <ChecklistItem>Review your past sessions</ChecklistItem>
+              <ChecklistItem>See correct answers &amp; explanations</ChecklistItem>
+              <ChecklistItem>Track your progress over time</ChecklistItem>
+            </ul>
+            <button style={{ ...labButtonStyle, background: ACCENT }} onClick={handleOpenHistory}>
+              View Past Sessions
+            </button>
           </div>
         </div>
+      )}
 
-        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: isMobile ? '12px' : '20px', marginTop: isMobile ? '4px' : '15px' }}>
-          <button
-            onClick={() => fetchBrainFeedPacket(false)}
-            disabled={cooldown > 0}
-            style={{
-              ...actionBtn,
-              padding: '14px',
-              borderRadius: '10px',
-              background: cooldown > 0 ? '#94a3b8' : ACCENT,
-              cursor: cooldown > 0 ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {cooldown > 0 ? `Please wait ${cooldown}s to retry` : "Start Practice"}
-          </button>
+      {/* 🆕 HISTORY LIST SCREEN */}
+      {landingView === 'history' && (
+        <div style={{ width: '100%', maxWidth: '620px', boxSizing: 'border-box', padding: isMobile ? '18px' : '0' }}>
+          <button onClick={handleBackToChoice} style={backLinkStyle}>← Back</button>
+          <h2 style={{ color: '#0f172a', fontWeight: '900', fontSize: isMobile ? '1.2rem' : '1.5rem', margin: '14px 0 18px 0' }}>Your Past Sessions</h2>
+
+          {historyLoading && (
+            <p style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: '500', textAlign: 'center', padding: '30px 0' }}>Loading your sessions...</p>
+          )}
+
+          {!historyLoading && historyError && (
+            <p style={{ color: '#b91c1c', fontSize: '0.88rem', fontWeight: '600', textAlign: 'center', padding: '20px 0' }}>{historyError}</p>
+          )}
+
+          {!historyLoading && !historyError && historySessions.length === 0 && (
+            <p style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: '500', textAlign: 'center', padding: '30px 0' }}>
+              No sessions yet — finish a BrainFeed session and it'll show up here.
+            </p>
+          )}
+
+          {!historyLoading && !historyError && historySessions.map(session => (
+            <div key={session.id} style={historyRowStyle}>
+              <div>
+                <div style={{ color: '#0f172a', fontWeight: '700', fontSize: '0.92rem', marginBottom: '4px' }}>
+                  {session.questionCount} Questions · {session.score}/{session.questionCount} correct
+                </div>
+                <div style={{ color: '#64748b', fontSize: '0.78rem', fontWeight: '500' }}>
+                  {new Date(session.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {session.accuracy}% accuracy
+                </div>
+              </div>
+              <button
+                onClick={() => handleRevisePastSession(session)}
+                disabled={pastSessionLoadingId === session.id}
+                style={{ ...historyReviseBtnStyle, opacity: pastSessionLoadingId === session.id ? 0.6 : 1 }}
+              >
+                {pastSessionLoadingId === session.id ? '...' : 'Revise'}
+              </button>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
+
+      {/* EXISTING FORM — untouched, just gated behind landingView === 'form' now */}
+      {landingView === 'form' && (
+        <div style={{
+          ...formCard,
+          padding: isMobile ? '18px' : '35px',
+          ...(isMobile ? { width: '100%', maxWidth: '100%', height: '100%', border: 'none', borderRadius: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' } : {})
+        }}>
+          <button onClick={handleBackToChoice} style={{ ...backLinkStyle, marginBottom: '12px' }}>← Back</button>
+          <h2 style={{ color: '#0f172a', marginBottom: '5px', fontWeight: '800', letterSpacing: '-0.5px', fontSize: isMobile ? '1.1rem' : '1.5rem', borderLeft: `3px solid ${ACCENT}`, paddingLeft: '12px' }}>Start a BrainFeed Session</h2>
+          <p style={{ color: '#64748b', marginBottom: isMobile ? '12px' : '25px', fontSize: isMobile ? '0.76rem' : '0.9rem', fontWeight: '500', paddingLeft: '15px' }}>
+            Fill in the details to start practicing.
+          </p>
+          
+          <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : flexRow.alignItems, gap: isMobile ? '0px' : '15px', marginBottom: isMobile ? '0' : flexRow.marginBottom }}>
+            <div style={{ flex: 1 }}>
+              <FieldLabel icon="exam">Target Exam <span style={mandatoryStar}>*</span></FieldLabel>
+              <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. UPSC, SSC, Banking" value={exam} onChange={e => setExam(e.target.value)} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <FieldLabel icon="subject">Subject / Section <span style={mandatoryStar}>*</span></FieldLabel>
+              <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Maths, English, GK" value={subjectSection} onChange={e => setSubjectSection(e.target.value)} />
+            </div>
+          </div>
+
+          <div>
+            <FieldLabel icon="topic">Topic <span style={mandatoryStar}>*</span></FieldLabel>
+            <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }} placeholder="e.g. Trigonometry, Mughal Empire" value={subject} onChange={e => setSubject(e.target.value)} />
+          </div>
+
+          <div style={{ ...flexRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : flexRow.alignItems, gap: isMobile ? '0px' : '15px' }}>
+            <div style={{ flex: 1 }}>
+              <FieldLabel icon="difficulty">Difficulty</FieldLabel>
+              <div style={{ ...horizontalDifficultyContainer, width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }}>
+                {difficultyLevels.map((level) => (
+                  <button
+                    key={level.value}
+                    type="button"
+                    onClick={() => setDifficulty(level.value)}
+                    style={{
+                      ...difficultyTabOption,
+                      flex: 1,
+                      background: difficulty === level.value ? ACCENT : '#f8fafc',
+                      color: difficulty === level.value ? '#ffffff' : '#334155',
+                      borderColor: difficulty === level.value ? ACCENT : '#e2e8f0',
+                    }}
+                  >
+                    {level.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', boxSizing: 'border-box', marginBottom: isMobile ? '10px' : '15px' }}>
+                <div style={{ marginBottom: 0 }}><FieldLabel icon="language"><span style={{ whiteSpace: 'nowrap' }}>Language</span></FieldLabel></div>
+                <select style={{ ...inputStyle, flex: 1, width: 'auto', padding: '11px', marginBottom: 0 }} value={language} onChange={e => setLanguage(e.target.value)}>
+                  <option value="English">English</option>
+                  <option value="Hindi">Hindi</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: isMobile ? '12px' : '20px', marginTop: isMobile ? '4px' : '15px' }}>
+            <button
+              onClick={() => fetchBrainFeedPacket(false)}
+              disabled={cooldown > 0}
+              style={{
+                ...actionBtn,
+                padding: '14px',
+                borderRadius: '10px',
+                background: cooldown > 0 ? '#94a3b8' : ACCENT,
+                cursor: cooldown > 0 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {cooldown > 0 ? `Please wait ${cooldown}s to retry` : "Start Practice"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1090,5 +1371,17 @@ const BrainFeed = () => {
 const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '35px', borderRadius: '20px', border: '1px solid #e2e8f0', width: '100%', maxWidth: '620px' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const mandatoryStar = { color: '#ef4444', fontWeight: '900' }; const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E4E1F5', fontSize: '0.95rem', outline: 'none', marginBottom: '15px', background: '#F8F7FC', color: '#0f172a', fontWeight: '500' }; const flexRow = { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '5px' }; const actionBtn = { border: 'none', color: '#fff', width: '100%', fontWeight: '700', transition: '0.2s', fontSize: '0.92rem' }; const horizontalDifficultyContainer = { display: 'flex', gap: '8px', width: '100%', marginBottom: '15px' }; const difficultyTabOption = { flex: 1, padding: '11px 12px', borderRadius: '10px', border: '1px solid', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s ease', textAlign: 'center' }; const feedWrapperStyle = { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: 'Inter, sans-serif' }; const topBarFeedStyle = { position: 'absolute', top: 0, left: 0, width: '100%', padding: '16px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box', borderBottom: '1px solid #e2e8f0', background: '#ffffff', zIndex: 12 }; const exitBtnStyle = { background: '#fff', color: '#ef4444', border: '1px solid #fee2e2', padding: '10px 20px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.82rem' }; const counterBadgeStyle = { background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '8px 18px', borderRadius: '30px', fontSize: '0.82rem', fontWeight: '700' }; const mainControlRowStyle = { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '24px', width: '100%', justifyContent: 'center', height: '84vh', marginTop: '65px', boxSizing: 'border-box', padding: '0 40px' }; const sideNavBtnStyle = { width: '48px', height: '48px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', fontWeight: '800', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', flexShrink: 0, outline: 'none' }; const viewportContainerStyle = { width: '100%', height: '100%', overflow: 'hidden', position: 'relative', maxWidth: '980px', flexShrink: 0 }; const sliderTrackStyle = { display: 'flex', flexDirection: 'column', width: '100%', height: '100%', transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }; const cardSlideInstanceStyle = { width: '100%', height: '100%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', padding: '10px 0' }; const splitFlexContainerLayout = { display: 'flex', flexDirection: 'row', gap: '20px', width: '100%', height: '100%', alignItems: 'stretch', justifyContent: 'center' }; const fixedQuestionCardStyle = { background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '30px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '16px', width: '610px', maxHeight: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.015)', flexShrink: 0 }; const navBtnRect = { padding: '14px 26px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#ffffff', color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.92rem', fontWeight: '800', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer', gap: '8px', outline: 'none' }; const scrollableCardContentBody = { flex: 1, overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '16px' }; const explanationPopupStyle = { background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 16px', marginBottom: '2px', boxShadow: '0 4px 12px rgba(16,185,129,0.08)' }; const explanationPopupHeader = { fontSize: '0.68rem', fontWeight: '900', letterSpacing: '0.5px', color: '#166534', marginBottom: '6px' }; const explanationPopupText = { margin: 0, fontSize: '0.85rem', color: '#166534', lineHeight: '1.5', fontWeight: '500' }; const qHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }; const qTypeLabel = { background: '#f1f5f9', color: '#475569', padding: '5px 12px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase' }; const statusIndicator = { fontSize: '0.75rem', fontWeight: '700' }; const saveBtnStyle = { border: '1px solid #e2e8f0', padding: '8px 16px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700' }; const questionTextStyle = { color: '#0f172a', margin: '5px 0', fontSize: '1.2rem', fontWeight: '800', lineHeight: '1.45', flexShrink: 0 }; const optionsContainerStyle = { display: 'flex', flexDirection: 'column', gap: '10px', margin: '5px 0', flexShrink: 0 }; const optionButtonStyle = { width: '100%', textAlign: 'left', padding: '12px 18px', borderRadius: '10px', border: '1px solid', fontSize: '0.92rem', fontWeight: '600', display: 'flex', alignItems: 'center', transition: 'all 0.15s ease' }; const optLabelMarker = { color: '#94a3b8', marginRight: '10px', fontWeight: '700' }; const inlineCardWarningStyle = { background: '#fef2f2', border: '1px solid #fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', flexShrink: 0 }; const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }; const modalContentCardStyle = { background: '#fff', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '380px', textAlign: 'center', border: '1px solid #e2e8f0', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }; const modalActionBtn = { width: '100%', padding: '12px', border: 'none', color: '#fff', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.88rem' }; const accuracyMetricsDashboardBox = { display: 'flex', flexDirection: 'column', gap: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px', marginTop: '16px' }; const metricRowItem = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #edf2f7', paddingBottom: '10px' }; const metricLabelText = { fontSize: '0.82rem', fontWeight: '600', color: '#475569' }; const metricValueBadge = { fontSize: '0.78rem', fontWeight: '700', padding: '4px 10px', borderRadius: '6px' };
 const modeHintTextStyle = { fontSize: '0.65rem', color: '#f59e0b', fontWeight: '700' };
 const scrollHintStyle = { textAlign: 'center', fontSize: '0.68rem', color: '#94a3b8', fontWeight: '600', pointerEvents: 'none', flex: 1 };
+
+// --- 🆕 CHOICE SCREEN + HISTORY STYLES (matches AI Test Lab card look/feel) ---
+const quotaBadgeStyle = { background: '#e0e7ff', color: ACCENT, padding: '8px 16px', borderRadius: '30px', fontSize: '0.8rem', fontWeight: '700', whiteSpace: 'nowrap' };
+const labCardStyle = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '28px', boxSizing: 'border-box', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' };
+const labIconBoxStyle = { width: '44px', height: '44px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const labBadgeStyle = { padding: '6px 14px', borderRadius: '30px', fontSize: '0.72rem', fontWeight: '700' };
+const labTitleStyle = { color: '#0f172a', fontWeight: '800', fontSize: '1.3rem', margin: '0 0 14px 0' };
+const labChecklistStyle = { listStyle: 'none', padding: 0, margin: '0 0 22px 0', display: 'flex', flexDirection: 'column', gap: '10px' };
+const labButtonStyle = { border: 'none', color: '#fff', width: '100%', fontWeight: '700', fontSize: '0.92rem', padding: '14px', borderRadius: '10px', cursor: 'pointer' };
+const backLinkStyle = { background: 'none', border: 'none', color: ACCENT, fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer', padding: 0 };
+const historyRowStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px 18px', marginBottom: '12px' };
+const historyReviseBtnStyle = { background: ACCENT, color: '#fff', border: 'none', padding: '9px 18px', borderRadius: '8px', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap' };
 
 export default BrainFeed;
