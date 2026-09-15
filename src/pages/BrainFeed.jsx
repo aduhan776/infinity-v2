@@ -637,28 +637,10 @@ const BrainFeed = () => {
         return;
       }
 
-      // 🆕 CREDIT DEDUCTION AT LOAD TIME (not at completion) — a fresh load
-      // generates a brand-new sessionUUID; Load More reuses the same one so
-      // both deductions reference the same logical session.
+      // 🆕 The sessionUUID is generated up front (a fresh load gets a brand-new
+      // one; Load More reuses the same one so both deductions reference the
+      // same logical session), but the credit is NOT deducted yet — see below.
       const activeSessionUUID = isLoadMore ? sessionUUIDRef.current : crypto.randomUUID();
-      if (!isLoadMore) {
-        sessionUUIDRef.current = activeSessionUUID;
-        setSessionUUID(activeSessionUUID);
-      }
-
-      try {
-        const creditResponse = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/deduct-credit`, {
-          method: 'POST',
-          body: JSON.stringify({ sessionUUID: activeSessionUUID, exam, subjectSection, subject })
-        });
-        const creditData = await creditResponse.json();
-        if (creditData.success && typeof creditData.updatedBrainfeedCredits === 'number') {
-          setBrainfeedCredits(creditData.updatedBrainfeedCredits);
-        }
-      } catch (creditErr) {
-        // Non-blocking: don't stop the student from practicing over a credit-tracking hiccup.
-        console.warn("Could not deduct BrainFeed credit (non-blocking):", creditErr);
-      }
 
       const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/pool/build-test`, {
         method: 'POST',
@@ -677,6 +659,32 @@ const BrainFeed = () => {
       });
       const data = await response.json();
       if (data.success && data.questions && data.questions.length > 0) {
+        // 🆕 CREDIT DEDUCTION — only now, once the questions have actually been
+        // served. Deducting before this call meant an upstream failure (e.g.
+        // Gemini returning 503 under load) still cost the student a credit for
+        // questions they never received. Deducting here keeps the anti-abuse
+        // property that matters — the credit is spent the moment questions are
+        // handed over, not when the session is finished — without charging for
+        // failures.
+        if (!isLoadMore) {
+          sessionUUIDRef.current = activeSessionUUID;
+          setSessionUUID(activeSessionUUID);
+        }
+
+        try {
+          const creditResponse = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/deduct-credit`, {
+            method: 'POST',
+            body: JSON.stringify({ sessionUUID: activeSessionUUID, exam, subjectSection, subject })
+          });
+          const creditData = await creditResponse.json();
+          if (creditData.success && typeof creditData.updatedBrainfeedCredits === 'number') {
+            setBrainfeedCredits(creditData.updatedBrainfeedCredits);
+          }
+        } catch (creditErr) {
+          // Non-blocking: don't stop the student from practicing over a credit-tracking hiccup.
+          console.warn("Could not deduct BrainFeed credit (non-blocking):", creditErr);
+        }
+
         // 🎯 Answer comes bundled upfront now (same trade-off as AI Labs) —
         // instant feedback on select, no "checking..." round-trip. Ledger
         // logging still happens, just silently in the background.
@@ -716,6 +724,15 @@ const BrainFeed = () => {
           setIsFeedActive(true);
           setHasLoadedMore(false);
         }
+      } else if (data.upstreamBusy) {
+        // Generator overloaded upstream — temporary and retryable, and no
+        // credit was spent (deduction only happens on success above).
+        setCustomAlert({
+          show: true,
+          title: 'Server Is Busy',
+          message: data.error || 'Our question generator is under heavy load right now. Please try again in a few minutes. You have not been charged for this attempt.'
+        });
+        setCooldown(30);
       } else {
         setCustomAlert({ show: true, title: 'Server Message', message: data.error || 'Failed to get questions from the server.' });
         setCooldown(60);
