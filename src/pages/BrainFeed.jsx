@@ -121,58 +121,6 @@ const BrainFeed = () => {
   const [sessionUUID, setSessionUUID] = useState(null);
   const sessionUUIDRef = useRef(null); // avoids stale-closure issues inside async handlers
 
-  // --- 🆕 BEST-EFFORT SAVE ON TAB CLOSE / BACKGROUNDING ---
-  // visibilitychange fires reliably when a tab is closed, the browser is
-  // closed, or the app goes to background (including most "swipe away from
-  // Recent Apps" cases on mobile, since the OS backgrounds the webview
-  // before it actually kills the process). sendBeacon is used instead of
-  // fetch because it's specifically designed to survive page teardown —
-  // fetch calls can get silently cancelled mid-flight when a tab closes.
-  // This only fires while a live session is actually in progress; it saves
-  // as incomplete (is_completed: false), never touching cumulative stats
-  // (that only happens via the normal complete-session call), so it can't
-  // double-count anything if the student later resumes and finishes.
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState !== 'hidden') return;
-      if (!isFeedActive || sessionMode !== 'live' || !sessionUUIDRef.current) return;
-      if (questions.length === 0) return;
-
-      const attempted = Object.keys(selectedAnswers).length;
-      if (attempted === 0) return; // nothing answered yet — nothing worth saving
-
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) return;
-
-        const correct = Object.values(answerResults).filter(r => r.isCorrect).length;
-        const questionIds = questions.map(q => q.id);
-        const answersArray = questions.map((_, idx) => (selectedAnswers[idx] !== undefined ? selectedAnswers[idx] : null));
-
-        const payload = JSON.stringify({
-          accessToken: session.access_token,
-          sessionUUID: sessionUUIDRef.current,
-          questionIds,
-          answers: answersArray,
-          attempted,
-          correct,
-          exam, subjectSection, subject
-        });
-
-        navigator.sendBeacon(
-          `${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/beacon-save`,
-          new Blob([payload], { type: 'application/json' })
-        );
-      } catch (err) {
-        // Best-effort only — nothing else we can do if this fails at teardown time.
-        console.warn("Beacon save skipped:", err);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isFeedActive, sessionMode, questions, selectedAnswers, answerResults, exam, subjectSection, subject]);
-
   // --- 🆕 Fetch current BrainFeed credit balance for the top-right quota badge on the choice screen ---
   const fetchBrainfeedCredits = async () => {
     try {
@@ -300,6 +248,62 @@ const BrainFeed = () => {
   const awaitingCompletionRef = useRef(false);
   const pendingCompletionDataRef = useRef(null);
   const pendingLedgerWritesRef = useRef([]); // tracks in-flight submit-attempt promises, so Load More can wait for them to land before re-querying the ledger
+
+  // --- 🆕 BEST-EFFORT SAVE ON TAB CLOSE / BACKGROUNDING ---
+  // Placed here, below every piece of state it reads: a hook's dependency
+  // array is evaluated during render, so listing `sessionMode` (etc.) in it
+  // from above their useState lines threw "Cannot access ... before
+  // initialization" and blanked the page.
+  // visibilitychange fires reliably when a tab is closed, the browser is
+  // closed, or the app goes to background (including most "swipe away from
+  // Recent Apps" cases on mobile, since the OS backgrounds the webview
+  // before it actually kills the process). sendBeacon is used instead of
+  // fetch because it's specifically designed to survive page teardown —
+  // fetch calls can get silently cancelled mid-flight when a tab closes.
+  // This only fires while a live session is actually in progress; it saves
+  // as incomplete (is_completed: false), never touching cumulative stats
+  // (that only happens via the normal complete-session call), so it can't
+  // double-count anything if the student later resumes and finishes.
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== 'hidden') return;
+      if (!isFeedActive || sessionMode !== 'live' || !sessionUUIDRef.current) return;
+      if (questions.length === 0) return;
+
+      const attempted = Object.keys(selectedAnswers).length;
+      if (attempted === 0) return; // nothing answered yet — nothing worth saving
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+
+        const correct = Object.values(answerResults).filter(r => r.isCorrect).length;
+        const questionIds = questions.map(q => q.id);
+        const answersArray = questions.map((_, idx) => (selectedAnswers[idx] !== undefined ? selectedAnswers[idx] : null));
+
+        const payload = JSON.stringify({
+          accessToken: session.access_token,
+          sessionUUID: sessionUUIDRef.current,
+          questionIds,
+          answers: answersArray,
+          attempted,
+          correct,
+          exam, subjectSection, subject
+        });
+
+        navigator.sendBeacon(
+          `${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/beacon-save`,
+          new Blob([payload], { type: 'application/json' })
+        );
+      } catch (err) {
+        // Best-effort only — nothing else we can do if this fails at teardown time.
+        console.warn("Beacon save skipped:", err);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isFeedActive, sessionMode, questions, selectedAnswers, answerResults, exam, subjectSection, subject]);
 
   // --- 🧭 PHASE 4: BRAINFEED SESSION RESUME (local-only) ---
   // Two different situations, two different behaviors:
