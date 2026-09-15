@@ -322,6 +322,30 @@ const BrainFeed = () => {
   const [resumePrompt, setResumePrompt] = useState(null); // null = not checked yet / none found
   const [isRestoringSilently, setIsRestoringSilently] = useState(true); // true until the initial check completes
 
+  // 🐛 TDZ FIX: these two are defined here — ABOVE every function that calls
+  // them — because `const` arrow functions are in the temporal dead zone
+  // until their definition line runs. handleDiscardSession (below) calls
+  // clearSavedBrainFeedSession, and handleSaveToLibrary calls
+  // showSaveErrorFlash; with both defined further down the file, those calls
+  // threw "Cannot access '...' before initialization" and blanked the page.
+
+  // Clearing the saved session belongs only at points where the session is
+  // genuinely, finally done — not inside the shared reset function used by
+  // every exit path (that broke "Save and Exit").
+  const clearSavedBrainFeedSession = () => {
+    try {
+      localStorage.removeItem(BRAINFEED_SESSION_KEY);
+      sessionStorage.removeItem(BRAINFEED_TAB_MARKER_KEY);
+    } catch (e) { /* ignore */ }
+  };
+
+  // Small, non-blocking inline error line — auto-dismisses after ~3.5s.
+  const showSaveErrorFlash = () => {
+    setSaveErrorFlash("Could not save this question — please try again.");
+    clearTimeout(saveErrorFlashTimerRef.current);
+    saveErrorFlashTimerRef.current = setTimeout(() => setSaveErrorFlash(''), 3500);
+  };
+
   const restoreSession = (saved) => {
     const restoredIdx = saved.currentIdx || 0;
     setQuestions(saved.questions);
@@ -856,23 +880,6 @@ const BrainFeed = () => {
       setSavedStatus(prev => ({ ...prev, [targetIdx]: false }));
       showSaveErrorFlash();
     }
-  };
-
-  // 🆕 Small, non-blocking inline error line — auto-dismisses after ~3.5s.
-  const showSaveErrorFlash = () => {
-    setSaveErrorFlash("Could not save this question — please try again.");
-    clearTimeout(saveErrorFlashTimerRef.current);
-    saveErrorFlashTimerRef.current = setTimeout(() => setSaveErrorFlash(''), 3500);
-  };
-
-  // 🐛 FIX: clearing the saved session belongs only at points where the
-  // session is genuinely, finally done — not inside the shared reset
-  // function used by every exit path (that broke "Save and Exit").
-  const clearSavedBrainFeedSession = () => {
-    try {
-      localStorage.removeItem(BRAINFEED_SESSION_KEY);
-      sessionStorage.removeItem(BRAINFEED_TAB_MARKER_KEY);
-    } catch (e) { /* ignore */ }
   };
 
   const handleTriggerExit = () => {
