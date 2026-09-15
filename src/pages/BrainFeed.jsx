@@ -724,23 +724,36 @@ const BrainFeed = () => {
           setIsFeedActive(true);
           setHasLoadedMore(false);
         }
-      } else if (data.upstreamBusy) {
-        // Generator overloaded upstream — temporary and retryable, and no
-        // credit was spent (deduction only happens on success above).
+      } else if (data.upstreamBusy || response.status === 503) {
+        // Generator is overloaded upstream. Deliberately generic — the student
+        // doesn't need (or want) the underlying provider error, just what it
+        // means for them and what to do. No credit was spent either, since
+        // deduction only happens on success above.
         setCustomAlert({
           show: true,
           title: 'Server Is Busy',
-          message: data.error || 'Our question generator is under heavy load right now. Please try again in a few minutes. You have not been charged for this attempt.'
+          message: 'A lot of people are using the app right now, so we could not prepare your questions. Please try again in a little while — you have not been charged for this attempt.'
         });
         setCooldown(30);
       } else {
-        setCustomAlert({ show: true, title: 'Server Message', message: data.error || 'Failed to get questions from the server.' });
-        setCooldown(60);
+        setCustomAlert({
+          show: true,
+          title: 'Server Is Busy',
+          message: 'We could not prepare your questions right now. Please try again in a little while — you have not been charged for this attempt.'
+        });
+        setCooldown(30);
       }
     } catch (error) {
       console.error("BrainFeed Network Sync Crash:", error);
-      setCustomAlert({ show: true, title: 'Network Error', message: 'Connection lost. Please try again after 60 seconds.' });
-      setCooldown(60);
+      // Covers network failures and cold starts (the server sleeps after a
+      // period of inactivity and takes a few seconds to wake up). Same
+      // generic wording — from the student's side it's the same situation.
+      setCustomAlert({
+        show: true,
+        title: 'Server Is Busy',
+        message: 'A lot of people are using the app right now, so we could not prepare your questions. Please try again in a little while — you have not been charged for this attempt.'
+      });
+      setCooldown(30);
     } finally {
       setLoading(false);
     }
@@ -990,6 +1003,22 @@ const BrainFeed = () => {
     return null;
   }
 
+  // 🆕 The alert modal is rendered by every early-return branch below, not just
+  // the main one — otherwise an error raised while `loading` was still true
+  // would set customAlert, but the loading screen's early return meant the
+  // modal never actually appeared on screen.
+  const alertModal = customAlert.show ? (
+    <div style={modalOverlayStyle}>
+      <div style={modalContentCardStyle}>
+        <h3 style={{ color: '#0f172a', fontWeight: '900', fontSize: '1.15rem', margin: '0 0 10px 0' }}>{customAlert.title}</h3>
+        <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.6', fontWeight: '500', margin: '0 0 22px 0' }}>{customAlert.message}</p>
+        <button onClick={() => setCustomAlert({ show: false, title: '', message: '' })} style={{ ...modalActionBtn, background: ACCENT }}>
+          Got It
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (loading) {
     return (
       <div style={{ ...formWrapper, boxSizing: 'border-box', ...(isMobile ? { minHeight: 'auto', height: '100%', width: '100%', padding: '20px', overflow: 'hidden' } : {}) }}>
@@ -999,6 +1028,7 @@ const BrainFeed = () => {
             This'll just take a moment.
           </p>
         </div>
+        {alertModal}
       </div>
     );
   }
@@ -1278,22 +1308,7 @@ const BrainFeed = () => {
           </div>
         )}
 
-        {customAlert.show && (
-          <div style={modalOverlayStyle}>
-            <div style={modalContentCardStyle}>
-              <h3 style={{ margin: '0 0 10px 0', color: '#0f172a', fontWeight: '900' }}>{customAlert.title}</h3>
-              <p style={{ color: '#64748b', fontSize: '0.88rem', margin: '0 0 20px 0', fontWeight: '500' }}>
-                {customAlert.message}
-              </p>
-              <button 
-                onClick={() => setCustomAlert({ show: false, title: '', message: '' })} 
-                style={{ ...modalActionBtn, background: ACCENT }}
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
+        {alertModal}
       </div>
     );
   }
@@ -1304,6 +1319,7 @@ const BrainFeed = () => {
           live session actually exists. "Continue" restores it exactly
           (same questions, same answers, same position, no new API call).
           "Start Fresh" discards it permanently and shows the normal form. */}
+      {alertModal}
       {resumePrompt && (
         <div style={modalOverlayStyle}>
           <div style={modalContentCardStyle}>
