@@ -71,6 +71,8 @@ const BrainFeed = () => {
   // --- TRACKING STATE FOR OPTIONS SELECTED & VAULT SAVES ---
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [savedStatus, setSavedStatus] = useState({}); 
+  const [saveErrorFlash, setSaveErrorFlash] = useState('');
+  const saveErrorFlashTimerRef = useRef(null);
 
   // --- 🎯 SERVER-VERIFIED RESULTS: correctness/explanation now only arrive
   // AFTER submitting an attempt to the backend (pool answers are hidden
@@ -118,6 +120,58 @@ const BrainFeed = () => {
   // brainfeed_sessions row's own id when the session is eventually saved. ---
   const [sessionUUID, setSessionUUID] = useState(null);
   const sessionUUIDRef = useRef(null); // avoids stale-closure issues inside async handlers
+
+  // --- 🆕 BEST-EFFORT SAVE ON TAB CLOSE / BACKGROUNDING ---
+  // visibilitychange fires reliably when a tab is closed, the browser is
+  // closed, or the app goes to background (including most "swipe away from
+  // Recent Apps" cases on mobile, since the OS backgrounds the webview
+  // before it actually kills the process). sendBeacon is used instead of
+  // fetch because it's specifically designed to survive page teardown —
+  // fetch calls can get silently cancelled mid-flight when a tab closes.
+  // This only fires while a live session is actually in progress; it saves
+  // as incomplete (is_completed: false), never touching cumulative stats
+  // (that only happens via the normal complete-session call), so it can't
+  // double-count anything if the student later resumes and finishes.
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== 'hidden') return;
+      if (!isFeedActive || sessionMode !== 'live' || !sessionUUIDRef.current) return;
+      if (questions.length === 0) return;
+
+      const attempted = Object.keys(selectedAnswers).length;
+      if (attempted === 0) return; // nothing answered yet — nothing worth saving
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+
+        const correct = Object.values(answerResults).filter(r => r.isCorrect).length;
+        const questionIds = questions.map(q => q.id);
+        const answersArray = questions.map((_, idx) => (selectedAnswers[idx] !== undefined ? selectedAnswers[idx] : null));
+
+        const payload = JSON.stringify({
+          accessToken: session.access_token,
+          sessionUUID: sessionUUIDRef.current,
+          questionIds,
+          answers: answersArray,
+          attempted,
+          correct,
+          exam, subjectSection, subject
+        });
+
+        navigator.sendBeacon(
+          `${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/beacon-save`,
+          new Blob([payload], { type: 'application/json' })
+        );
+      } catch (err) {
+        // Best-effort only — nothing else we can do if this fails at teardown time.
+        console.warn("Beacon save skipped:", err);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isFeedActive, sessionMode, questions, selectedAnswers, answerResults, exam, subjectSection, subject]);
 
   // --- 🆕 Fetch current BrainFeed credit balance for the top-right quota badge on the choice screen ---
   const fetchBrainfeedCredits = async () => {
@@ -342,11 +396,49 @@ const BrainFeed = () => {
     setResumePrompt(false);
   };
 
-  const handleDiscardSession = () => {
+  const handleDiscardSession = async () => {
+    // 🆕 Before discarding, make sure whatever was answered actually made it
+    // to brainfeed_sessions — this specifically covers the case where the
+    // student never got a chance to trigger a normal save (e.g. an actual
+    // app crash, not a graceful "Save and Exit"), so no row exists yet at
+    // all. If a row already exists (from a prior Save and Exit or beacon
+    // save), this just re-saves the same data — harmless, same sessionUUID.
+    if (resumePrompt && resumePrompt.sessionUUID) {
+      const answersData = resumePrompt.selectedAnswers || {};
+      const resultsData = resumePrompt.answerResults || {};
+      const attempted = Object.keys(answersData).length;
+
+      if (attempted > 0) {
+        const correct = Object.values(resultsData).filter(r => r.isCorrect).length;
+        const questionIds = (resumePrompt.questions || []).map(q => q.id);
+        const answersArray = (resumePrompt.questions || []).map((_, idx) => (answersData[idx] !== undefined ? answersData[idx] : null));
+
+        try {
+          await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/complete-session`, {
+            method: 'POST',
+            body: JSON.stringify({
+              sessionUUID: resumePrompt.sessionUUID,
+              questionIds,
+              answers: answersArray,
+              attempted,
+              correct,
+              isCompleted: false,
+              exam: resumePrompt.exam,
+              subjectSection: resumePrompt.subjectSection,
+              subject: resumePrompt.subject
+            })
+          });
+        } catch (err) {
+          // Best-effort — if this fails, the credit ledger row still exists
+          // as a record that a credit was spent, even if the content isn't saved.
+          console.warn("Could not save partial session before discarding:", err);
+        }
+      }
+    }
+
     clearSavedBrainFeedSession();
-    // 🆕 The old sessionUUID (and its already-saved partial brainfeed_sessions
-    // row, if any) is left as-is — it already accounted for the credit(s)
-    // that were deducted for it. We just stop referencing it going forward.
+    // The old sessionUUID is left as-is now that its data (if any) is saved —
+    // we just stop referencing it going forward.
     sessionUUIDRef.current = null;
     setSessionUUID(null);
     setResumePrompt(false);
@@ -684,7 +776,7 @@ const BrainFeed = () => {
   // populate metricsSummary exactly as before) but also atomically saves the
   // brainfeed_sessions record and logs the credit_transactions ledger row —
   // neither of which a client-side write could safely do.
-  const saveSessionMetricsToProfile = async (answersOverride, resultsOverride) => {
+  const saveSessionMetricsToProfile = async (answersOverride, resultsOverride, isCompleted = true) => {
     const answersData = answersOverride || selectedAnswers;
     const resultsData = resultsOverride || answerResults;
     const attempted = Object.keys(answersData).length;
@@ -708,7 +800,9 @@ const BrainFeed = () => {
           questionIds,
           answers: answersArray,
           attempted,
-          correct
+          correct,
+          isCompleted,
+          exam, subjectSection, subject
         })
       });
       const data = await response.json();
@@ -727,10 +821,19 @@ const BrainFeed = () => {
     const currentQ = questions[currentIdx];
     if (savedStatus[currentIdx]) return;
 
+    // 🆕 OPTIMISTIC UPDATE: flip the button to "Saved" immediately so the
+    // student isn't sitting there waiting on a network round-trip. The
+    // actual save happens in the background; if it turns out to have
+    // failed, we quietly revert the button and show a small inline error
+    // (not a blocking popup) so nothing interrupts their flow.
+    const targetIdx = currentIdx;
+    setSavedStatus(prev => ({ ...prev, [targetIdx]: true }));
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setCustomAlert({ show: true, title: 'Authentication Required', message: 'Your session expired. Please log in again to continue.' });
+        setSavedStatus(prev => ({ ...prev, [targetIdx]: false }));
+        showSaveErrorFlash();
         return;
       }
 
@@ -743,15 +846,23 @@ const BrainFeed = () => {
       });
       const data = await response.json();
 
-      if (data.success) {
-        setSavedStatus({ ...savedStatus, [currentIdx]: true });
-      } else {
-        setCustomAlert({ show: true, title: 'Save Failed', message: data.error || 'Could not save this question to your library.' });
+      if (!data.success) {
+        setSavedStatus(prev => ({ ...prev, [targetIdx]: false }));
+        showSaveErrorFlash();
       }
+      // On success, the optimistic state was already correct — nothing more to do.
     } catch (err) {
       console.error("Save to library failed:", err);
-      setCustomAlert({ show: true, title: 'Network Error', message: 'Could not save the question. Please check your connection.' });
+      setSavedStatus(prev => ({ ...prev, [targetIdx]: false }));
+      showSaveErrorFlash();
     }
+  };
+
+  // 🆕 Small, non-blocking inline error line — auto-dismisses after ~3.5s.
+  const showSaveErrorFlash = () => {
+    setSaveErrorFlash("Could not save this question — please try again.");
+    clearTimeout(saveErrorFlashTimerRef.current);
+    saveErrorFlashTimerRef.current = setTimeout(() => setSaveErrorFlash(''), 3500);
   };
 
   // 🐛 FIX: clearing the saved session belongs only at points where the
@@ -950,6 +1061,12 @@ const BrainFeed = () => {
                             </button>
                           </div>
                         </div>
+
+                        {saveErrorFlash && idx === currentIdx && (
+                          <div style={{ color: '#ef4444', fontSize: '0.78rem', fontWeight: '600', marginTop: '-4px' }}>
+                            {saveErrorFlash}
+                          </div>
+                        )}
                         
                         <div style={{ ...scrollableCardContentBody, overflowY: isMobile ? 'visible' : 'auto', flex: isMobile ? 'none' : 1 }}>
                           <h2 style={{ ...questionTextStyle, fontSize: getQuestionFontSize(q.question, isMobile) }}><LatexText text={q.question} /></h2>
@@ -1116,7 +1233,7 @@ const BrainFeed = () => {
                   Resume Session
                 </button>
                 <button onClick={() => {
-                  saveSessionMetricsToProfile();
+                  saveSessionMetricsToProfile(undefined, undefined, false);
                   handleForceClearFeed();
                   // 🐛 FIX: deliberately leaving — clear the "same tab, just
                   // reloaded" marker (so the *next* time BrainFeed opens in
@@ -1286,11 +1403,19 @@ const BrainFeed = () => {
           {!historyLoading && !historyError && historySessions.map(session => (
             <div key={session.id} style={historyRowStyle}>
               <div>
-                <div style={{ color: '#0f172a', fontWeight: '700', fontSize: '0.92rem', marginBottom: '4px' }}>
-                  {session.questionCount} Questions · {session.score}/{session.questionCount} correct
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ color: '#0f172a', fontWeight: '700', fontSize: '0.92rem' }}>
+                    {session.sessionLabel}
+                  </span>
+                  {!session.isCompleted && (
+                    <span style={incompleteBadgeStyle}>Incomplete</span>
+                  )}
                 </div>
                 <div style={{ color: '#64748b', fontSize: '0.78rem', fontWeight: '500' }}>
-                  {new Date(session.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {session.accuracy}% accuracy
+                  {session.questionCount} Questions · {session.score}/{session.questionCount} correct · {session.accuracy}% accuracy
+                </div>
+                <div style={{ color: '#94a3b8', fontSize: '0.74rem', fontWeight: '500', marginTop: '2px' }}>
+                  {new Date(session.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
               <button
@@ -1420,5 +1545,6 @@ const quotaBadgeStyle = { background: '#e0e7ff', color: ACCENT, padding: '8px 18
 const backLinkStyle = { background: 'none', border: 'none', color: ACCENT, fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer', padding: 0 };
 const historyRowStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px 18px', marginBottom: '12px' };
 const historyReviseBtnStyle = { background: ACCENT, color: '#fff', border: 'none', padding: '9px 18px', borderRadius: '8px', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap' };
+const incompleteBadgeStyle = { background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '700' };
 
 export default BrainFeed;
