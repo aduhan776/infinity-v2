@@ -45,10 +45,10 @@ const FieldLabel = ({ icon, children }) => (
 );
 
 // --- 🆕 Checkmark bullet used by the BrainFeed choice-screen cards ---
-const ChecklistItem = ({ children }) => (
-  <li style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.88rem', fontWeight: '500', color: '#334155' }}>
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-    {children}
+const ChecklistItem = ({ color = '#10b981', children }) => (
+  <li className="ai-bullet-item" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.92rem', color: '#475569', fontWeight: '500', lineHeight: '1.5' }}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" style={{ marginTop: '2px', flexShrink: 0 }}><polyline points="20 6 9 17 4 12" /></svg>
+    <span>{children}</span>
   </li>
 );
 
@@ -1180,74 +1180,95 @@ const BrainFeed = () => {
       )}
       {isMobile && (
         <style>{`
-          .content-view {
-            padding: 0 !important;
-            overflow: hidden !important;
-            height: calc(100dvh - 65px) !important;
+          @media (max-width: 768px) {
+            .content-view { padding-left: 0 !important; padding-right: 0 !important; }
+            .bf-container { padding: 16px 0px !important; }
+            .ai-selection-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+
+            /* Selection screen: shrink everything so both cards fit without scrolling issues */
+            .ai-select-header { margin-bottom: 10px !important; }
+            .ai-select-title { font-size: 1.3rem !important; letter-spacing: -0.3px !important; }
+            .ai-select-subtitle { font-size: 0.72rem !important; margin-top: 2px !important; }
+            .ai-mock-card { padding: 12px !important; border-radius: 16px !important; }
+            .ai-card-header-row { margin-bottom: 6px !important; }
+            .ai-icon-frame { width: 26px !important; height: 26px !important; border-radius: 8px !important; }
+            .ai-icon-frame svg { width: 14px !important; height: 14px !important; }
+            .ai-badge { font-size: 0.6rem !important; padding: 2px 6px !important; border-radius: 6px !important; }
+            .ai-card-title { font-size: 0.98rem !important; margin: 0 0 4px 0 !important; }
+            .ai-bullet-list { gap: 3px !important; margin: 0 0 8px 0 !important; }
+            .ai-bullet-item { font-size: 0.68rem !important; gap: 5px !important; line-height: 1.25 !important; }
+            .ai-bullet-item svg { width: 11px !important; height: 11px !important; }
+            .ai-card-btn { padding: 7px !important; font-size: 0.75rem !important; border-radius: 8px !important; }
           }
+          ${isFeedActive ? `
+          @media (max-width: 768px) {
+            .content-view {
+              padding: 0 !important;
+              overflow: hidden !important;
+              height: calc(100dvh - 65px) !important;
+            }
+          }
+          ` : ''}
         `}</style>
       )}
 
-      {/* 🆕 CHOICE SCREEN — same card layout/shape/colors as the AI Test Lab page */}
+      {/* 🆕 CHOICE SCREEN — mirrors AI Test Lab's exact container/grid/card styles for consistency */}
       {landingView === 'choice' && (
-        <div style={{ width: '100%', maxWidth: '620px', boxSizing: 'border-box', padding: isMobile ? '18px' : '0' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
+        <div style={brainfeedContainerStyle} className="bf-container">
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
             <div style={quotaBadgeStyle}>
               {brainfeedCredits === null ? 'Loading...' : `${brainfeedCredits} session${brainfeedCredits === 1 ? '' : 's'} left`}
             </div>
           </div>
 
-          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-            <h2 style={{ color: '#0f172a', fontWeight: '900', fontSize: isMobile ? '1.4rem' : '1.8rem', margin: '0 0 8px 0' }}>BrainFeed</h2>
-            <p style={{ color: '#64748b', fontSize: isMobile ? '0.85rem' : '0.95rem', fontWeight: '500', margin: 0 }}>
-              Choose how you want to practice today
-            </p>
-          </div>
+          <header className="ai-select-header" style={{ textAlign: 'center', marginBottom: '30px' }}>
+            <h1 className="ai-select-title" style={{ fontSize: '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.8px' }}>BrainFeed</h1>
+            <p className="ai-select-subtitle" style={{ color: '#64748b', marginTop: '6px', fontSize: '0.95rem', fontWeight: '500' }}>Choose how you want to practice today</p>
+          </header>
 
-          <div style={labCardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
-              <div style={{ ...labIconBoxStyle, background: '#d1fae5' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.2" fill="#10b981" /></svg>
+          <div style={selectionGridStyle} className="ai-selection-grid">
+            <div className="ai-mock-card" style={topicMockCardStyle} onClick={handleOpenNewSessionForm}>
+              <div className="ai-card-header-row" style={cardHeaderRowStyle}>
+                <div className="ai-icon-frame" style={emeraldIconFrameStyle}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>
+                </div>
+                <span className="ai-badge" style={emeraldBadgeStyle}>Daily Practice</span>
               </div>
-              <div style={{ ...labBadgeStyle, background: '#d1fae5', color: '#065f46' }}>Daily Practice</div>
+              <h3 className="ai-card-title" style={leftCardTitleStyle}>Start New Session</h3>
+              <ul className="ai-bullet-list" style={cleanBulletListStyle}>
+                <ChecklistItem>15 adaptive questions per session</ChecklistItem>
+                <ChecklistItem>Focuses on your weak areas</ChecklistItem>
+                <ChecklistItem>Instant feedback after each answer</ChecklistItem>
+              </ul>
+              <button className="ai-card-btn" style={emeraldActionBtnStyle}>Start Practice</button>
             </div>
-            <h3 style={labTitleStyle}>Start New Session</h3>
-            <ul style={labChecklistStyle}>
-              <ChecklistItem>15 adaptive questions per session</ChecklistItem>
-              <ChecklistItem>Focuses on your weak areas</ChecklistItem>
-              <ChecklistItem>Instant feedback after each answer</ChecklistItem>
-            </ul>
-            <button style={{ ...labButtonStyle, background: '#10b981' }} onClick={handleOpenNewSessionForm}>
-              Start Practice
-            </button>
-          </div>
 
-          <div style={{ ...labCardStyle, marginTop: '18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
-              <div style={{ ...labIconBoxStyle, background: '#e0e7ff' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /><path d="M12 8v4l3 3" /></svg>
+            <div className="ai-mock-card" style={fullMockCardStyleBF} onClick={handleOpenHistory}>
+              <div className="ai-card-header-row" style={cardHeaderRowStyle}>
+                <div className="ai-icon-frame" style={indigoIconFrameStyle}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /><path d="M12 8v4l3 3" /></svg>
+                </div>
+                <span className="ai-badge" style={indigoBadgeStyle}>Session History</span>
               </div>
-              <div style={{ ...labBadgeStyle, background: '#e0e7ff', color: ACCENT }}>Session History</div>
+              <h3 className="ai-card-title" style={leftCardTitleStyle}>Revise Previous Sessions</h3>
+              <ul className="ai-bullet-list" style={cleanBulletListStyle}>
+                <ChecklistItem color={ACCENT}>Review your past sessions</ChecklistItem>
+                <ChecklistItem color={ACCENT}>See correct answers &amp; explanations</ChecklistItem>
+                <ChecklistItem color={ACCENT}>Track your progress over time</ChecklistItem>
+              </ul>
+              <button className="ai-card-btn" style={indigoActionBtnStyle}>View Past Sessions</button>
             </div>
-            <h3 style={labTitleStyle}>Revise Previous Sessions</h3>
-            <ul style={labChecklistStyle}>
-              <ChecklistItem>Review your past sessions</ChecklistItem>
-              <ChecklistItem>See correct answers &amp; explanations</ChecklistItem>
-              <ChecklistItem>Track your progress over time</ChecklistItem>
-            </ul>
-            <button style={{ ...labButtonStyle, background: ACCENT }} onClick={handleOpenHistory}>
-              View Past Sessions
-            </button>
           </div>
         </div>
       )}
 
       {/* 🆕 HISTORY LIST SCREEN */}
       {landingView === 'history' && (
-        <div style={{ width: '100%', maxWidth: '620px', boxSizing: 'border-box', padding: isMobile ? '18px' : '0' }}>
+        <div style={brainfeedContainerStyle} className="bf-container">
           <button onClick={handleBackToChoice} style={backLinkStyle}>← Back</button>
           <h2 style={{ color: '#0f172a', fontWeight: '900', fontSize: isMobile ? '1.2rem' : '1.5rem', margin: '14px 0 18px 0' }}>Your Past Sessions</h2>
 
+          <div style={{ maxWidth: '620px' }}>
           {historyLoading && (
             <p style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: '500', textAlign: 'center', padding: '30px 0' }}>Loading your sessions...</p>
           )}
@@ -1281,16 +1302,23 @@ const BrainFeed = () => {
               </button>
             </div>
           ))}
+          </div>
         </div>
       )}
 
       {/* EXISTING FORM — untouched, just gated behind landingView === 'form' now */}
       {landingView === 'form' && (
-        <div style={{
-          ...formCard,
-          padding: isMobile ? '18px' : '35px',
-          ...(isMobile ? { width: '100%', maxWidth: '100%', height: '100%', border: 'none', borderRadius: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' } : {})
-        }}>
+        <div style={{ width: '100%', maxWidth: '600px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+            <div style={quotaBadgeStyle}>
+              {brainfeedCredits === null ? 'Loading...' : `${brainfeedCredits} session${brainfeedCredits === 1 ? '' : 's'} left`}
+            </div>
+          </div>
+          <div style={{
+            ...formCard,
+            padding: isMobile ? '18px' : '35px',
+            ...(isMobile ? { width: '100%', maxWidth: '100%', height: '100%', border: 'none', borderRadius: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' } : {})
+          }}>
           <button onClick={handleBackToChoice} style={{ ...backLinkStyle, marginBottom: '12px' }}>← Back</button>
           <h2 style={{ color: '#0f172a', marginBottom: '5px', fontWeight: '800', letterSpacing: '-0.5px', fontSize: isMobile ? '1.1rem' : '1.5rem', borderLeft: `3px solid ${ACCENT}`, paddingLeft: '12px' }}>Start a BrainFeed Session</h2>
           <p style={{ color: '#64748b', marginBottom: isMobile ? '12px' : '25px', fontSize: isMobile ? '0.76rem' : '0.9rem', fontWeight: '500', paddingLeft: '15px' }}>
@@ -1361,6 +1389,7 @@ const BrainFeed = () => {
               {cooldown > 0 ? `Please wait ${cooldown}s to retry` : "Start Practice"}
             </button>
           </div>
+          </div>
         </div>
       )}
     </div>
@@ -1372,14 +1401,22 @@ const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'ce
 const modeHintTextStyle = { fontSize: '0.65rem', color: '#f59e0b', fontWeight: '700' };
 const scrollHintStyle = { textAlign: 'center', fontSize: '0.68rem', color: '#94a3b8', fontWeight: '600', pointerEvents: 'none', flex: 1 };
 
-// --- 🆕 CHOICE SCREEN + HISTORY STYLES (matches AI Test Lab card look/feel) ---
-const quotaBadgeStyle = { background: '#e0e7ff', color: ACCENT, padding: '8px 16px', borderRadius: '30px', fontSize: '0.8rem', fontWeight: '700', whiteSpace: 'nowrap' };
-const labCardStyle = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '28px', boxSizing: 'border-box', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' };
-const labIconBoxStyle = { width: '44px', height: '44px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
-const labBadgeStyle = { padding: '6px 14px', borderRadius: '30px', fontSize: '0.72rem', fontWeight: '700' };
-const labTitleStyle = { color: '#0f172a', fontWeight: '800', fontSize: '1.3rem', margin: '0 0 14px 0' };
-const labChecklistStyle = { listStyle: 'none', padding: 0, margin: '0 0 22px 0', display: 'flex', flexDirection: 'column', gap: '10px' };
-const labButtonStyle = { border: 'none', color: '#fff', width: '100%', fontWeight: '700', fontSize: '0.92rem', padding: '14px', borderRadius: '10px', cursor: 'pointer' };
+// --- 🆕 CHOICE SCREEN + HISTORY STYLES — exact copies of AI Test Lab's constants for 1:1 visual consistency ---
+const brainfeedContainerStyle = { padding: '40px 20px', maxWidth: '1050px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif', width: '100%', boxSizing: 'border-box' };
+const selectionGridStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop: '10px' };
+const cardHeaderRowStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '14px' };
+const leftCardTitleStyle = { margin: '0 0 8px 0', fontSize: '1.4rem', color: '#0f172a', fontWeight: '800', letterSpacing: '-0.5px' };
+const cleanBulletListStyle = { listStyleType: 'none', padding: 0, margin: '0 0 20px 0', display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', flex: 1 };
+const topicMockCardStyle = { background: '#ffffff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 6px 24px rgba(16, 185, 129, 0.14)' };
+const emeraldIconFrameStyle = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d1fae5', border: '1px solid #a7f3d0' };
+const emeraldBadgeStyle = { background: '#d1fae5', color: '#065f46', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' };
+const emeraldActionBtnStyle = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' };
+const fullMockCardStyleBF = { background: '#ffffff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 6px 24px rgba(79, 70, 229, 0.14)' };
+const indigoIconFrameStyle = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff', border: '1px solid #c7d2fe' };
+const indigoBadgeStyle = { background: '#e0e7ff', color: '#4f46e5', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' };
+const indigoActionBtnStyle = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' };
+// Rectangular-with-rounded-corners quota badge (distinct from the fully pill-shaped AI Labs badges, per request)
+const quotaBadgeStyle = { background: '#e0e7ff', color: ACCENT, padding: '8px 18px', borderRadius: '10px', fontSize: '0.82rem', fontWeight: '700', whiteSpace: 'nowrap', border: '1px solid #c7d2fe' };
 const backLinkStyle = { background: 'none', border: 'none', color: ACCENT, fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer', padding: 0 };
 const historyRowStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px 18px', marginBottom: '12px' };
 const historyReviseBtnStyle = { background: ACCENT, color: '#fff', border: 'none', padding: '9px 18px', borderRadius: '8px', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap' };
