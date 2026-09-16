@@ -11,6 +11,7 @@ import AnalysisPortal from './pages/AnalysisPortal';
 import Statistics from './pages/Statistics';
 import CustomBuilder from './pages/CustomBuilder';
 import Login from './pages/Login'; 
+import MobileUpload from './pages/MobileUpload';
 import './App.css';
 import { supabase } from './supabaseClient'; 
 import useAdmin from './hooks/useAdmin'; // 🎯 REUSABLE CUSTOM HOOK LINKED
@@ -317,6 +318,14 @@ function App() {
       return () => clearTimeout(t);
     }
   }, [authLoading, showSplash]);
+
+  // 📱 The QR upload page is opened on a phone that is NOT signed in — the
+  // token in the link is its only authorisation. It therefore has to render
+  // ahead of both the splash screen and the login gate below, which would
+  // otherwise swallow it.
+  if (location.pathname.startsWith('/m-upload')) {
+    return <MobileUpload />;
+  }
 
   if (showSplash) {
     return (

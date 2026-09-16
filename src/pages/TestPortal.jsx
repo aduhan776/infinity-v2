@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText';
+import { QRCodeCanvas } from 'qrcode.react';
 
 // --- 🌐 LOCAL STORAGE STORAGE ENGINE MAPPINGS ---
 const dbName = "InfinityLocalDB";
@@ -220,6 +221,23 @@ const TestPortal = ({ testData, onExit }) => {
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState({}); 
   const [uploads, setUploads] = useState({}); 
+
+  // --- 📱 QR PHONE UPLOAD ---
+  // A short-lived window the student opens per question: scan, shoot the
+  // answer on a phone, and the photos land here. The real attemptId isn't
+  // created until submission, so QR uploads are filed under a stable id
+  // generated once when the portal mounts. Files pulled in from the phone
+  // keep their storage path, so submission reuses it instead of uploading
+  // the same bytes a second time.
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrToken, setQrToken] = useState('');
+  const [qrSecondsLeft, setQrSecondsLeft] = useState(0);
+  const [qrReceivedCount, setQrReceivedCount] = useState(0);
+  const [qrError, setQrError] = useState('');
+  const [qrLoading, setQrLoading] = useState(false);
+  const qrExpiresAtRef = useRef(null);
+  const qrSessionIdRef = useRef(null);
+  const qrSeenPathsRef = useRef(new Set());
   const [isPaused, setIsPaused] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); 
   const [markedForReview, setMarkedForReview] = useState([]);
@@ -687,6 +705,15 @@ const TestPortal = ({ testData, onExit }) => {
       const uploadedMeta = [];
       for (let fi = 0; fi < filesForQ.length; fi++) {
         const file = filesForQ[fi];
+
+        // 📱 Photos sent from the phone via QR are already sitting in the
+        // bucket — they carry their storage path, so reuse it rather than
+        // pushing the same bytes up a second time.
+        if (file.path) {
+          uploadedMeta.push({ name: file.name, type: file.type, path: file.path });
+          continue;
+        }
+
         try {
           // file.url is a base64 data URL (e.g. "data:image/png;base64,...").
           const matches = /^data:(.+);base64,(.*)$/.exec(file.url || '');
@@ -1130,6 +1157,117 @@ const TestPortal = ({ testData, onExit }) => {
     setUploads({ ...uploads, [currentQ]: up });
   };
 
+  // --- 📱 QR PHONE UPLOAD -------------------------------------------------
+
+  // One stable id per portal session, used as the storage folder for QR
+  // uploads (the real attemptId only exists once the test is submitted).
+  const getQrSessionId = () => {
+    if (!qrSessionIdRef.current) {
+      qrSessionIdRef.current = `${data?.id || 'test'}_qrs_${Date.now()}`;
+    }
+    return qrSessionIdRef.current;
+  };
+
+  const openQrWindow = async () => {
+    setQrError('');
+    setQrLoading(true);
+    setQrReceivedCount(0);
+    qrSeenPathsRef.current = new Set();
+
+    try {
+      const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/qr/create-session`, {
+        method: 'POST',
+        body: JSON.stringify({ attemptId: getQrSessionId(), questionIndex: currentQ })
+      });
+      const result = await res.json();
+      if (!result.success) {
+        setQrError(result.error || 'Could not open the upload window. Please try again.');
+        setQrLoading(false);
+        return;
+      }
+
+      qrExpiresAtRef.current = result.expiresAt;
+      setQrToken(result.token);
+      setQrSecondsLeft(Math.max(0, Math.round((result.expiresAt - Date.now()) / 1000)));
+      setQrOpen(true);
+    } catch (err) {
+      console.error('Could not open QR session:', err);
+      setQrError('Could not reach the server. Please try again.');
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const closeQrWindow = () => {
+    setQrOpen(false);
+    setQrToken('');
+    qrExpiresAtRef.current = null;
+  };
+
+  // Countdown — the phone runs the same clock off the same expiry.
+  useEffect(() => {
+    if (!qrOpen) return;
+    const timer = setInterval(() => {
+      const left = Math.max(0, Math.round((qrExpiresAtRef.current - Date.now()) / 1000));
+      setQrSecondsLeft(left);
+      if (left <= 0) closeQrWindow();
+    }, 1000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qrOpen]);
+
+  // Poll for photos while the window is open. Only runs during that window,
+  // so this is a handful of small requests, never a background drip.
+  useEffect(() => {
+    if (!qrOpen) return;
+
+    const questionAtOpen = currentQ;
+
+    const poll = async () => {
+      try {
+        const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/qr/list`, {
+          method: 'POST',
+          body: JSON.stringify({ attemptId: getQrSessionId(), questionIndex: questionAtOpen })
+        });
+        const result = await res.json();
+        if (!result.success || !Array.isArray(result.files)) return;
+
+        const fresh = result.files.filter(f => f.path && !qrSeenPathsRef.current.has(f.path));
+        if (fresh.length === 0) return;
+
+        fresh.forEach(f => qrSeenPathsRef.current.add(f.path));
+
+        // Pull each new photo in for preview. The storage path travels with
+        // it so submission can reuse the already-uploaded file rather than
+        // sending the same bytes again.
+        const prepared = await Promise.all(fresh.map(async (f) => {
+          let previewUrl = f.url;
+          try {
+            const blobRes = await fetch(f.url);
+            const blob = await blobRes.blob();
+            previewUrl = URL.createObjectURL(blob);
+          } catch {
+            // Fall back to the signed URL directly if the fetch fails.
+          }
+          return { url: previewUrl, name: f.name, type: f.mimeType, path: f.path, fromPhone: true };
+        }));
+
+        setUploads(prev => ({
+          ...prev,
+          [questionAtOpen]: [...(prev[questionAtOpen] || []), ...prepared]
+        }));
+        setQrReceivedCount(prev => prev + prepared.length);
+      } catch (err) {
+        console.warn('QR poll failed:', err);
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qrOpen]);
+
   // Toggles the current question's marked-for-review state and confirms it
   // with a short toast — used by both the desktop text button and the
   // mobile "!" icon.
@@ -1409,7 +1547,17 @@ const TestPortal = ({ testData, onExit }) => {
                           <button onClick={() => fileInputRef.current.click()} style={styles.uploadBtn}>Upload Media File</button>
                           <input type="file" ref={fileInputRef} multiple accept="image/*, .pdf" style={{display:'none'}} onChange={handleFileUpload} />
                         </div>
-                        <div style={styles.qrContainer}><div style={styles.qrBox}>QR</div><div style={styles.qrText}>Scan to<br/>Upload</div></div>
+                        {!isMobile && (
+                          <div style={{ ...styles.qrContainer, cursor: 'pointer', opacity: qrLoading ? 0.6 : 1 }} onClick={qrLoading ? undefined : openQrWindow}>
+                            <div style={styles.qrBox}>
+                              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2">
+                                <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" />
+                                <line x1="14" y1="14" x2="14" y2="17" /><line x1="17" y1="14" x2="21" y2="14" /><line x1="17" y1="18" x2="17" y2="21" /><line x1="20" y1="17" x2="21" y2="21" />
+                              </svg>
+                            </div>
+                            <div style={styles.qrText}>{qrLoading ? 'Opening...' : <>Scan to upload<br/>from phone</>}</div>
+                          </div>
+                        )}
                       </div>
                       <div style={styles.previewStrip}>
                         {(uploads[currentQ] || []).map((file, fIdx) => (
@@ -1628,6 +1776,50 @@ const TestPortal = ({ testData, onExit }) => {
            </div>
         </div>
       )}
+
+      {/* 📱 QR upload window — open for a few minutes at a time, per question */}
+      {qrOpen && (
+        <div style={styles.qrOverlay}>
+          <div style={styles.qrModal}>
+            <h3 style={styles.qrModalTitle}>Upload from your phone</h3>
+            <p style={styles.qrModalSub}>
+              Scan this code, then photograph your answer for Question {currentQ + 1}.
+            </p>
+
+            <div style={styles.qrCodeFrame}>
+              <QRCodeCanvas
+                value={`${window.location.origin}/m-upload?t=${qrToken}`}
+                size={190}
+                level="M"
+                includeMargin
+              />
+            </div>
+
+            <div style={styles.qrTimerRow}>
+              <span style={styles.qrTimerLabel}>Closes in</span>
+              <span style={{ ...styles.qrTimerValue, color: qrSecondsLeft <= 30 ? '#dc2626' : '#7065BA' }}>
+                {Math.floor(qrSecondsLeft / 60)}:{String(qrSecondsLeft % 60).padStart(2, '0')}
+              </span>
+            </div>
+
+            <div style={styles.qrStatusBox}>
+              {qrReceivedCount === 0
+                ? 'Waiting for photos...'
+                : `${qrReceivedCount} photo${qrReceivedCount === 1 ? '' : 's'} received`}
+            </div>
+
+            <button style={styles.qrFinishBtn} onClick={closeQrWindow}>Finish Uploading</button>
+
+            <p style={styles.qrFootNote}>
+              Photos appear here within a few seconds. You can reopen the code any time if you need to send more.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {qrError && !qrOpen && (
+        <div style={styles.qrErrorToast}>{qrError}</div>
+      )}
     </div>
   );
 };
@@ -1678,6 +1870,18 @@ const styles = {
   qrContainer: { display:'flex', alignItems:'center', gap:'10px', borderLeft:'2px solid #e2e8f0', paddingLeft:'15px' }, 
   qrBox: { width:'40px', height:'40px', background:'#fff', border:'1px solid #ccc', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'0.7rem' }, 
   qrText: { fontSize:'0.6rem', color:'#64748b', fontWeight:'700' }, 
+  qrOverlay: { position:'fixed', inset:0, background:'rgba(15,23,42,0.55)', backdropFilter:'blur(3px)', zIndex:999999, display:'flex', alignItems:'center', justifyContent:'center' },
+  qrModal: { background:'#fff', borderRadius:'20px', padding:'28px', width:'92%', maxWidth:'380px', textAlign:'center', boxShadow:'0 24px 60px rgba(0,0,0,0.18)' },
+  qrModalTitle: { color:'#0f172a', fontSize:'1.15rem', fontWeight:'900', margin:'0 0 6px 0' },
+  qrModalSub: { color:'#64748b', fontSize:'0.84rem', fontWeight:'500', margin:'0 0 18px 0', lineHeight:'1.5' },
+  qrCodeFrame: { display:'inline-flex', padding:'10px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:'14px', marginBottom:'16px' },
+  qrTimerRow: { display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f1f5f9', borderRadius:'10px', padding:'9px 14px', marginBottom:'12px' },
+  qrTimerLabel: { color:'#64748b', fontSize:'0.8rem', fontWeight:'600' },
+  qrTimerValue: { fontSize:'1rem', fontWeight:'800', fontVariantNumeric:'tabular-nums' },
+  qrStatusBox: { background:'#eef2ff', border:'1px solid #c7d2fe', borderRadius:'10px', padding:'10px', color:'#4338ca', fontSize:'0.84rem', fontWeight:'700', marginBottom:'14px' },
+  qrFinishBtn: { width:'100%', background:'#0f172a', color:'#fff', border:'none', borderRadius:'11px', padding:'13px', fontSize:'0.9rem', fontWeight:'700', cursor:'pointer' },
+  qrFootNote: { color:'#94a3b8', fontSize:'0.74rem', fontWeight:'500', lineHeight:'1.5', margin:'12px 0 0 0' },
+  qrErrorToast: { position:'fixed', bottom:'24px', left:'50%', transform:'translateX(-50%)', background:'#fef2f2', border:'1px solid #fecaca', color:'#b91c1c', padding:'12px 18px', borderRadius:'10px', fontSize:'0.84rem', fontWeight:'700', zIndex:999999 },
   previewStrip: { display:'flex', gap:'10px', overflowX:'auto', padding:'5px 0' }, 
   thumbWindow: { width:'80px', height:'100px', background:'#fff', border:'1px solid #ddd', borderRadius:'6px', position:'relative', overflow:'hidden', flexShrink:0 }, 
   thumbImg: { width:'100%', height:'100%', objectFit:'cover' }, 
