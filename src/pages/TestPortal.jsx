@@ -1172,7 +1172,14 @@ const TestPortal = ({ testData, onExit }) => {
     setQrError('');
     setQrLoading(true);
     setQrReceivedCount(0);
-    qrSeenPathsRef.current = new Set();
+
+    // 🐛 FIX: this used to start from an empty set, so reopening the QR for a
+    // question made the poll treat photos still sitting in the folder as new
+    // and pull them in a second time. Seed it with what's already attached
+    // to this question instead — anything previously imported is skipped.
+    qrSeenPathsRef.current = new Set(
+      (uploads[currentQ] || []).map(f => f.path).filter(Boolean)
+    );
 
     try {
       const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/qr/create-session`, {
@@ -1198,7 +1205,17 @@ const TestPortal = ({ testData, onExit }) => {
     }
   };
 
-  const closeQrWindow = () => {
+  const closeQrWindow = (endSession = true) => {
+    // Tell the server the session is over so the phone stops accepting
+    // uploads immediately instead of staying live until the clock runs out.
+    if (endSession && qrToken) {
+      const tokenToClose = qrToken;
+      authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/qr/close`, {
+        method: 'POST',
+        body: JSON.stringify({ token: tokenToClose })
+      }).catch(err => console.warn('Could not close QR session:', err));
+    }
+
     setQrOpen(false);
     setQrToken('');
     qrExpiresAtRef.current = null;
@@ -1210,7 +1227,7 @@ const TestPortal = ({ testData, onExit }) => {
     const timer = setInterval(() => {
       const left = Math.max(0, Math.round((qrExpiresAtRef.current - Date.now()) / 1000));
       setQrSecondsLeft(left);
-      if (left <= 0) closeQrWindow();
+      if (left <= 0) closeQrWindow(false); // expired on its own — nothing to close
     }, 1000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1222,41 +1239,54 @@ const TestPortal = ({ testData, onExit }) => {
     if (!qrOpen) return;
 
     const questionAtOpen = currentQ;
+    const tokenAtOpen = qrToken;
 
     const poll = async () => {
       try {
         const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/qr/list`, {
           method: 'POST',
-          body: JSON.stringify({ attemptId: getQrSessionId(), questionIndex: questionAtOpen })
+          body: JSON.stringify({ attemptId: getQrSessionId(), questionIndex: questionAtOpen, token: tokenAtOpen })
         });
         const result = await res.json();
         if (!result.success || !Array.isArray(result.files)) return;
 
         const fresh = result.files.filter(f => f.path && !qrSeenPathsRef.current.has(f.path));
-        if (fresh.length === 0) return;
 
-        fresh.forEach(f => qrSeenPathsRef.current.add(f.path));
+        if (fresh.length > 0) {
+          fresh.forEach(f => qrSeenPathsRef.current.add(f.path));
 
-        // Pull each new photo in for preview. The storage path travels with
-        // it so submission can reuse the already-uploaded file rather than
-        // sending the same bytes again.
-        const prepared = await Promise.all(fresh.map(async (f) => {
-          let previewUrl = f.url;
-          try {
-            const blobRes = await fetch(f.url);
-            const blob = await blobRes.blob();
-            previewUrl = URL.createObjectURL(blob);
-          } catch {
-            // Fall back to the signed URL directly if the fetch fails.
-          }
-          return { url: previewUrl, name: f.name, type: f.mimeType, path: f.path, fromPhone: true };
-        }));
+          // Pull each new photo in for preview. The storage path travels with
+          // it so submission can reuse the already-uploaded file rather than
+          // sending the same bytes again.
+          const prepared = await Promise.all(fresh.map(async (f) => {
+            let previewUrl = f.url;
+            try {
+              const blobRes = await fetch(f.url);
+              const blob = await blobRes.blob();
+              previewUrl = URL.createObjectURL(blob);
+            } catch {
+              // Fall back to the signed URL directly if the fetch fails.
+            }
+            return { url: previewUrl, name: f.name, type: f.mimeType, path: f.path, fromPhone: true };
+          }));
 
-        setUploads(prev => ({
-          ...prev,
-          [questionAtOpen]: [...(prev[questionAtOpen] || []), ...prepared]
-        }));
-        setQrReceivedCount(prev => prev + prepared.length);
+          setUploads(prev => {
+            const existing = prev[questionAtOpen] || [];
+            // Second guard against a photo landing twice — two polls can
+            // overlap on a slow connection and both see the same file.
+            const existingPaths = new Set(existing.map(f => f.path).filter(Boolean));
+            const toAdd = prepared.filter(f => !existingPaths.has(f.path));
+            if (toAdd.length === 0) return prev;
+            return { ...prev, [questionAtOpen]: [...existing, ...toAdd] };
+          });
+          setQrReceivedCount(prev => prev + prepared.length);
+        }
+
+        // The phone pressed "Finish Uploading" — close here too, but only
+        // after the photos above have been taken in.
+        if (result.sessionEnded) {
+          closeQrWindow(false);
+        }
       } catch (err) {
         console.warn('QR poll failed:', err);
       }
@@ -1808,7 +1838,7 @@ const TestPortal = ({ testData, onExit }) => {
                 : `${qrReceivedCount} photo${qrReceivedCount === 1 ? '' : 's'} received`}
             </div>
 
-            <button style={styles.qrFinishBtn} onClick={closeQrWindow}>Finish Uploading</button>
+            <button style={styles.qrFinishBtn} onClick={() => closeQrWindow(true)}>Finish Uploading</button>
 
             <p style={styles.qrFootNote}>
               Photos appear here within a few seconds. You can reopen the code any time if you need to send more.

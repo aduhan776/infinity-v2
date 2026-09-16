@@ -54,16 +54,52 @@ const MobileUpload = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- Same countdown the desktop is running ---
+  // --- Same countdown the desktop is running, plus a watch for the desktop
+  // ending the session early via its own "Finish Uploading" button. ---
   useEffect(() => {
     if (status !== 'ready') return;
+
     const timer = setInterval(() => {
       const left = Math.max(0, Math.round((expiresAtRef.current - Date.now()) / 1000));
       setSecondsLeft(left);
       if (left <= 0) setStatus('expired');
     }, 1000);
-    return () => clearInterval(timer);
+
+    const watcher = setInterval(async () => {
+      try {
+        const res = await fetch(`${API}/api/qr/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        const data = await res.json();
+        if (!data.success) setStatus('expired');
+      } catch {
+        // Ignore transient network blips — the countdown still applies.
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(watcher);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  // Ends the session for both devices, rather than letting it sit open
+  // until the clock runs out.
+  const finishUploading = async () => {
+    setStatus('finished');
+    try {
+      await fetch(`${API}/api/qr/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+    } catch {
+      // Best effort — the session expires on its own shortly anyway.
+    }
+  };
 
   // --- Shrink photos before sending, exactly as the desktop does ---
   const compressImage = (file) => new Promise((resolve, reject) => {
@@ -223,7 +259,7 @@ const MobileUpload = () => {
             <button
               style={{ ...finishBtn, opacity: stillUploading ? 0.5 : 1 }}
               disabled={stillUploading}
-              onClick={() => setStatus('finished')}
+              onClick={finishUploading}
             >
               {stillUploading ? 'Sending photos...' : 'Finish Uploading'}
             </button>
