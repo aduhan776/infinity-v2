@@ -941,6 +941,24 @@ const TestPortal = ({ testData, onExit }) => {
           subjective_results: subjectiveResultsForCloud
         });
         cloudSyncSucceeded = true;
+
+        // 🆕 AI Labs tests are also stored server-side as an unattempted
+        // placeholder row keyed by the generated testId, so the student can
+        // see which generated tests they still haven't taken. Now that this
+        // attempt has been recorded, flip that placeholder. Only applies to
+        // AI Labs tests (their ids carry the AI- prefix); curated Test Series
+        // tests have no such placeholder. Best-effort — a failure here only
+        // affects that "not yet attempted" list, never the attempt itself.
+        if (typeof data.id === 'string' && data.id.startsWith('AI-')) {
+          try {
+            await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/ailabs/mark-attempted`, {
+              method: 'POST',
+              body: JSON.stringify({ testId: data.id })
+            });
+          } catch (markErr) {
+            console.warn("Could not mark generated test as attempted:", markErr);
+          }
+        }
       } catch (cloudErr) {
         console.warn("Cloud test session sync failed:", cloudErr);
       }

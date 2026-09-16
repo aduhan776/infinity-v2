@@ -47,6 +47,25 @@ const ConfirmRow = ({ label, value }) => (
 // --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
 const ACCENT = '#7065BA';
 
+// 🆕 Shown whenever a Subjective question type is picked. Subjective questions
+// cost twice as much quota as Objective ones (generation plus image evaluation
+// and written feedback), and that has to be stated before the student commits
+// to the run rather than discovered afterwards on the balance.
+const SubjectiveCostNote = () => (
+  <div style={{
+    display: 'flex', alignItems: 'center', gap: '7px',
+    background: '#fef3c7', border: '1px solid #fde68a',
+    borderRadius: '8px', padding: '8px 11px', marginTop: '6px', marginBottom: '10px'
+  }}>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#92400e" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+    <span style={{ color: '#92400e', fontSize: '0.76rem', fontWeight: '600', lineHeight: '1.4' }}>
+      Subjective questions use 2 credits each (Objective use 1).
+    </span>
+  </div>
+);
+
 const AiTests = ({ onStartTest }) => {
   const [view, setView] = useState('selection'); // selection, config-full, config-topic, ai-summary, admin-preview, admin-push-cloud
   const [aiTestDetails, setAiTestDetails] = useState(null);
@@ -106,6 +125,90 @@ const AiTests = ({ onStartTest }) => {
   const [topicMarks, setTopicMarks] = useState('2.0');
   const [topicNeg, setTopicNeg] = useState('0.66');
   const [topicType, setTopicType] = useState('Objective');
+
+  // --- 🆕 AI LABS CREDITS (billed per question: Objective = 1, Subjective = 2) ---
+  const [aiLabsCredits, setAiLabsCredits] = useState(null); // null = not loaded yet
+
+  const fetchAiLabsCredits = async () => {
+    try {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/credits`, { method: 'GET' });
+      const data = await response.json();
+      if (data.success && typeof data.aiLabsCredits === 'number') {
+        setAiLabsCredits(data.aiLabsCredits);
+      }
+    } catch (err) {
+      console.warn("Could not fetch AI Labs credits (non-blocking):", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAiLabsCredits();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 🆕 Charge for a finished generation run. Called only after everything
+  // generated successfully — a run that fails partway through costs nothing.
+  // Counts come from the questions actually produced, and Subjective
+  // questions count double (see the backend route for the reasoning).
+  const chargeForGeneratedTest = async (testId, testTitle, objectiveCount, subjectiveCount) => {
+    try {
+      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/ailabs/deduct-credit`, {
+        method: 'POST',
+        body: JSON.stringify({ testId, testTitle, objectiveCount, subjectiveCount })
+      });
+      const data = await response.json();
+      if (data.success && typeof data.updatedAiLabsCredits === 'number') {
+        setAiLabsCredits(data.updatedAiLabsCredits);
+      }
+    } catch (err) {
+      // Non-blocking: never block the student from using a test they've already been given.
+      console.warn("Could not deduct AI Labs credits (non-blocking):", err);
+    }
+  };
+
+  // 🆕 Persist the generated test server-side as an unattempted placeholder,
+  // so it's reachable from any device and the ledger's `reference` always
+  // resolves to a real row. IndexedDB is still written as before.
+  const saveGeneratedTestToCloud = async (testId, title, questionIds, testStructure) => {
+    try {
+      await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/ailabs/save-generated-test`, {
+        method: 'POST',
+        body: JSON.stringify({ testId, title, questionIds, testStructure })
+      });
+    } catch (err) {
+      // Non-blocking: the local IndexedDB copy still works on this device.
+      console.warn("Could not save generated test to cloud (non-blocking):", err);
+    }
+  };
+
+  // 🆕 Counts questions by type across both flat and sectional structures.
+  const countQuestionsByType = (structure) => {
+    let objectiveCount = 0;
+    let subjectiveCount = 0;
+
+    const tally = (list) => {
+      (list || []).forEach(q => {
+        if (q.type === 'Subjective') subjectiveCount += 1;
+        else objectiveCount += 1;
+      });
+    };
+
+    if (Array.isArray(structure.sections)) {
+      structure.sections.forEach(sec => tally(sec.questions));
+    } else {
+      tally(structure.questions_list);
+    }
+
+    return { objectiveCount, subjectiveCount };
+  };
+
+  // 🆕 Flattens every question id out of a structure, for the placeholder row.
+  const collectQuestionIds = (structure) => {
+    if (Array.isArray(structure.sections)) {
+      return structure.sections.flatMap(sec => (sec.questions || []).map(q => q.id).filter(Boolean));
+    }
+    return (structure.questions_list || []).map(q => q.id).filter(Boolean);
+  };
 
   // 🚨 FIXED: DYNAMIC CLOUD MATRIX DROPDOWNS (MOVED TO THE TOP FOR GUARANTEED RENDER SCOPE)
   const categoriesList = Array.from(new Set((cloudMockTestsPool || []).map(t => t.category_name))).filter(name => name && name !== 'AI Lab Generated');
@@ -404,6 +507,19 @@ const AiTests = ({ onStartTest }) => {
       }
 
       setAiTestDetails(finalStructure);
+
+      // 🆕 Everything generated successfully — now persist it server-side and
+      // charge for it. Both happen only on the success path, so a run that
+      // failed partway through costs the student nothing.
+      const { objectiveCount, subjectiveCount } = countQuestionsByType(finalStructure);
+      await saveGeneratedTestToCloud(
+        generatedTestId,
+        finalStructure.title,
+        collectQuestionIds(finalStructure),
+        finalStructure
+      );
+      await chargeForGeneratedTest(generatedTestId, finalStructure.title, objectiveCount, subjectiveCount);
+
       setView('ai-summary');
     } catch (error) {
       console.error("Full Test Compilation Error:", error);
@@ -488,6 +604,18 @@ const AiTests = ({ onStartTest }) => {
       });
 
       setAiTestDetails(topicStructure);
+
+      // 🆕 Same as the Full Mock path — persist and charge only once the whole
+      // run has succeeded.
+      const { objectiveCount, subjectiveCount } = countQuestionsByType(topicStructure);
+      await saveGeneratedTestToCloud(
+        generatedTestId,
+        topicStructure.title,
+        collectQuestionIds(topicStructure),
+        topicStructure
+      );
+      await chargeForGeneratedTest(generatedTestId, topicStructure.title, objectiveCount, subjectiveCount);
+
       setView('ai-summary');
     } catch (error) {
       console.error("AI Generation Error:", error);
@@ -667,6 +795,11 @@ const AiTests = ({ onStartTest }) => {
 
       {view === 'selection' && (
         <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+            <div style={quotaBadgeStyle}>
+              {aiLabsCredits === null ? 'Loading...' : `${aiLabsCredits} question${aiLabsCredits === 1 ? '' : 's'} left`}
+            </div>
+          </div>
           <header className="ai-select-header" style={{ textAlign: 'center', marginBottom: '30px' }}>
             <h1 className="ai-select-title" style={{ fontSize: '2.4rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.8px' }}>AI Test Lab</h1>
             <p className="ai-select-subtitle" style={{ color: '#64748b', marginTop: '6px', fontSize: '0.95rem', fontWeight: '500' }}>Choose how you want to practice and prepare with AI</p>
@@ -750,6 +883,11 @@ const AiTests = ({ onStartTest }) => {
       {view === 'config-full' && (
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+              <div style={quotaBadgeStyle}>
+                {aiLabsCredits === null ? 'Loading...' : `${aiLabsCredits} question${aiLabsCredits === 1 ? '' : 's'} left`}
+              </div>
+            </div>
             <h2 className="ai-form-title" style={{ color: '#1e293b', marginBottom: '5px', fontWeight: '900' }}>Full Scale Exam Blueprint</h2>
             <p className="ai-form-subtitle" style={{ color: '#64748b', marginBottom: '16px', fontSize: '0.9rem', fontWeight: '500' }}>Configure structure evaluation parameters and let AI model the questions.</p>
                        
@@ -858,6 +996,7 @@ const AiTests = ({ onStartTest }) => {
                   <div style={{ flex: 1 }}><label style={miniLabel}>Correct Mark (+)</label><input style={inputStyle} type="number" step="0.5" value={fullMarks} onChange={e => setFullMarks(e.target.value)} /></div>
                   <div style={{ flex: 1 }}><label style={miniLabel}>Negative Mark (-)</label><input style={inputStyle} type="number" step="0.01" value={fullNeg} onChange={e => setFullNeg(e.target.value)} disabled={fullType === 'Subjective'} /></div>
                 </div>
+                {fullType === 'Subjective' && <SubjectiveCostNote />}
               </div>
             ) : (
               <div style={nestedBox}>
@@ -897,6 +1036,7 @@ const AiTests = ({ onStartTest }) => {
                   <div style={{ flex: 1 }}><label style={miniLabel}>Correct Mark (+)</label><input style={inputStyle} type="number" step="0.5" value={secMarks} onChange={e => setSecMarks(e.target.value)} /></div>
                   <div style={{ flex: 1 }}><label style={miniLabel}>Negative Mark (-)</label><input style={inputStyle} type="number" step="0.01" value={secNeg} onChange={e => setSecNeg(e.target.value)} disabled={secType === 'Subjective'} /></div>
                 </div>
+                {secType === 'Subjective' && <SubjectiveCostNote />}
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button onClick={handleAddSectionToBlueprint} style={{ ...addSecBtn, flex: 2 }}>
                     {editingSecIdx !== null ? "Update Section Configuration" : "Save Section Component"}
@@ -943,6 +1083,11 @@ const AiTests = ({ onStartTest }) => {
       {view === 'config-topic' && (
         <div style={formWrapper} className="ai-form-wrapper">
           <div style={formCard} className="ai-form-card">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+              <div style={quotaBadgeStyle}>
+                {aiLabsCredits === null ? 'Loading...' : `${aiLabsCredits} question${aiLabsCredits === 1 ? '' : 's'} left`}
+              </div>
+            </div>
             <h2 className="ai-form-title" style={{ color: '#1e293b', marginBottom: '5px', fontWeight: '900' }}>Targeted Topic Drill</h2>
             <p className="ai-form-subtitle" style={{ color: '#64748b', marginBottom: '16px', fontSize: '0.9rem', fontWeight: '500' }}>Specify single concepts and set direct evaluation criteria.</p>
                        
@@ -968,6 +1113,7 @@ const AiTests = ({ onStartTest }) => {
                 <option value="Subjective">Subjective (Theory)</option>
               </select>
             </div>
+            {topicType === 'Subjective' && <SubjectiveCostNote />}
                        
             <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1 }}><label style={labelStyle}>Difficulty Level <span style={mandatoryStar}>*</span></label>
@@ -1257,6 +1403,10 @@ const AiTests = ({ onStartTest }) => {
 // --- STYLES SCHEMA ---
 const containerStyle = { padding: '40px 20px', maxWidth: '1050px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }; 
 const selectionGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop: '35px' }; 
+// 🆕 Same rectangular-with-rounded-corners quota badge BrainFeed uses, so the
+// two pages read as one product even though their units differ (questions here,
+// sessions there).
+const quotaBadgeStyle = { background: '#e0e7ff', color: ACCENT, padding: '8px 18px', borderRadius: '10px', fontSize: '0.82rem', fontWeight: '700', whiteSpace: 'nowrap', border: '1px solid #c7d2fe' };
 const cardHeaderRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '14px' }; const leftCardTitle = { margin: '0 0 8px 0', fontSize: '1.4rem', color: '#0f172a', fontWeight: '800', letterSpacing: '-0.5px' }; const cleanBulletList = { listStyleType: 'none', padding: 0, margin: '0 0 20px 0', display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', flex: 1 }; const bulletItemRow = { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.92rem', color: '#475569', fontWeight: '500', lineHeight: '1.5' }; const fullMockCardStyle = { background: '#ffffff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 6px 24px rgba(79, 70, 229, 0.14)' }; const indigoIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff', border: '1px solid #c7d2fe' }; const indigoBadge = { background: '#e0e7ff', color: '#4f46e5', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const indigoActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }; const topicMockCardStyle = { background: '#ffffff', padding: '26px', borderRadius: '24px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', boxShadow: '0 6px 24px rgba(16, 185, 129, 0.14)' }; const emeraldIconFrame = { width: '48px', height: '48px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d1fae5', border: '1px solid #a7f3d0' }; const emeraldBadge = { background: '#d1fae5', color: '#065f46', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.2px' }; const emeraldActionBtn = { border: 'none', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', fontSize: '0.92rem', cursor: 'pointer', transition: '0.2s', width: '100%', background: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' }; const actionBtn = { border: 'none', color: '#fff', padding: '11px 24px', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', width: '100%' }; const formWrapper = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px', background: '#ffffff', fontFamily: 'Inter, sans-serif' }; const formCard = { background: '#fff', padding: '26px', borderRadius: '24px', border: '1px solid #EDEBF5', width: '100%', maxWidth: '600px', boxShadow: '0 10px 30px rgba(112, 101, 186, 0.08)' }; const labelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }; const mandatoryStar = { color: '#ef4444', fontWeight: '900' }; const miniLabel = { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }; const inputStyle = { width: '100%', padding: '11px', borderRadius: '10px', border: '1px solid #E4E1F5', fontSize: '1rem', outline: 'none', marginBottom: '12px', background: '#F8F7FC', fontWeight: '600', color: '#1e293b', boxSizing: 'border-box' }; const flexRow = { display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '2px' }; const nestedBox = { background: '#F8F7FC', padding: '14px', borderRadius: '16px', border: '1px solid #E4E1F5', marginBottom: '16px' }; const addSecBtn = { width: '100%', padding: '10px', background: ACCENT, color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }; const secBadgeRow = { display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #E4E1F5', fontSize: '0.85rem', fontWeight: '600' }; const cancelBtn = { padding: '12px 24px', background: '#F1EFFA', color: '#475569', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }; const summaryVaultBox = { background: '#F8F7FC', border: '1px solid #E4E1F5', padding: '20px', borderRadius: '16px', textAlign: 'left', margin: '20px 0 30px 0' }; const sumLine = { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.9rem', fontWeight: '500' }; const modeToggleRow = { display: 'flex', gap: '10px', background: '#F1EFFA', padding: '5px', borderRadius: '12px', marginBottom: '15px' }; const modeBtn = { flex: 1, padding: '10px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem', transition: '0.3s' }; 
 
 const miniSectionActionControlBtn = {
