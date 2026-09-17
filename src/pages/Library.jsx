@@ -2,48 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; 
-
-// --- 🌐 LIGHTWEIGHT INLINE INDEXEDDB ENGINE FOR DEVICE STORAGE ---
-const dbName = "InfinityLocalDB";
-
-const initLibraryDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, 3); // 🚨 ENGINE VERSION 3 — matches AiTests.jsx, fixes VersionError
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains("test_sessions")) {
-        db.createObjectStore("test_sessions", { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains("saved_questions")) {
-        db.createObjectStore("saved_questions", { keyPath: "id" });
-      }
-    };
-    request.onsuccess = (e) => resolve(e.target.result);
-    request.onerror = (e) => reject(e.target.error);
-  });
-};
-
-const getAllFromLocalStore = async (storeName) => {
-  const db = await initLibraryDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, "readonly");
-    const store = transaction.objectStore(storeName);
-    const request = store.getAll();
-    request.onsuccess = () => resolve(request.result || []);
-    request.onerror = (e) => reject(e.target.error);
-  });
-};
-
-const deleteFromLocalStore = async (storeName, id) => {
-  const db = await initLibraryDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, "readwrite");
-    const store = transaction.objectStore(storeName);
-    const request = store.delete(id);
-    request.onsuccess = () => resolve();
-    request.onerror = (e) => reject(e.target.error);
-  });
-};
+import { getAllFromLocalStore, deleteFromLocalStore } from '../utils/localDb';
 
 // --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
 const ACCENT = '#7065BA';

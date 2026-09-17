@@ -4,65 +4,7 @@ import { supabase } from '../supabaseClient';
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText';
 import { QRCodeCanvas } from 'qrcode.react';
-
-// --- 🌐 LOCAL STORAGE STORAGE ENGINE MAPPINGS ---
-const dbName = "InfinityLocalDB";
-
-const initPortalDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, 3); // 🚨 ENGINE VERSION 3 — matches AiTests.jsx, fixes VersionError
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains("test_sessions")) {
-        db.createObjectStore("test_sessions", { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains("saved_questions")) {
-        db.createObjectStore("saved_questions", { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains("ai_mock_tests")) {
-        db.createObjectStore("ai_mock_tests", { keyPath: "id" });
-      }
-    };
-    request.onsuccess = (e) => resolve(e.target.result);
-    request.onerror = (e) => reject(e.target.error);
-  });
-};
-
-const saveToLocalStore = async (storeName, payload) => {
-  const db = await initPortalDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
-    store.put(payload);
-    tx.oncomplete = () => resolve();
-    tx.onerror = (err) => reject(err);
-  });
-};
-
-const deleteFromLocalStore = async (storeName, id) => {
-  const db = await initPortalDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
-    store.delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = (err) => reject(err);
-  });
-};
-
-// 🧭 STEP B: read a single record back out of an IndexedDB store by id —
-// used to recover AI Labs tests (ai_mock_tests) after a reload, when the
-// test data no longer exists in memory.
-const getFromLocalStore = async (storeName, id) => {
-  const db = await initPortalDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const store = tx.objectStore(storeName);
-    const req = store.get(id);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = (err) => reject(err);
-  });
-};
+import { saveToLocalStore, deleteFromLocalStore, getFromLocalStore } from '../utils/localDb';
 
 // --- 📱 MOBILE BREAKPOINT DETECTION ---
 const useIsMobile = (breakpoint = 768) => {

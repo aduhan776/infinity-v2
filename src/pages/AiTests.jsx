@@ -2,40 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; 
-
-// --- 🌐 INLINE BULLETPROOF INDEXEDDB STORAGE SYSTEM INITIALIZER ---
-const dbName = "InfinityLocalDB";
-
-const initAiTestsDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, 3); // ENGINE VERSION 3 FOR LOCAL EXAM BLUEPRINTS
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains("test_sessions")) {
-        db.createObjectStore("test_sessions", { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains("saved_questions")) {
-        db.createObjectStore("saved_questions", { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains("ai_mock_tests")) {
-        db.createObjectStore("ai_mock_tests", { keyPath: "id" });
-      }
-    };
-    request.onsuccess = (e) => resolve(e.target.result);
-    request.onerror = (e) => reject(e.target.error);
-  });
-};
-
-const saveAiTestToLocalStore = async (payload) => {
-  const db = await initAiTestsDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("ai_mock_tests", "readwrite");
-    const store = tx.objectStore("ai_mock_tests");
-    store.put(payload);
-    tx.oncomplete = () => resolve();
-    tx.onerror = (err) => reject(tx.error);
-  });
-};
+import { saveAiTestToLocalStore } from '../utils/localDb';
 
 const ConfirmRow = ({ label, value }) => (
   <div className="ai-confirm-row" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
