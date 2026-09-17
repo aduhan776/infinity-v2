@@ -224,10 +224,10 @@ const AiTests = ({ onStartTest }) => {
           } else {
             const { data: profile } = await supabase
               .from('profiles')
-              .select('role')
+              .select('is_admin')
               .eq('id', user.id)
               .single();
-            if (profile && (profile.role === 'admin' || profile.role === 'superuser')) {
+            if (profile && profile.is_admin === true) {
               setIsAdmin(true);
             }
           }
