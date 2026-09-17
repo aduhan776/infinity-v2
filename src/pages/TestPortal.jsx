@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText';
 import { QRCodeCanvas } from 'qrcode.react';
-import { saveToLocalStore, deleteFromLocalStore } from '../utils/localDb';
+import { saveToLocalStore, deleteFromLocalStore, getFromLocalStore } from '../utils/localDb';
 
 // --- 📱 MOBILE BREAKPOINT DETECTION ---
 const useIsMobile = (breakpoint = 768) => {
@@ -88,6 +88,81 @@ const TestPortal = ({ testData, onExit }) => {
 
     (async () => {
       try {
+        // 🧭 DRAFT-FIRST RESOLUTION — before treating urlTestId as a fresh
+        // test to load, check whether a paused draft exists for it. Same
+        // device (IndexedDB has it, from this test's own 800ms/12s local
+        // autosave) resolves instantly, no network needed. A different
+        // device (or IndexedDB cleared) falls back to Supabase, which the
+        // 60s background sync / immediate Pause-sync keep current. Only
+        // once neither has a draft do we fall through to loading a FRESH
+        // test below (AI Labs blueprint or mock_tests/Test Series row).
+        const localDraft = await getFromLocalStore("test_sessions", urlTestId).catch(() => null);
+        if (cancelled) return;
+        if (localDraft && localDraft.status === 'draft') {
+          setResolvedTestData({
+            id: localDraft.test_id,
+            title: localDraft.title,
+            status: 'draft',
+            time: localDraft.time,
+            questions: localDraft.questions,
+            questions_list: localDraft.questions_list,
+            sections: localDraft.sections,
+            hasSectionalTiming: localDraft.hasSectionalTiming || false,
+            mode: localDraft.mode,
+            // Resume-specific fields — picked up by the existing
+            // hasRestoredRef effect below via its `data.status === 'draft'`
+            // branch, the same path Library's "Resume Session" already uses.
+            answers: localDraft.answers || {},
+            uploads: localDraft.uploads || {},
+            timeTracker: localDraft.time_tracker || {},
+            lastIndex: localDraft.lastIndex || 0,
+            currentSectionIdx: localDraft.currentSectionIdx || 0,
+            markedForReview: localDraft.markedForReview || [],
+            rawSeconds: localDraft.raw_seconds,
+            sectionTimeLeft: localDraft.sectionTimeLeft
+          });
+          setIsResolving(false);
+          return;
+        }
+
+        try {
+          const draftRes = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/drafts/by-test/${encodeURIComponent(urlTestId)}`, {
+            method: 'GET'
+          });
+          const draftJson = await draftRes.json();
+          if (cancelled) return;
+          if (draftJson.success && draftJson.draft) {
+            const row = draftJson.draft;
+            const meta = row.draft_meta || {};
+            setResolvedTestData({
+              id: row.test_id,
+              title: row.title,
+              status: 'draft',
+              time: meta.time,
+              questions: meta.questions,
+              questions_list: meta.questions_list,
+              sections: meta.sections,
+              hasSectionalTiming: meta.hasSectionalTiming || false,
+              mode: meta.mode,
+              answers: row.answers || {},
+              uploads: {}, // 📎 uploads are deliberately never persisted into a paused draft (see handleSaveForLater) — nothing to restore
+              timeTracker: row.time_tracker || {},
+              lastIndex: meta.lastIndex || 0,
+              currentSectionIdx: meta.currentSectionIdx || 0,
+              markedForReview: meta.markedForReview || [],
+              rawSeconds: row.raw_seconds,
+              sectionTimeLeft: meta.sectionTimeLeft
+            });
+            setIsResolving(false);
+            return;
+          }
+          // 404 / no draft found — fall through to loading a fresh test below.
+        } catch (draftErr) {
+          // Network hiccup checking for a cloud draft — don't block the
+          // student from at least getting a fresh copy of the test below.
+          console.warn("Cloud draft check failed (non-blocking):", draftErr);
+        }
+
         // 🧭 AI Labs tests ("AI-FULL-..." / "AI-TOPIC-...") now live only in
         // Supabase (ai_generated_tests) — the old IndexedDB copy was removed
         // because it couldn't survive a different device/browser, and
