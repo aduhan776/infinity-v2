@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
+import { authFetch } from '../utils/apiClient';
 
 const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
   const [subscribedExams, setSubscribedExams] = useState([]);
@@ -106,16 +107,41 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
             }
             setStreakCount(streak);
 
-            // FETCH PRIVATE USER-SPECIFIC DYNAMIC AI TESTS Snapshots
-            const userTestIds = Array.from(new Set(sessions.map(s => s.test_id)))
-              .filter(id => id && (id.startsWith('AI-') || id.startsWith('AI_')));
-
-            if (userTestIds.length > 0) {
-              const { data: mtData } = await supabase
-                .from('mock_tests')
-                .select('*')
-                .in('id', userTestIds);
-              if (mtData) setAiLabTests(mtData);
+            // 🧭 FETCH PRIVATE USER-SPECIFIC AI LAB GENERATED TESTS
+            // Previously this derived a list of AI test ids from already-
+            // *submitted* test_sessions and looked them up in mock_tests —
+            // which meant a test the student generated but hadn't attempted
+            // yet could never appear here, even though the whole point of
+            // this section is "tests you generated" (attempted or not).
+            // ai_generated_tests (Supabase) is now the single source of
+            // truth for every AI Labs test's structure, generated tests
+            // included, so we read directly from there instead.
+            try {
+              const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/ailabs/generated-tests`, {
+                method: 'GET'
+              });
+              const json = await res.json();
+              if (json.success && Array.isArray(json.tests)) {
+                // Flatten test_structure so the rest of this component (which
+                // expects test.title / test.time / test.questions_list etc.
+                // directly on the object) doesn't need to change.
+                const flattened = json.tests.map(t => ({
+                  id: t.id,
+                  title: t.test_structure?.title || t.title,
+                  time: t.test_structure?.time,
+                  questions: t.test_structure?.questions,
+                  questions_list: t.test_structure?.questions_list || [],
+                  sections: t.test_structure?.sections || null,
+                  has_sectional_timing: t.test_structure?.hasSectionalTiming || false,
+                  is_attempted: t.is_attempted,
+                  created_at: t.created_at
+                }));
+                setAiLabTests(flattened);
+              }
+            } catch (aiLabsErr) {
+              // Non-blocking: the rest of the dashboard (streak, subscribed
+              // exams, submitted-test count) is unaffected by this failing.
+              console.warn("Could not fetch AI Lab generated tests:", aiLabsErr);
             }
           }
         }

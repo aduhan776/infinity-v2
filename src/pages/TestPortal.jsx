@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText';
 import { QRCodeCanvas } from 'qrcode.react';
-import { saveToLocalStore, deleteFromLocalStore, getFromLocalStore } from '../utils/localDb';
+import { saveToLocalStore, deleteFromLocalStore } from '../utils/localDb';
 
 // --- 📱 MOBILE BREAKPOINT DETECTION ---
 const useIsMobile = (breakpoint = 768) => {
@@ -88,14 +88,22 @@ const TestPortal = ({ testData, onExit }) => {
 
     (async () => {
       try {
-        // AI Labs tests are saved locally with ids like "AI-FULL-..." / "AI-TOPIC-..."
+        // 🧭 AI Labs tests ("AI-FULL-..." / "AI-TOPIC-...") now live only in
+        // Supabase (ai_generated_tests) — the old IndexedDB copy was removed
+        // because it couldn't survive a different device/browser, and
+        // inconsistent per-page store definitions had already caused it to
+        // silently fail for some users. This fetch works the same on any
+        // device the student is logged in on.
         if (urlTestId.startsWith('AI-FULL-') || urlTestId.startsWith('AI-TOPIC-')) {
-          const localTest = await getFromLocalStore('ai_mock_tests', urlTestId);
+          const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/ailabs/generated-tests/${encodeURIComponent(urlTestId)}`, {
+            method: 'GET'
+          });
+          const json = await res.json();
           if (cancelled) return;
-          if (localTest) {
-            setResolvedTestData(localTest);
+          if (json.success && json.test?.test_structure) {
+            setResolvedTestData(json.test.test_structure);
           } else {
-            setResolveError("This AI test could not be found on this device. It may have been generated on a different device or browser.");
+            setResolveError(json.error || "This AI test could not be found. It may have been removed, or belongs to a different account.");
           }
           setIsResolving(false);
           return;

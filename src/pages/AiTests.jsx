@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; 
-import { saveAiTestToLocalStore } from '../utils/localDb';
 
 const ConfirmRow = ({ label, value }) => (
   <div className="ai-confirm-row" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
@@ -133,18 +132,21 @@ const AiTests = ({ onStartTest }) => {
     }
   };
 
-  // 🆕 Persist the generated test server-side as an unattempted placeholder,
+  // 🧭 Persist the generated test server-side as an unattempted placeholder,
   // so it's reachable from any device and the ledger's `reference` always
-  // resolves to a real row. IndexedDB is still written as before.
+  // resolves to a real row. This is now the ONLY copy of the test's
+  // structure (IndexedDB was removed), so a failure here must stop the
+  // flow — it is NOT caught/swallowed, it propagates to the caller so the
+  // generation run is treated as failed and the student isn't charged for
+  // a test that has nowhere to live.
   const saveGeneratedTestToCloud = async (testId, title, questionIds, testStructure) => {
-    try {
-      await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/ailabs/save-generated-test`, {
-        method: 'POST',
-        body: JSON.stringify({ testId, title, questionIds, testStructure })
-      });
-    } catch (err) {
-      // Non-blocking: the local IndexedDB copy still works on this device.
-      console.warn("Could not save generated test to cloud (non-blocking):", err);
+    const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/ailabs/save-generated-test`, {
+      method: 'POST',
+      body: JSON.stringify({ testId, title, questionIds, testStructure })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || "Could not save the generated test. Please try again.");
     }
   };
 
@@ -467,17 +469,6 @@ const AiTests = ({ onStartTest }) => {
         finalStructure.sections = compiledSections;
         finalStructure.mode = `Mixed / Sectional (${fullDifficulty})`;
 
-        await saveAiTestToLocalStore({
-          id: generatedTestId,
-          category_name: 'AI Lab Generated',
-          title: finalStructure.title,
-          questions: totalQuestions,
-          time: totalDuration,
-          sections: compiledSections,
-          has_sectional_timing: hasSectionalTiming,
-          created_at: new Date().getTime()
-        });
-
       } else {
         if (!fullQCount || !fullDuration) { alert("Please enter the question count and duration."); setLoading(false); processingRef.current = false; return; }
         
@@ -515,24 +506,18 @@ const AiTests = ({ onStartTest }) => {
         finalStructure.hasSectionalTiming = false;
         finalStructure.questions_list = flatPaperQuestionsList;
         finalStructure.mode = `${fullType} (${fullDifficulty}) - ${fullLanguage}`;
-
-        await saveAiTestToLocalStore({
-          id: generatedTestId,
-          category_name: 'AI Lab Generated',
-          title: finalStructure.title,
-          questions: flatPaperQuestionsList.length,
-          time: parseInt(fullDuration),
-          questions_list: flatPaperQuestionsList,
-          has_sectional_timing: false,
-          created_at: new Date().getTime()
-        });
       }
 
       setAiTestDetails(finalStructure);
 
-      // 🆕 Everything generated successfully — now persist it server-side and
-      // charge for it. Both happen only on the success path, so a run that
-      // failed partway through costs the student nothing.
+      // 🧭 Supabase (ai_generated_tests) is now the ONLY place this test's
+      // structure is persisted — IndexedDB was removed because it couldn't
+      // survive a different device/browser, and inconsistent per-page store
+      // definitions had already caused it to silently fail for some users.
+      // This save must succeed before we charge credits or show the summary:
+      // if it fails, there is no fallback copy anywhere, so the run has to
+      // be treated as failed (and the student not charged) rather than
+      // silently producing a test that can never be opened again.
       const { objectiveCount, subjectiveCount } = countQuestionsByType(finalStructure);
       await saveGeneratedTestToCloud(
         generatedTestId,
@@ -621,21 +606,10 @@ const AiTests = ({ onStartTest }) => {
         mode: `${topicType} - ${topicDifficulty} (${topicLanguage})`
       };
 
-      await saveAiTestToLocalStore({
-        id: generatedTestId,
-        category_name: 'AI Lab Generated',
-        title: topicStructure.title,
-        questions: topicQuestionsList.length,
-        time: targetDuration,
-        questions_list: topicQuestionsList,
-        has_sectional_timing: false,
-        created_at: new Date().getTime()
-      });
-
       setAiTestDetails(topicStructure);
 
-      // 🆕 Same as the Full Mock path — persist and charge only once the whole
-      // run has succeeded.
+      // 🧭 Same as the Full Mock path — Supabase is the only persistence,
+      // and it must succeed before the student is charged.
       const { objectiveCount, subjectiveCount } = countQuestionsByType(topicStructure);
       await saveGeneratedTestToCloud(
         generatedTestId,

@@ -15,21 +15,29 @@
 //
 // With one shared module the store list cannot drift again.
 //
-// 🚨 CHANGING THE SCHEMA: add the new store to STORES *and* bump DB_VERSION.
-// Bumping the version is what re-runs the upgrade on devices that already have
-// an older (possibly incomplete) database on disk.
+// 🚨 CHANGING THE SCHEMA:
+// - Adding a store: add it to STORES AND bump DB_VERSION. Bumping is what
+//   re-runs the upgrade on devices that already have an older database on
+//   disk — without it, existing devices never get the new store.
+// - Removing a store (like ai_mock_tests below): just remove it from
+//   STORES. No bump needed for a plain removal — nothing here actively
+//   deletes the old object store from devices that already have it (it's
+//   simply never opened/written again), so leaving DB_VERSION alone is
+//   safe and avoids an unnecessary upgrade cycle for everyone else.
 
 const DB_NAME = 'InfinityLocalDB';
 
 // ENGINE VERSION 4 — bumped from 3 to repair devices that were left with an
-// incomplete store set by the old per-page upgrade handlers.
+// incomplete store set by the old per-page upgrade handlers. AI Labs tests
+// no longer live here at all (moved to Supabase's ai_generated_tests table),
+// so the ai_mock_tests store was removed from STORES below — this did not
+// require a further bump (see the schema-change note above).
 const DB_VERSION = 4;
 
 // The complete store list. Anything not in here does not exist.
 export const STORES = {
   TEST_SESSIONS: 'test_sessions',
   SAVED_QUESTIONS: 'saved_questions',
-  AI_MOCK_TESTS: 'ai_mock_tests',
 };
 
 const ALL_STORES = Object.values(STORES);
@@ -153,10 +161,3 @@ export const deleteFromLocalStore = async (storeName, id) => {
     tx.onabort = () => reject(tx.error);
   });
 };
-
-/**
- * Convenience wrapper used by AI Labs — saves a generated test blueprint so it
- * can be recovered by TestPortal after a reload.
- */
-export const saveAiTestToLocalStore = (payload) =>
-  saveToLocalStore(STORES.AI_MOCK_TESTS, payload);
