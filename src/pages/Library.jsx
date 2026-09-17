@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; 
-import { getAllFromLocalStore, deleteFromLocalStore } from '../utils/localDb';
 
 // --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
 const ACCENT = '#7065BA';
@@ -59,13 +58,12 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
         setSavedQuestions([]);
       }
 
-      // 2. Fetch Centralized Test Sessions — merge local (IndexedDB, fast,
-      // carries the full question snapshot) with cloud (Supabase, source of
-      // truth, survives across devices / cleared local storage). Local wins
-      // on id conflicts since it already has the richer data; cloud-only
-      // rows (not present locally) are appended so history is never blank
-      // just because this device's IndexedDB doesn't have that attempt.
-      const localSessions = await getAllFromLocalStore("test_sessions");
+      // 2. Fetch Test Sessions — Supabase is now the single source for both
+      // submitted attempts and paused drafts. Drafts used to live only in
+      // IndexedDB (same-device only) and get merged in here; now the
+      // periodic/immediate cloud draft sync in TestPortal keeps Supabase
+      // current enough that this device-local merge is no longer needed —
+      // one source, works from any device, nothing to reconcile.
       let cloudSessions = [];
       if (user) {
         const { data: cloudRows, error: cloudSessionsErr } = await supabase
@@ -78,11 +76,7 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
           cloudSessions = cloudRows || [];
         }
       }
-      const localIds = new Set(localSessions.map(row => row.id));
-      const cloudOnlySessions = cloudSessions
-        .filter(row => !localIds.has(row.id))
-        .map(row => ({ ...row, questions: null })); // no local question snapshot — AnalysisPortal reconstructs via mock_tests/question_pool join
-      const allSessions = [...localSessions, ...cloudOnlySessions];
+      const allSessions = cloudSessions;
 
       const { data: masterTests } = await supabase.from('mock_tests').select('*');
 
@@ -113,12 +107,13 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
             answers: row.answers || {},
             uploads: row.uploads || {},
             timeTracker: row.time_tracker || {},
-            // Priority: local full snapshot (row.questions, from IndexedDB) >
-            // mock_tests join (Test Series) > neither, in which case
-            // question_ids/subjective_results are passed through so
-            // AnalysisPortal can reconstruct from question_pool (AI Labs).
-            questions: row.questions || cloudMatch.questions_list || [],
-            questions_list: row.questions || cloudMatch.questions_list || [],
+            // Test Series tests get their question list from the mock_tests
+            // join; AI Labs tests carry no full snapshot here (Supabase
+            // never stores raw question text for submitted rows), so
+            // question_ids/subjective_results are passed through instead —
+            // AnalysisPortal reconstructs those from question_pool.
+            questions: cloudMatch.questions_list || [],
+            questions_list: cloudMatch.questions_list || [],
             question_ids: row.question_ids || [],
             subjective_results: row.subjective_results || [],
             sections: cloudMatch.sections || null,
@@ -129,28 +124,38 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
           };
         });
 
-      // Parse and map Paused Draft Snapshots
-      const draftRows = localSessions
+      // Parse and map Paused Draft Snapshots — Supabase-only now. Everything
+      // specific to an in-progress draft (lastIndex, sections, mode, the
+      // paper's own questions_list, etc) lives inside draft_meta (see the
+      // backend's /api/tests/save-draft), since test_sessions' regular
+      // columns are shaped around a *submitted* attempt.
+      const draftRows = allSessions
         .filter(row => row.status === 'draft')
         .map(row => {
+          const meta = row.draft_meta || {};
           const cloudMatch = cloudTestsMap[row.test_id] || {};
           return {
             id: row.test_id, 
             title: row.title,
-            lastIndex: row.last_index || 0,
+            lastIndex: meta.lastIndex || 0,
+            currentSectionIdx: meta.currentSectionIdx || 0,
             timeLeft: row.time_left || 0,
             rawSeconds: row.raw_seconds,
+            sectionTimeLeft: meta.sectionTimeLeft,
             date: row.created_at ? new Date(row.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : "Recent",
             answers: row.answers || {},
             uploads: row.uploads || {},
             timeTracker: row.time_tracker || {},
-            markedForReview: [],
-            questions: cloudMatch.questions_list || [],
-            questions_list: cloudMatch.questions_list || [],
-            sections: cloudMatch.sections || null,
-            hasSectionalTiming: cloudMatch.has_sectional_timing || false,
-            mode: cloudMatch.category_name || "Standard",
-            time: cloudMatch.time || 180,
+            markedForReview: meta.markedForReview || [],
+            // AI Labs drafts carry their own paper in draft_meta (the test
+            // was never a mock_tests row to begin with); Test Series drafts
+            // fall back to the mock_tests join instead.
+            questions: meta.questions_list || cloudMatch.questions_list || [],
+            questions_list: meta.questions_list || cloudMatch.questions_list || [],
+            sections: meta.sections || cloudMatch.sections || null,
+            hasSectionalTiming: meta.hasSectionalTiming || cloudMatch.has_sectional_timing || false,
+            mode: meta.mode || cloudMatch.category_name || "Standard",
+            time: meta.time || cloudMatch.time || 180,
             createdAt: row.created_at || 0
           };
         });
@@ -231,28 +236,36 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
     }
 
     if (category === 'history') {
-      if (window.confirm("Bhai, kya tu sach mein is test history record ko device memory se permanently mitaana chahta hai?")) {
+      if (window.confirm("Bhai, kya tu sach mein is test history record ko permanently mitaana chahta hai?")) {
         try {
-          await deleteFromLocalStore("test_sessions", attemptId);
+          const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/history/${encodeURIComponent(attemptId)}`, {
+            method: 'DELETE'
+          });
+          const resData = await res.json();
+          if (!resData.success) throw new Error(resData.error || "Delete failed");
           setAttemptedHistory(attemptedHistory.filter(item => item.attemptId !== attemptId));
           if (selectedItem && selectedItem.attemptId === attemptId) setSelectedItem(null);
           alert("Success: Evaluation record permanently erased.");
         } catch (err) {
-          alert("Delete Failure: Storage node link breakdown.");
+          alert("Delete Failure: Could not reach the server.");
         }
       }
       return;
     }
 
     if (category === 'drafts') {
-      if (window.confirm("Bhai, is paused draft snapshot ko device memory se discard karna hai?")) {
+      if (window.confirm("Bhai, is paused draft snapshot ko discard karna hai?")) {
         try {
-          await deleteFromLocalStore("test_sessions", id);
+          const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/drafts/${encodeURIComponent(id)}`, {
+            method: 'DELETE'
+          });
+          const resData = await res.json();
+          if (!resData.success) throw new Error(resData.error || "Delete failed");
           setSavedTests(savedTests.filter(item => item.id !== id));
           if (selectedItem && selectedItem.id === id) setSelectedItem(null);
           alert("Success: Draft snapshot discarded safely.");
         } catch (err) {
-          alert("Delete Failure: Storage configuration error.");
+          alert("Delete Failure: Could not reach the server.");
         }
       }
       return;

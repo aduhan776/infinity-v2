@@ -392,6 +392,13 @@ const TestPortal = ({ testData, onExit }) => {
       if (!intentionalExitRef.current) {
         clearAutosave(data.id);
         deleteFromLocalStore("test_sessions", data.id).catch(() => {});
+        // Best-effort cloud cleanup too — the periodic 60s sync may have
+        // already pushed this draft to Supabase before the student backed
+        // out in-app, so it needs the same explicit delete IndexedDB gets
+        // above, or it would linger there as a phantom resumable draft.
+        authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/drafts/${encodeURIComponent(data.id)}`, {
+          method: 'DELETE'
+        }).catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -464,6 +471,49 @@ const TestPortal = ({ testData, onExit }) => {
     }
   }, [data, currentQ, markedForReview]);
 
+  // 🧭 CLOUD DRAFT SYNC — separate cadence from the IndexedDB draft above on
+  // purpose. IndexedDB stays on the fast 800ms/12s cadence (same-device
+  // crash/reload recovery, effectively free — it's local disk). This one
+  // pushes the same draft to Supabase (test_sessions, status:'draft') every
+  // 60s in the background, so a silent tab-close (no explicit Pause) still
+  // leaves a resumable draft reachable from a different device — at most 60s
+  // stale, which is an acceptable trade-off against writing to the network
+  // on every keystroke. A student's own manual Pause/Save-for-Later still
+  // syncs immediately (see handleSaveForLater) rather than waiting on this
+  // timer, since that's a deliberate exit, not a background safety net.
+  // Best-effort and silent on failure: the IndexedDB copy is still there for
+  // same-device resume even if this call fails (offline, server hiccup).
+  const syncDraftToCloud = useCallback(async () => {
+    if (stateRef.current.isSubmitting) return;
+    const snapshot = stateRef.current;
+    try {
+      await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/save-draft`, {
+        method: 'POST',
+        body: JSON.stringify({
+          id: data.id,
+          testId: data.id,
+          title: data.title,
+          timeLeft: Math.floor(snapshot.globalTimeLeft / 60),
+          rawSeconds: snapshot.globalTimeLeft,
+          answers: snapshot.answers,
+          timeTracker: snapshot.timeTracker,
+          lastIndex: currentQ,
+          currentSectionIdx: snapshot.currentSectionIdx,
+          markedForReview: markedForReview,
+          sectionTimeLeft: snapshot.sectionTimeLeft,
+          questionsList: data.questions_list,
+          sections: data.sections,
+          mode: data.mode,
+          time: data.time || 180,
+          questions: data.questions,
+          hasSectionalTiming: data.hasSectionalTiming
+        })
+      });
+    } catch (e) {
+      console.warn("Cloud draft sync failed (non-blocking, IndexedDB copy still current):", e);
+    }
+  }, [data, currentQ, markedForReview]);
+
   const flushAutosave = useCallback(() => {
     if (stateRef.current.isSubmitting) return; // don't resurrect a test that's mid-submit
     writeAutosave(data.id, buildAutosaveSnapshot());
@@ -484,6 +534,13 @@ const TestPortal = ({ testData, onExit }) => {
     const interval = setInterval(flushAutosave, 12000);
     return () => clearInterval(interval);
   }, [flushAutosave]);
+
+  // Cloud draft sync — its own slower 60s interval, decoupled from the
+  // IndexedDB cadence above (see syncDraftToCloud for why).
+  useEffect(() => {
+    const cloudInterval = setInterval(syncDraftToCloud, 60000);
+    return () => clearInterval(cloudInterval);
+  }, [syncDraftToCloud]);
 
   // Last-chance flush if the tab is hidden/closed or the app is backgrounded.
   useEffect(() => {
@@ -573,6 +630,14 @@ const TestPortal = ({ testData, onExit }) => {
         raw_seconds: draftData.rawSeconds,
         time_tracker: snapshot.timeTracker
       });
+
+      // 🧭 Immediate cloud sync — a deliberate Pause/Save-for-Later shouldn't
+      // wait on the 60s background timer (syncDraftToCloud) to make this
+      // draft reachable from another device. Best-effort: if it fails, the
+      // IndexedDB copy just written above still makes it resumable on this
+      // device, and the next background tick would have retried anyway had
+      // the student not been exiting.
+      syncDraftToCloud();
 
       if (localStorageSaveFailed) {
         alert("Your progress was saved, but there wasn't enough free browser storage to also cache a fast-resume copy. You can still resume it from your Library.");
@@ -890,6 +955,21 @@ const TestPortal = ({ testData, onExit }) => {
       await deleteFromLocalStore("test_sessions", data.id);
     } catch (err) {
       console.error("Local draft cleanup fault (non-blocking):", err);
+    }
+
+    // 🧹 Same cleanup, cloud side — the draft row (id: data.id, status:
+    // 'draft') is a DIFFERENT row from the submitted attempt about to be
+    // inserted below (that uses finalReport.attemptId as its id), so it
+    // won't be overwritten automatically and must be deleted explicitly, or
+    // it would keep showing up as a paused draft in Library forever.
+    // Best-effort/non-blocking: a leftover draft row is a cosmetic issue,
+    // never worth failing the submission over.
+    try {
+      await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/drafts/${encodeURIComponent(data.id)}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      console.warn("Cloud draft cleanup failed (non-blocking):", err);
     }
 
     // 🌐 Cloud sync — this is now the ONLY permanent record of a submitted
