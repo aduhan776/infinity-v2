@@ -724,6 +724,14 @@ const BrainFeed = () => {
           setIsFeedActive(true);
           setHasLoadedMore(false);
         }
+      } else if (data.insufficientCredits) {
+        // Out of BrainFeed sessions — nothing was generated and nothing charged.
+        if (typeof data.available === 'number') setBrainfeedCredits(data.available);
+        setCustomAlert({
+          show: true,
+          title: 'No Sessions Left',
+          message: data.error || "You're out of BrainFeed sessions. Add more to keep practising."
+        });
       } else if (data.upstreamBusy || response.status === 503) {
         // Generator is overloaded upstream. Deliberately generic — the student
         // doesn't need (or want) the underlying provider error, just what it

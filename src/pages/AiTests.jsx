@@ -181,6 +181,35 @@ const AiTests = ({ onStartTest }) => {
     }
   };
 
+  // 🆕 Ask the server whether the whole paper is affordable before building
+  // any of it. build-test also gates each batch, but a long paper would then
+  // fail partway through — this makes it all-or-nothing, and tells the
+  // student up front. Returns true if generation should proceed.
+  const ensureEnoughCredits = async (objectiveCount, subjectiveCount) => {
+    try {
+      const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/ailabs/check-credits`, {
+        method: 'POST',
+        body: JSON.stringify({ objectiveCount, subjectiveCount })
+      });
+      const data = await res.json();
+      if (!data.success) return true; // check itself failed — let build-test be the gate
+
+      if (!data.sufficient) {
+        setAiLabsCredits(data.available);
+        alert(
+          `You do not have enough question credits in AI Labs.\n\n` +
+          `This test needs ${data.required} credit${data.required === 1 ? '' : 's'} and you have ${data.available}.\n\n` +
+          `Subjective questions use 2 credits each, Objective use 1.`
+        );
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn("Credit pre-check failed (non-blocking):", err);
+      return true; // build-test still enforces server-side
+    }
+  };
+
   // 🆕 Counts questions by type across both flat and sectional structures.
   const countQuestionsByType = (structure) => {
     let objectiveCount = 0;
@@ -326,6 +355,12 @@ const AiTests = ({ onStartTest }) => {
         }
       }
       
+      if (data && data.insufficientCredits) {
+        // The pre-check should normally catch this before any batch runs;
+        // reaching it here means the balance changed mid-generation.
+        setAiLabsCredits(data.available ?? 0);
+        throw new Error("You do not have enough question credits in AI Labs for this test.");
+      }
       if (!data || !data.success) throw new Error((data && data.error) || `Batch stream failed at query slot index: ${startIndex}`);
       if (!data.questions || !Array.isArray(data.questions)) {
         throw new Error("Backend response mismatch: 'questions' data array package is missing.");
@@ -405,6 +440,26 @@ const AiTests = ({ onStartTest }) => {
         id: generatedTestId,
         title: `AI Full Mock: ${testTitle} [${fullDifficulty}]`,
       };
+
+      // 💳 Price the whole paper up front — Subjective questions cost double,
+      // and in a sectional paper each section carries its own type.
+      let plannedObjective = 0;
+      let plannedSubjective = 0;
+      if (fullHasSections) {
+        aiSections.forEach(sec => {
+          const n = parseInt(sec.qCount) || 0;
+          if (sec.type === 'Subjective') plannedSubjective += n;
+          else plannedObjective += n;
+        });
+      } else {
+        const n = parseInt(fullQCount) || 0;
+        if (fullType === 'Subjective') plannedSubjective += n;
+        else plannedObjective += n;
+      }
+
+      if (!(await ensureEnoughCredits(plannedObjective, plannedSubjective))) {
+        setLoading(false); processingRef.current = false; return;
+      }
 
       if (fullHasSections) {
         if (aiSections.length === 0) { alert("Please add at least one section to build the test blueprint."); setLoading(false); processingRef.current = false; return; }
@@ -565,6 +620,13 @@ const AiTests = ({ onStartTest }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         alert("Your session expired. Please log in again to continue.");
+        setLoading(false); processingRef.current = false; return;
+      }
+
+      // 💳 Price the drill up front — all questions share one type here.
+      const plannedObjective = topicType === 'Subjective' ? 0 : targetQCount;
+      const plannedSubjective = topicType === 'Subjective' ? targetQCount : 0;
+      if (!(await ensureEnoughCredits(plannedObjective, plannedSubjective))) {
         setLoading(false); processingRef.current = false; return;
       }
 
