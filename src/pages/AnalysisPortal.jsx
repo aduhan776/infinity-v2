@@ -264,7 +264,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
     // Undo the extra history entry pushed when the popup opened, so back
     // navigation continues to behave normally instead of stacking up.
     if (window.history.state && window.history.state.analysisPopup) {
-      window.history.back();
+      window.history.replaceState({ infinityAnalysisGuard: true }, '');
     }
   };
   const [showExplanation, setShowExplanation] = useState(false); 

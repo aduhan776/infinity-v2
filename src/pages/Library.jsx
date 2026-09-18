@@ -160,8 +160,8 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
           };
         });
 
-      setAttemptedHistory(historyRows.sort((a, b) => b.createdAt - a.createdAt));
-      setSavedTests(draftRows.sort((a, b) => b.createdAt - a.createdAt));
+      setAttemptedHistory(historyRows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+      setSavedTests(draftRows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
     } catch (err) {
       console.error("Local database retrieval system failure:", err);
     }

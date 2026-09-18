@@ -118,6 +118,13 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
     loadTestSeriesCloudData();
   }, [view]);
 
+  // Default the sub-group selection to the first real sub-group of the active
+  // Section, so a section with grouped tests does not look empty on open.
+  useEffect(() => {
+    const subGroups = getSubGroupsForActiveSection();
+    setActiveSubGroup(subGroups.length > 0 ? subGroups[0] : '');
+  }, [activeSubSection]);
+
   // Intercept and handle Dashboard redirection clicks via the selectedFolder prop row filter
   useEffect(() => {
     if (selectedFolder && allMockTests.length > 0) {
@@ -777,7 +784,7 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
                 <button 
                   key={tab} 
                   className="ts-tab-btn"
-                  onClick={() => { setActiveSubSection(tab); setActiveSubGroup(''); }} 
+                  onClick={() => setActiveSubSection(tab)} 
                   style={{
                     ...tabElementBtn, 
                     color: activeSubSection === tab ? ACCENT : '#94a3b8', 
