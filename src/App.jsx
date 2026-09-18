@@ -129,36 +129,92 @@ function App() {
 
   // --- 🔄 SUPABASE AUTH LIFECYCLE LISTENER ---
   useEffect(() => {
-    // 🚨 FIX: a hung or failing network call here used to leave the loading
-    // screen stuck forever, since nothing guaranteed setAuthLoading(false)
-    // would ever run. withTimeout() ensures we never wait more than 8s, and
-    // try/catch/finally guarantees the loading screen always gets dismissed
-    // no matter what happens (success, error, or timeout).
-    const withTimeout = (promise, ms = 8000) => {
+    // 🧭 REWORKED — the old version treated "timed out / network hiccup"
+    // exactly the same as "server said this token is invalid": both cases
+    // called setSession(null), which instantly booted the user to the
+    // Login screen. That's wrong for a timeout — a slow response means "we
+    // don't know yet", not "this session is bad". A student on a fresh
+    // page load with a slightly slow connection could get logged out of a
+    // perfectly valid session just because the check didn't finish inside
+    // the old 8s window (this was actually observed happening).
+    //
+    // Fixed behaviour:
+    //  - Each Supabase call gets its own timeout (was one shared 8s wrapper
+    //    around getSession() AND getUser() combined) — this also gives us
+    //    a timing log per step, so if one specific call is the slow one,
+    //    it's visible in the console instead of a single opaque "timed out".
+    //  - A timeout/network error no longer logs the user out immediately.
+    //    It retries once (after a short pause) before giving up.
+    //  - Only an ACTUAL "invalid token" response from Supabase (getUser()
+    //    resolving with an error, not a timeout) — or both attempts here
+    //    exhausting their retries — clears the session. A session that
+    //    still hasn't been confirmed bad is left alone rather than
+    //    assumed bad, so a slow network never signs a valid user out.
+    const withTimeout = (promise, ms, label) => {
+      const startedAt = performance.now();
       return Promise.race([
-        promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Session check timed out')), ms))
+        promise.then((result) => {
+          console.log(`[auth] ${label} resolved in ${Math.round(performance.now() - startedAt)}ms`);
+          return result;
+        }),
+        new Promise((_, reject) => setTimeout(() => {
+          console.warn(`[auth] ${label} did not respond within ${ms}ms`);
+          reject(new Error(`${label} timed out`));
+        }, ms))
       ]);
+    };
+
+    // One retry, after a short pause, before we treat a call as failed.
+    // Covers a single slow/dropped request without doubling every check's
+    // worst-case latency by much (2.5s attempt + 1s pause + 2.5s retry ≈ 6s
+    // worst case, vs the old flat single-shot 8s that had no way to recover
+    // from a single bad round-trip).
+    const withRetry = async (fn, label, ms = 2500) => {
+      try {
+        return await withTimeout(fn(), ms, label);
+      } catch (err) {
+        console.warn(`[auth] ${label} failed once (${err.message}), retrying in 1s...`);
+        await new Promise((r) => setTimeout(r, 1000));
+        return await withTimeout(fn(), ms, `${label} (retry)`);
+      }
     };
 
     const validateActiveSession = async () => {
       try {
-        const { data: { session: currentSession } } = await withTimeout(supabase.auth.getSession());
+        const { data: { session: currentSession } } = await withRetry(
+          () => supabase.auth.getSession(), 'getSession'
+        );
 
         if (currentSession) {
-          const { error } = await withTimeout(supabase.auth.getUser());
-          if (error) {
-            await supabase.auth.signOut();
-            setSession(null);
-          } else {
+          try {
+            const { error } = await withRetry(() => supabase.auth.getUser(), 'getUser');
+            if (error) {
+              // A real answer from Supabase saying this token is invalid —
+              // this is the one case that should actually log the user out.
+              console.error("Token confirmed invalid by server — signing out:", error);
+              await supabase.auth.signOut();
+              setSession(null);
+            } else {
+              setSession(currentSession);
+            }
+          } catch (verifyErr) {
+            // Both attempts at getUser() timed out/failed — we still never
+            // got an actual "invalid" answer from the server, so we do NOT
+            // sign the user out. Keep the session we already have (it was
+            // valid enough to be sitting in localStorage) and let the next
+            // check (next focus, or the periodic retry below) sort it out.
+            console.warn("Could not verify token after retry (keeping existing session, not logging out):", verifyErr);
             setSession(currentSession);
           }
         } else {
           setSession(null);
         }
       } catch (err) {
-        console.error("Session validation failed or timed out — defaulting to logged-out state:", err);
-        setSession(null);
+        // getSession() itself failed even after a retry — this is normally
+        // just reading localStorage, so this is a genuinely unusual case.
+        // Still: a failed CHECK is not the same as a CONFIRMED bad session,
+        // so we don't force a logout here either.
+        console.error("Session validation failed after retry — leaving current auth state as-is:", err);
       } finally {
         setAuthLoading(false);
       }
@@ -169,20 +225,26 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
       try {
         if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-          const { data: { user }, error } = await withTimeout(supabase.auth.getUser());
-          if (error) {
-            await supabase.auth.signOut();
-            setSession(null);
-            return;
-          }
-          if (event === 'SIGNED_IN' && user) {
-            fixFallbackUsername(user); // fire-and-forget, non-blocking
+          try {
+            const { data: { user }, error } = await withRetry(() => supabase.auth.getUser(), 'getUser (auth event)');
+            if (error) {
+              console.error("Token confirmed invalid by server on auth event — signing out:", error);
+              await supabase.auth.signOut();
+              setSession(null);
+              return;
+            }
+            if (event === 'SIGNED_IN' && user) {
+              fixFallbackUsername(user); // fire-and-forget, non-blocking
+            }
+          } catch (verifyErr) {
+            // Same reasoning as above — a timeout here isn't a confirmed
+            // invalid token, so don't sign out over it.
+            console.warn("Could not verify token after retry on auth event (not logging out):", verifyErr);
           }
         }
         setSession(currentSession);
       } catch (err) {
-        console.error("Auth state change handling failed or timed out:", err);
-        setSession(null);
+        console.error("Auth state change handling failed:", err);
       } finally {
         setAuthLoading(false);
       }
