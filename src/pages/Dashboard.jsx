@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
+import { useUserData } from '../context/UserDataContext';
 
 const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
   const [subscribedExams, setSubscribedExams] = useState([]);
-  const [userName, setUserName] = useState("Student");
   const [folderToUnpin, setFolderToUnpin] = useState(null);
+
+  // --- 🌐 SHARED USER DATA (name + BrainFeed counter come from the context now) ---
+  const { full_name, brainfeed_count } = useUserData();
+  const userName = full_name || "Student";
+  const brainFeedCount = brainfeed_count || 0;
 
   // --- MOBILE RESPONSIVE DETECTION ---
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -21,7 +26,6 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
 
   // --- LIVE STATISTICS OVERVIEW STATES ---
   const [totalTests, setTotalTests] = useState(0);
-  const [brainFeedCount, setBrainFeedCount] = useState(0);
   const [streakCount, setStreakCount] = useState(0);
   
   // --- PRIVATE PERSONAL AI LAB TESTS CONTAINER ---
@@ -38,17 +42,8 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
           const filteredSubs = loadedSubs.filter(s => s !== 'AI Lab Generated');
           setSubscribedExams(filteredSubs);
 
-          // Fetch real profile name
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name, brainfeed_count')
-            .eq('id', user.id)
-            .single();
-
-          if (profile) {
-            if (profile.full_name) setUserName(profile.full_name);
-            setBrainFeedCount(profile.brainfeed_count || 0);
-          }
+          // Profile name + BrainFeed count now come from the shared user
+          // data context (see useUserData above) — no per-page fetch here.
 
           // Fetch mock exam logs
           const { data: sessions, error: sError } = await supabase

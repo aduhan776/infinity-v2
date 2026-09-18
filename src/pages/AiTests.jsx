@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
-import LatexText from '../components/LatexText'; 
+import LatexText from '../components/LatexText';
+import { useUserData } from '../context/UserDataContext';
 
 const ConfirmRow = ({ label, value }) => (
   <div className="ai-confirm-row" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
@@ -93,24 +94,15 @@ const AiTests = ({ onStartTest }) => {
   const [topicType, setTopicType] = useState('Objective');
 
   // --- 🆕 AI LABS CREDITS (billed per question: Objective = 1, Subjective = 2) ---
-  const [aiLabsCredits, setAiLabsCredits] = useState(null); // null = not loaded yet
-
-  const fetchAiLabsCredits = async () => {
-    try {
-      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/credits`, { method: 'GET' });
-      const data = await response.json();
-      if (data.success && typeof data.aiLabsCredits === 'number') {
-        setAiLabsCredits(data.aiLabsCredits);
-      }
-    } catch (err) {
-      console.warn("Could not fetch AI Labs credits (non-blocking):", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchAiLabsCredits();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // The balance (and the admin flag below) come from the shared user data
+  // context, which calls /api/credits once per authenticated user instead of
+  // on every visit to this page. Deductions below push the new balance straight
+  // into that context, so the badge still updates instantly, with no re-fetch.
+  const {
+    ai_labs_credits: aiLabsCredits, // null = not loaded yet
+    is_admin: sharedIsAdmin,
+    updateCredits
+  } = useUserData();
 
   // 🆕 Charge for a finished generation run. Called only after everything
   // generated successfully — a run that fails partway through costs nothing.
@@ -124,7 +116,9 @@ const AiTests = ({ onStartTest }) => {
       });
       const data = await response.json();
       if (data.success && typeof data.updatedAiLabsCredits === 'number') {
-        setAiLabsCredits(data.updatedAiLabsCredits);
+        // Local-only update — the backend already charged the account, so the
+        // shared context just takes the authoritative new balance it returned.
+        updateCredits({ aiLabsCredits: data.updatedAiLabsCredits });
       }
     } catch (err) {
       // Non-blocking: never block the student from using a test they've already been given.
@@ -164,7 +158,7 @@ const AiTests = ({ onStartTest }) => {
       if (!data.success) return true; // check itself failed — let build-test be the gate
 
       if (!data.sufficient) {
-        setAiLabsCredits(data.available);
+        updateCredits({ aiLabsCredits: data.available });
         alert(
           `You do not have enough question credits in AI Labs.\n\n` +
           `This test needs ${data.required} credit${data.required === 1 ? '' : 's'} and you have ${data.available}.\n\n` +
@@ -221,15 +215,10 @@ const AiTests = ({ onStartTest }) => {
         if (user) {
           if (user.email === 'aduhan776@gmail.com') {
             setIsAdmin(true);
-          } else {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('is_admin')
-              .eq('id', user.id)
-              .single();
-            if (profile && profile.is_admin === true) {
-              setIsAdmin(true);
-            }
+          } else if (sharedIsAdmin === true) {
+            // is_admin now comes from the shared user data context instead of
+            // this page running its own profiles lookup.
+            setIsAdmin(true);
           }
         }
       } catch (err) {
@@ -237,7 +226,7 @@ const AiTests = ({ onStartTest }) => {
       }
     };
     silentAdminCheck();
-  }, []);
+  }, [sharedIsAdmin]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -327,7 +316,7 @@ const AiTests = ({ onStartTest }) => {
       if (data && data.insufficientCredits) {
         // The pre-check should normally catch this before any batch runs;
         // reaching it here means the balance changed mid-generation.
-        setAiLabsCredits(data.available ?? 0);
+        updateCredits({ aiLabsCredits: data.available ?? 0 });
         throw new Error("You do not have enough question credits in AI Labs for this test.");
       }
       if (!data || !data.success) throw new Error((data && data.error) || `Batch stream failed at query slot index: ${startIndex}`);

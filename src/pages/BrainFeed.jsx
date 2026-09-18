@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; // 👈 YEH IMPORT GAYAB THA BHAI, AB FIXED HAI!
+import { useUserData } from '../context/UserDataContext';
 
 // --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
 const ACCENT = '#7065BA';
@@ -109,7 +110,16 @@ const BrainFeed = () => {
 
   // --- 🆕 LANDING VIEW: 'choice' (2 cards) -> 'form' (existing config form) or 'history' (past sessions list) ---
   const [landingView, setLandingView] = useState('choice');
-  const [brainfeedCredits, setBrainfeedCredits] = useState(null); // null = not loaded yet
+
+  // --- 🌐 SHARED USER DATA: the quota badge reads the balance straight from
+  // the app-wide context (fetched once per authenticated user), and every
+  // credit change on this page is mirrored back into it — so there is no
+  // page-local copy of the balance to drift out of sync. ---
+  const {
+    brainfeed_credits: brainfeedCredits, // null = not loaded yet
+    updateCredits,
+    updateBrainfeedStats
+  } = useUserData();
   const [historySessions, setHistorySessions] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
@@ -121,25 +131,10 @@ const BrainFeed = () => {
   const [sessionUUID, setSessionUUID] = useState(null);
   const sessionUUIDRef = useRef(null); // avoids stale-closure issues inside async handlers
 
-  // --- 🆕 Fetch current BrainFeed credit balance for the top-right quota badge on the choice screen ---
-  const fetchBrainfeedCredits = async () => {
-    try {
-      const response = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/brainfeed/history`, {
-        method: 'GET'
-      });
-      const data = await response.json();
-      if (data.success) {
-        setBrainfeedCredits(typeof data.brainfeedCredits === 'number' ? data.brainfeedCredits : 0);
-      }
-    } catch (err) {
-      console.warn("Could not fetch BrainFeed credits (non-blocking):", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchBrainfeedCredits();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // The top-right quota badge used to be fed by its own /api/brainfeed/history
+  // call (and a refresh of it on every return to the choice screen) purely to
+  // read `brainfeedCredits`. That balance now comes from the shared user data
+  // context, so those extra round-trips are gone.
 
   // --- 🆕 Fetch the list of past BrainFeed sessions for the "Revise Previous Sessions" screen ---
   const fetchBrainfeedHistory = async () => {
@@ -152,7 +147,8 @@ const BrainFeed = () => {
       const data = await response.json();
       if (data.success) {
         setHistorySessions(data.sessions || []);
-        setBrainfeedCredits(typeof data.brainfeedCredits === 'number' ? data.brainfeedCredits : 0);
+        // `data.brainfeedCredits` is still returned by this route, but the
+        // badge reads the balance from the shared context now, so it's ignored.
       } else {
         setHistoryError(data.error || 'Could not load your past sessions.');
       }
@@ -175,7 +171,6 @@ const BrainFeed = () => {
 
   const handleBackToChoice = () => {
     setLandingView('choice');
-    fetchBrainfeedCredits(); // keep the badge fresh in case a session just completed
   };
 
   // --- 🆕 REVISE A PAST SESSION (from history list): fetch full question content by id
@@ -678,7 +673,10 @@ const BrainFeed = () => {
           });
           const creditData = await creditResponse.json();
           if (creditData.success && typeof creditData.updatedBrainfeedCredits === 'number') {
-            setBrainfeedCredits(creditData.updatedBrainfeedCredits);
+            // The only thing keeping this page's badge in sync: push the new
+            // balance the backend just returned into the shared context —
+            // local state only, no re-fetch.
+            updateCredits({ brainfeedCredits: creditData.updatedBrainfeedCredits });
           }
         } catch (creditErr) {
           // Non-blocking: don't stop the student from practicing over a credit-tracking hiccup.
@@ -726,7 +724,7 @@ const BrainFeed = () => {
         }
       } else if (data.insufficientCredits) {
         // Out of BrainFeed sessions — nothing was generated and nothing charged.
-        if (typeof data.available === 'number') setBrainfeedCredits(data.available);
+        if (typeof data.available === 'number') updateCredits({ brainfeedCredits: data.available });
         setCustomAlert({
           show: true,
           title: 'No Sessions Left',
@@ -875,6 +873,15 @@ const BrainFeed = () => {
 
       if (data.success) {
         setMetricsSummary(data.metricsSummary);
+
+        // 🌐 Push the new lifetime totals the backend just returned into the
+        // shared user data context, so Dashboard and Statistics show them
+        // immediately. Local state only — no re-fetch, and nothing is
+        // recalculated here: these are exactly the values from the response.
+        updateBrainfeedStats({
+          brainfeedCount: data.metricsSummary?.newTotalQuestions,
+          brainfeedAccuracy: data.metricsSummary?.newAccuracy
+        });
       } else {
         console.error("Failed to save session:", data.error);
       }
@@ -980,10 +987,10 @@ const BrainFeed = () => {
     // handleDiscardSession (Start Fresh) and freshly regenerated the next
     // time fetchBrainFeedPacket(false) runs for a genuinely new session.
 
-    // 🆕 Back to the 2-card choice screen (not straight into the form) —
-    // and refresh the quota badge in case a session/credit just got consumed.
+    // 🆕 Back to the 2-card choice screen (not straight into the form). The
+    // quota badge needs no refresh here — the deduction call site already
+    // pushed the new balance into the shared context when it was charged.
     setLandingView('choice');
-    fetchBrainfeedCredits();
   };
 
   // --- 📖 REVISE: re-open the same finished session, read-only, so the person can scroll back through it ---

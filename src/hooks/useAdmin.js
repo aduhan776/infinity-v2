@@ -1,49 +1,21 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { useUserData } from '../context/UserDataContext';
 
+// --- 🛡️ ADMIN ROLE HOOK ---
+// This used to run its own `profiles.select('is_admin')` query per consumer,
+// which meant the same lookup happened again on every screen that cared about
+// the admin flag. The flag now comes from the shared user data context (one
+// combined profile fetch per authenticated user), so this hook is just a thin
+// adapter — the `(session)` signature and the `{ isAdmin, loading }` shape it
+// returns are unchanged, so existing call sites need no edits.
 const useAdmin = (session) => {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { is_admin, loading } = useUserData();
 
-  useEffect(() => {
-    let isMounted = true;
-    
-    const checkAdminStatus = async () => {
-      if (!session?.user) {
-        if (isMounted) {
-          setIsAdmin(false);
-          setLoading(false);
-        }
-        return;
-      }
+  // No session means no admin rights, and nothing to wait on — same as before.
+  if (!session?.user) {
+    return { isAdmin: false, loading: false };
+  }
 
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', session.user.id)
-          .single();
-
-        if (isMounted && !error && data) {
-          setIsAdmin(data.is_admin || false);
-        }
-      } catch (err) {
-        console.error("Administrative authentication gateway boundary exception caught safely.");
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    checkAdminStatus();
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [session]);
-
-  return { isAdmin, loading };
+  return { isAdmin: is_admin === true, loading };
 };
 
 export default useAdmin;

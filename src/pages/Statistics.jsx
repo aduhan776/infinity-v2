@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
+import { useUserData } from '../context/UserDataContext';
 
 // --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
 const ACCENT = '#7065BA';
 
 const Statistics = () => {
+  // --- 🌐 SHARED USER DATA (the BrainFeed metrics box reads from here now) ---
+  const { brainfeed_count, brainfeed_accuracy } = useUserData();
+
   const [stats, setStats] = useState({
     totalAttempts: 0,
     avgScore: 0,
@@ -13,8 +17,6 @@ const Statistics = () => {
     meanAccuracy: 0,
     peakAccuracy: 0,
     overallAccuracy: 0,
-    brainAttempted: 0,
-    brainAccuracy: 0,
     savedQsCount: 0,
     docsCount: 0,
     aiTestsCount: 0,
@@ -41,12 +43,8 @@ const Statistics = () => {
         const savedData = await savedRes.json();
         const qCount = savedData.success ? savedData.count : 0;
 
-        // 3. FETCH BOTH METRICS BOXES DIRECTLY FROM THE PROFILES TABLE ROW
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('brainfeed_count, brainfeed_accuracy')
-          .eq('id', user.id)
-          .single();
+        // 3. BOTH BRAINFEED METRICS BOXES NOW COME FROM THE SHARED USER DATA
+        //    CONTEXT (see useUserData above) instead of re-reading profiles here.
 
         const savedDocs = JSON.parse(localStorage.getItem('infinity_docs')) || [];
 
@@ -95,8 +93,6 @@ const Statistics = () => {
           meanAccuracy: totalCount > 0 ? Math.round(totalAccuracySum / totalCount) : 0,
           peakAccuracy: peakAccuracy,
           overallAccuracy: totalCount > 0 ? Math.round(totalAccuracySum / totalCount) : 0,
-          brainAttempted: profile?.brainfeed_count || 0,
-          brainAccuracy: profile?.brainfeed_accuracy || 0,
           savedQsCount: qCount || 0,
           docsCount: savedDocs.length,
           aiTestsCount: aiCount,
@@ -143,8 +139,8 @@ const Statistics = () => {
       <div style={statsGrid} className="stat-grid">
         <div className="stat-card" style={{ ...cardStyle, background: `linear-gradient(135deg, ${ACCENT}, #4A4380)`, color: '#fff', border: 'none' }}>
           <span className="stat-card-label" style={{ ...cardLabel, color: '#D8D5EE' }}>BrainFeed Practice</span>
-          <h2 className="stat-card-metric" style={{ ...cardMetric, color: '#ffffff' }}>Fed {stats.brainAttempted} Times</h2>
-          <p className="stat-card-sub" style={{ ...cardSubText, color: '#D8D5EE' }}>Accuracy index: <b>{stats.brainAccuracy}%</b></p>
+          <h2 className="stat-card-metric" style={{ ...cardMetric, color: '#ffffff' }}>Fed {brainfeed_count || 0} Times</h2>
+          <p className="stat-card-sub" style={{ ...cardSubText, color: '#D8D5EE' }}>Accuracy index: <b>{brainfeed_accuracy || 0}%</b></p>
         </div>
 
         <div className="stat-card" style={{ ...cardStyle, borderTop: `6px solid ${ACCENT}` }}>

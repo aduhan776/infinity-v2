@@ -14,18 +14,21 @@ import Login from './pages/Login';
 import MobileUpload from './pages/MobileUpload';
 import './App.css';
 import { supabase } from './supabaseClient'; 
-import useAdmin from './hooks/useAdmin'; // 🎯 REUSABLE CUSTOM HOOK LINKED
 import { deriveUsernameFromEmail } from './utils/authHelpers';
+import { UserDataProvider, useUserData } from './context/UserDataContext';
 
-function App() {
+function AppShell() {
   // --- 🛰️ GLOBAL AUTH STATES ---
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const [splashZooming, setSplashZooming] = useState(false);
 
-  // --- 🛡️ GLOBAL ADMIN ACCESS PRIVILEGES TRACKER ---
-  const { isAdmin } = useAdmin(session); // Live system role state
+  // --- 🌐 SHARED USER DATA (fetched once, reused by every screen) ---
+  // 🛡️ The global admin flag comes straight from here now — the old useAdmin
+  // hook ran its own `profiles.select('is_admin')` query for this same value.
+  const { full_name: sharedFullName, is_admin: sharedIsAdmin } = useUserData();
+  const isAdmin = session?.user ? sharedIsAdmin === true : false; // Live system role state
 
   // --- 🧭 ROUTING: activeTab is now derived from the URL instead of being
   // its own disconnected state. setActiveTab(x) below is kept as a thin
@@ -75,10 +78,16 @@ function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  // --- REACTIVE HEADER PROFILE STATE ---
-  const [headerUser, setHeaderUser] = useState({
-    name: "Student"
-  });
+  // --- REACTIVE HEADER PROFILE ---
+  // Derived straight from the shared user data context (fetched once per
+  // authenticated user) instead of this file running its own `profiles` read
+  // on every tab change and every window focus. Fallback order is unchanged:
+  // profile name -> auth metadata name -> email prefix -> "Student".
+  const headerUser = {
+    name: session?.user
+      ? (sharedFullName || session.user.user_metadata?.full_name || session.user.email.split('@')[0])
+      : "Student"
+  };
 
   // --- 📱 MOBILE RESPONSIVE STATES ---
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -140,9 +149,8 @@ function App() {
     //
     // Fixed behaviour:
     //  - Each Supabase call gets its own timeout (was one shared 8s wrapper
-    //    around getSession() AND getUser() combined) — this also gives us
-    //    a timing log per step, so if one specific call is the slow one,
-    //    it's visible in the console instead of a single opaque "timed out".
+    //    around getSession() AND getUser() combined), so a slow step is
+    //    named in its own warning instead of a single opaque "timed out".
     //  - A timeout/network error no longer logs the user out immediately.
     //    It retries once (after a short pause) before giving up.
     //  - Only an ACTUAL "invalid token" response from Supabase (getUser()
@@ -151,12 +159,8 @@ function App() {
     //    still hasn't been confirmed bad is left alone rather than
     //    assumed bad, so a slow network never signs a valid user out.
     const withTimeout = (promise, ms, label) => {
-      const startedAt = performance.now();
       return Promise.race([
-        promise.then((result) => {
-          console.log(`[auth] ${label} resolved in ${Math.round(performance.now() - startedAt)}ms`);
-          return result;
-        }),
+        promise,
         new Promise((_, reject) => setTimeout(() => {
           console.warn(`[auth] ${label} did not respond within ${ms}ms`);
           reject(new Error(`${label} timed out`));
@@ -285,44 +289,6 @@ function App() {
       window.history.replaceState({}, document.title, "/");
     }
   }, []);
-
-  // --- LIVE HEADER PROFILE SYNCHRONIZATION LOOP ---
-  useEffect(() => {
-    const syncHeaderProfile = async () => {
-      if (!session?.user) {
-        setHeaderUser({ name: "Student" });
-        return;
-      }
-
-      try {
-        const { data: profileRow } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', session.user.id)
-          .single();
-
-        if (profileRow) {
-          setHeaderUser({
-            name: profileRow.full_name || session.user.user_metadata?.full_name || session.user.email.split('@')[0]
-          });
-        } else {
-          setHeaderUser({
-            name: session.user.user_metadata?.full_name || session.user.email.split('@')[0]
-          });
-        }
-      } catch (err) {
-        setHeaderUser({
-          name: session.user.user_metadata?.full_name || session.user.email.split('@')[0]
-        });
-      }
-    };
-    
-    syncHeaderProfile();
-    window.addEventListener('focus', syncHeaderProfile);
-    return () => {
-      window.removeEventListener('focus', syncHeaderProfile);
-    };
-  }, [session, activeTab]);
 
   const startTestHandler = (test) => {
     setCurrentTestData(test);
@@ -875,5 +841,17 @@ const initialsProfileCapsuleCircular = { width: '32px', height: '32px', backgrou
 const upgradeSectionCard = { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', marginTop: 'auto', marginBottom: '16px', textAlign: 'left' };
 const upgradeCardActionBtn = { width: '100%', border: 'none', background: '#ffffff', color: '#000000', padding: '8px 12px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' };
 const helpLinkActionRow = { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.88rem', color: '#64748b', padding: '8px 12px', cursor: 'pointer', fontWeight: '500', borderTop: '1px solid #f1f5f9', paddingTop: '16px' };
+
+// --- 🌐 PROVIDER BOUNDARY ---
+// Everything inside AppShell (header, sidebar, every routed page) reads the
+// shared profile/credits data from this one provider, so those fields are
+// fetched once per authenticated user instead of once per screen.
+function App() {
+  return (
+    <UserDataProvider>
+      <AppShell />
+    </UserDataProvider>
+  );
+}
 
 export default App;
