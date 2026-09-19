@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
 import { useUserData } from '../context/UserDataContext';
+import useBackClose from '../hooks/useBackClose';
 
 const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
   const [subscribedExams, setSubscribedExams] = useState([]);
@@ -23,6 +24,8 @@ const Dashboard = ({ setActiveTab, setTestSeriesFolder, onStartTest }) => {
   // --- IN-APP WINDOW OVERLAY STATES ---
   const [showViewAllModal, setShowViewAllModal] = useState(false);
   const [showAiFolderModal, setShowAiFolderModal] = useState(false);
+  useBackClose(showViewAllModal, () => setShowViewAllModal(false));
+  useBackClose(showAiFolderModal, () => setShowAiFolderModal(false));
 
   // --- LIVE STATISTICS OVERVIEW STATES ---
   const [totalTests, setTotalTests] = useState(0);

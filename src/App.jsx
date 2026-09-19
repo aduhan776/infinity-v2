@@ -16,6 +16,7 @@ import './App.css';
 import { supabase } from './supabaseClient'; 
 import { deriveUsernameFromEmail } from './utils/authHelpers';
 import { UserDataProvider, useUserData } from './context/UserDataContext';
+import useBackClose from './hooks/useBackClose';
 
 function AppShell() {
   // --- 🛰️ GLOBAL AUTH STATES ---
@@ -104,6 +105,13 @@ function AppShell() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // --- 🔙 BACK PRESS CLOSES THE TOPMOST SHELL OVERLAY ---
+  // Gated on the exam/analysis screens so nothing new can activate there —
+  // those screens keep their own untouched history guards.
+  useBackClose(showNotifications && !isTestActive && !isAnalysisPortalActive, () => setShowNotifications(false));
+  useBackClose(showLogoutModal && !isTestActive && !isAnalysisPortalActive, () => setShowLogoutModal(false));
+  useBackClose(mobileSidebarOpen && !isTestActive && !isAnalysisPortalActive, () => setMobileSidebarOpen(false));
 
   // --- 🔧 GOOGLE SIGN-IN USERNAME FIXER ---
   // Google sign-ins can't derive a username from email at signup time (control

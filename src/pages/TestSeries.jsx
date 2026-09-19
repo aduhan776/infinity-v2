@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; 
 import useAdmin from '../hooks/useAdmin'; // 🎯 Custom Hook Linked
+import useBackClose from '../hooks/useBackClose';
 
 // --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
 const ACCENT = '#7065BA';
@@ -442,6 +443,13 @@ const TestSeries = ({ onStartTest, selectedFolder, setSelectedFolder, onViewAnal
       alert("Network error — could not load the review. Please check your connection.");
     }
   };
+
+  // --- 🔙 BACK PRESS CLOSES THE TOPMOST OVERLAY ON THIS SCREEN ---
+  useBackClose(view === 'series-detail', () => { setSelectedFolder(null); setView('categories'); });
+  useBackClose(isModalOpen, () => setIsModalOpen(false));
+  useBackClose(!!viewAllCategory, () => setViewAllCategory(null));
+  useBackClose(showAddSectionModal, () => setShowAddSectionModal(false));
+  useBackClose(showAddSubGroupModal, () => setShowAddSubGroupModal(false));
 
   // --- VIEW RENDER 1: HORIZONTAL BRANCHING ALLOCATIONS REEL ---
   if (view === 'categories') {
