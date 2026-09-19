@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; 
+import useBackClose from '../hooks/useBackClose';
 
 // --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
 const ACCENT = '#7065BA';
@@ -315,6 +316,8 @@ const Library = ({ onResumeTest, onViewAnalysis, onStartTest }) => {
     else if (deltaX > SWIPE_THRESHOLD) goToPrevQuestion();
     touchStartXRef.current = null;
   };
+
+  useBackClose(!!(selectedItem && selectedItem.question), () => setSelectedItem(null));
 
   return (
     <div style={libContainer} className="lib-container">
