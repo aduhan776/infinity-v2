@@ -847,7 +847,7 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
                     </span>
                   </div>
                 </div>
-                <p style={styles.qTruncated}>{questions[idx].question}</p>
+                <p style={styles.qTruncated}><LatexText text={questions[idx].question} compactSpacing /></p>
                 <div style={styles.smallTime}>⏱️ Time Taken: {formatTime(timeTracker[idx])}</div>
               </div>
             );
