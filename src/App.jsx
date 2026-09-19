@@ -65,6 +65,13 @@ function AppShell() {
     if (!isAnalysisPortalActive) return;
     window.history.pushState({ infinityAnalysisGuard: true }, '');
     const handlePopState = () => {
+      // 🧭 The Detailed Review popup pushes its own entry on top of this
+      // guard entry, so popping the popup away lands us back on THIS guard
+      // entry — meaning the portal is still open and only the popup was
+      // dismissed. Don't force-navigate in that case. A real exit pops the
+      // guard entry itself, landing on the previous page's router state,
+      // which never carries this flag.
+      if (window.history.state && window.history.state.infinityAnalysisGuard) return;
       navigate('/dashboard', { replace: true });
     };
     window.addEventListener('popstate', handlePopState);

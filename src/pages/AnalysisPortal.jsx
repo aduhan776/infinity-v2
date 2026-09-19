@@ -263,8 +263,13 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
     setShowExplanation(false);
     // Undo the extra history entry pushed when the popup opened, so back
     // navigation continues to behave normally instead of stacking up.
+    // This POPS the entry rather than overwriting it in place: overwriting
+    // left a second guard-flagged entry behind, which App.jsx's Analysis
+    // Portal back-guard can't tell apart from the popup's own entry — the
+    // next back press would then be swallowed instead of leaving the
+    // portal. Popping restores the stack to exactly its pre-popup shape.
     if (window.history.state && window.history.state.analysisPopup) {
-      window.history.replaceState({ infinityAnalysisGuard: true }, '');
+      window.history.back();
     }
   };
   const [showExplanation, setShowExplanation] = useState(false); 
@@ -343,6 +348,54 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
   const totalObjectiveAttempted = correctCount + incorrectCount;
   const accuracy = totalObjectiveAttempted > 0 ? Math.round((correctCount / totalObjectiveAttempted) * 100) : 0;
+
+  // --- 🏆 RANKINGS (Test Series only) ---
+  // AI Labs tests are single-student generated papers — no shared leaderboard
+  // exists for them. Same signal used elsewhere in the app (TestPortal.jsx):
+  // AI Labs test ids carry the "AI-" prefix ("AI-FULL-..." / "AI-TOPIC-...").
+  const isTestSeriesTest = typeof id === 'string' && id.length > 0 && !id.startsWith('AI-');
+
+  const [rankings, setRankings] = useState(null);
+  const [rankingsLoading, setRankingsLoading] = useState(false);
+  const [rankingsError, setRankingsError] = useState(null);
+
+  // Fetched once per test, regardless of which tab is showing — both the
+  // Rankings tab and the Rank stat in the Test Summary read this same state,
+  // so there is exactly one call per test view.
+  useEffect(() => {
+    // Nothing to reset on the way out: every render path below is gated on
+    // isTestSeriesTest, so stale data from a previous test can never show.
+    if (!isTestSeriesTest) return;
+    let cancelled = false;
+    setRankingsLoading(true);
+    setRankingsError(null);
+    (async () => {
+      try {
+        const res = await authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/rankings?testId=${encodeURIComponent(id)}`, {
+          method: 'GET'
+        });
+        const json = await res.json();
+        if (cancelled) return;
+        if (json.success) {
+          setRankings({ top10: json.top10 || [], yourRank: json.yourRank || null });
+        } else {
+          setRankingsError(json.error || "Could not load rankings for this test.");
+        }
+      } catch (err) {
+        console.error("Rankings fetch failed:", err);
+        if (!cancelled) setRankingsError("Network error — could not load rankings. Please check your connection.");
+      } finally {
+        if (!cancelled) setRankingsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isTestSeriesTest]);
+
+  // 🏆 The Rank stat card only exists once this student actually has a
+  // placing on record: Test Series test, rankings resolved, and a yourRank
+  // object present. AI Labs tests, an in-flight or failed fetch, and a
+  // never-attempted test all fall through to the plain 5-card grid.
+  const showRankCard = isTestSeriesTest && !!(rankings && rankings.yourRank);
 
   const totalNegativePenalty = objectiveIndices.reduce((sum, idx) => {
     const q = questions[idx];
@@ -530,12 +583,59 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
 
     if (Math.abs(deltaY) > Math.abs(deltaX)) return; // vertical scroll, ignore
     const SWIPE_THRESHOLD = 50;
-    if (deltaX < -SWIPE_THRESHOLD && activeTab === 'analysis') {
-      setActiveTab('solutions'); // swipe left → next tab
-    } else if (deltaX > SWIPE_THRESHOLD && activeTab === 'solutions') {
-      setActiveTab('analysis'); // swipe right → previous tab
+    // Mirrors the tab bar's own order. Rankings joins the sequence only when
+    // it is actually rendered (Test Series only) — on an AI Labs test this
+    // stays the exact two-tab analysis <-> solutions swipe it has always been.
+    const tabOrder = isTestSeriesTest ? ['analysis', 'solutions', 'rankings'] : ['analysis', 'solutions'];
+    const currentIdx = tabOrder.indexOf(activeTab);
+    if (currentIdx === -1) return;
+    if (deltaX < -SWIPE_THRESHOLD && currentIdx < tabOrder.length - 1) {
+      setActiveTab(tabOrder[currentIdx + 1]); // swipe left → next tab
+    } else if (deltaX > SWIPE_THRESHOLD && currentIdx > 0) {
+      setActiveTab(tabOrder[currentIdx - 1]); // swipe right → previous tab
     }
   };
+
+  // 🏆 Rankings body — rendered identically by the mobile Rankings tab and
+  // the desktop side panel, so the two can never drift apart and neither
+  // needs its own loading/error treatment. Each host supplies its own
+  // container and heading; this is only the contents.
+  const renderRankingsBody = () => (
+    <>
+      {rankingsLoading && (
+        <p style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: '600', margin: 0 }}>Loading rankings...</p>
+      )}
+
+      {!rankingsLoading && rankingsError && (
+        <p style={{ fontSize: '0.85rem', color: '#dc2626', fontWeight: '700', margin: 0 }}>{rankingsError}</p>
+      )}
+
+      {!rankingsLoading && !rankingsError && rankings && (
+        <>
+          <div style={{ ...styles.topicSection, ...(isMobile ? styles.topicSectionMobile : {}) }}>
+            {rankings.yourRank ? (
+              <div style={{ ...styles.topicBadge, ...(isMobile ? styles.topicBadgeMobile : {}) }}>Your Rank: {rankings.yourRank.rank}/{rankings.yourRank.total_students}</div>
+            ) : (
+              <div style={{ ...styles.topicBadge, ...(isMobile ? styles.topicBadgeMobile : {}) }}>You haven't attempted this test yet.</div>
+            )}
+          </div>
+
+          <div style={{ ...styles.listGrid, ...(isMobile ? styles.listGridMobile : { gridTemplateColumns: '1fr', gap: '10px' }), marginTop: '12px' }}>
+            {rankings.top10.length === 0 ? (
+              <p style={{ fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic', margin: 0 }}>No one has attempted this test yet.</p>
+            ) : rankings.top10.map((entry, rIdx) => (
+              <div key={rIdx} style={{ ...styles.qCardSmall, ...(isMobile ? styles.qCardSmallMobile : {}), background: '#fff', borderColor: '#e2e8f0' }}>
+                <div style={styles.cardHeader}>
+                  <span style={styles.qNum}>#{rIdx + 1} {entry.full_name || 'Student'}</span>
+                  <span style={{ fontWeight: '800', color: '#6366f1' }}>{entry.best_score}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  );
 
   // 🧭 while resolving via URL (reload/direct hit), or if it failed, show a
   // minimal state instead of falling through to render against empty data.
@@ -591,6 +691,15 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
           >
             Solutions
           </button>
+          {/* 🏆 Rankings — Test Series only; AI Labs papers have no leaderboard. */}
+          {isTestSeriesTest && (
+            <button
+              onClick={() => setActiveTab('rankings')}
+              style={{ ...styles.tabBtnMobile, ...(activeTab === 'rankings' ? styles.tabBtnActiveMobile : {}) }}
+            >
+              Rankings
+            </button>
+          )}
         </div>
       )}
 
@@ -617,11 +726,19 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
         )}
 
         {/* Stat cards — compact 2-per-row grid on mobile, 5-across row on desktop */}
-        <div style={{ ...styles.mainStatsGrid, ...(isMobile ? styles.mainStatsGridMobile : {}) }}>
+        {/* Desktop columns track the card count so the row stays evenly filled:
+            6 across with the Rank card, the original 5 across without it. */}
+        <div style={{ ...styles.mainStatsGrid, ...(isMobile ? styles.mainStatsGridMobile : {}), ...(!isMobile && showRankCard ? { gridTemplateColumns: 'repeat(6, 1fr)' } : {}) }}>
           <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
              <span style={{...styles.mainStatLabel, ...(isMobile ? styles.mainStatLabelMobile : {})}}>FINAL SCORE</span>
              <span style={{...styles.mainStatValue, color:'#6366f1', fontSize: isMobile ? '1.1rem' : '1.5rem'}}>{totalScore.toFixed(2)}</span>
           </div>
+          {showRankCard && (
+          <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
+             <span style={{...styles.mainStatLabel, ...(isMobile ? styles.mainStatLabelMobile : {})}}>RANK</span>
+             <span style={{...styles.mainStatValue, color:'#f59e0b', fontSize: isMobile ? '1.1rem' : '1.5rem'}}>{rankings.yourRank.rank}/{rankings.yourRank.total_students}</span>
+          </div>
+          )}
           <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardMobile : {}) }}>
              <span style={{...styles.mainStatLabel, ...(isMobile ? styles.mainStatLabelMobile : {})}}>ACCURACY</span>
              <span style={{...styles.mainStatValue, color:'#22c55e', fontSize: isMobile ? '1.1rem' : '1.5rem'}}>{accuracy}%</span>
@@ -634,7 +751,11 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
              <span style={{...styles.mainStatLabel, ...(isMobile ? styles.mainStatLabelMobile : {})}}>INCORRECT (MCQ)</span>
              <span style={{...styles.mainStatValue, color:'#ef4444', fontSize: isMobile ? '1.1rem' : '1.5rem'}}>{incorrectCount}</span>
           </div>
-          <div style={{ ...styles.mainStatCard, ...(isMobile ? styles.mainStatCardFullRowMobile : {}) }}>
+          {/* With the Rank card present the mobile grid holds 6 cards — three
+              clean rows of two — so this one no longer needs to span the row
+              to avoid being orphaned. Without it, the original 5-card layout
+              (and this full-width last row) is preserved exactly. */}
+          <div style={{ ...styles.mainStatCard, ...(isMobile ? (showRankCard ? styles.mainStatCardMobile : styles.mainStatCardFullRowMobile) : {}) }}>
              <span style={{...styles.mainStatLabel, ...(isMobile ? styles.mainStatLabelMobile : {})}}>UNATTEMPTED</span>
              <span style={{...styles.mainStatValue, color:'#94a3b8', fontSize: isMobile ? '1.1rem' : '1.5rem'}}>{unattemptedCount}</span>
           </div>
@@ -648,9 +769,15 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
       </div>
       )}
 
+      {/* 🖥️ On desktop, Solutions and Rankings sit side by side in a flex row.
+          Everywhere else (mobile, or an AI Labs test with no leaderboard) this
+          wrapper is display:contents, so the layout is exactly what it was
+          before — Solutions simply stays a direct child of the container. */}
+      <div style={!isMobile && isTestSeriesTest ? styles.splitRowDesktop : { display: 'contents' }}>
+
       {/* ================= SECTION 2: SOLUTIONS / QUESTIONS LIST ================= */}
       {(!isMobile || activeTab === 'solutions') && (
-      <div style={{ ...styles.solutionsSection, ...(isMobile ? styles.solutionsSectionMobile : {}) }}>
+      <div style={{ ...styles.solutionsSection, ...(isMobile ? styles.solutionsSectionMobile : {}), ...(!isMobile && isTestSeriesTest ? { flex: 1, minWidth: 0 } : {}) }}>
         <h2 style={{ ...styles.solutionsSectionTitle, ...(isMobile ? styles.solutionsSectionTitleMobile : {}) }}>Solutions</h2>
 
         {/* Section nav — only shown for multi-section papers */}
@@ -726,6 +853,26 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
             );
           })}
         </div>
+      </div>
+      )}
+
+      {/* ================= SECTION 3a: RANKINGS — DESKTOP SIDE PANEL ================= */}
+      {/* Its own scroll container (sticky + capped height + overflowY), so
+          paging through Solutions never moves this list, and vice versa. */}
+      {!isMobile && isTestSeriesTest && (
+        <aside style={styles.rankingsPanelDesktop}>
+          <h2 style={styles.solutionsSectionTitle}>Rankings</h2>
+          {renderRankingsBody()}
+        </aside>
+      )}
+
+      </div>
+
+      {/* ================= SECTION 3b: RANKINGS — MOBILE TAB (Test Series only) ================= */}
+      {isMobile && activeTab === 'rankings' && isTestSeriesTest && (
+      <div style={{ ...styles.solutionsSection, ...styles.solutionsSectionMobile }}>
+        <h2 style={{ ...styles.solutionsSectionTitle, ...styles.solutionsSectionTitleMobile }}>Rankings</h2>
+        {renderRankingsBody()}
       </div>
       )}
 
@@ -977,6 +1124,8 @@ const styles = {
 
   // ---------- SECTION 2: SOLUTIONS ----------
   solutionsSection: { background: '#fff', padding: '30px', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', width: '100%', boxSizing: 'border-box' },
+  splitRowDesktop: { display: 'flex', gap: '30px', alignItems: 'flex-start', width: '100%', boxSizing: 'border-box' },
+  rankingsPanelDesktop: { background: '#fff', padding: '24px', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', width: '340px', flexShrink: 0, boxSizing: 'border-box', position: 'sticky', top: '30px', maxHeight: 'calc(100vh - 60px)', overflowY: 'auto' },
   solutionsSectionMobile: { padding: '12px', borderRadius: '12px' },
 
   solutionsSectionTitle: { margin: '0 0 20px 0', fontSize: '1.3rem', fontWeight: '900', color: '#1e293b' },
