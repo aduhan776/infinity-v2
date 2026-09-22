@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { authFetch } from '../utils/apiClient';
-import LatexText from '../components/LatexText';
 import { useUserData } from '../context/UserDataContext';
+import useBackClose from '../hooks/useBackClose';
 
 const ConfirmRow = ({ label, value }) => (
   <div className="ai-confirm-row" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
@@ -34,7 +34,7 @@ const SubjectiveCostNote = () => (
 );
 
 const AiTests = ({ onStartTest }) => {
-  const [view, setView] = useState('selection'); // selection, config-full, config-topic, ai-summary, admin-preview, admin-push-cloud
+  const [view, setView] = useState('selection'); // selection, config-full, config-topic, confirm-full, confirm-topic, ai-summary
   const [aiTestDetails, setAiTestDetails] = useState(null);
   const [loading, setLoading] = useState(false); 
   const [loadingMessage, setLoadingMessage] = useState(''); 
@@ -42,14 +42,6 @@ const AiTests = ({ onStartTest }) => {
 
   // 🚨 SYNCHRONOUS MUTEX LOCK REF TO CUT-OFF MULTI-TAP CLICK FLOODS
   const processingRef = useRef(false);
-
-  // --- INTERNAL ADMIN CONTROLS STATE (ZERO APP.JSX DEPENDENCY) ---
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [cloudMockTestsPool, setCloudMockTestsPool] = useState([]);
-  const [renamedTitle, setRenamedTitle] = useState('');
-  const [selectedMoveCategory, setSelectedMoveCategory] = useState('');
-  const [selectedMoveSeries, setSelectedMoveSeries] = useState('');
-  const [selectedMoveSection, setSelectedMoveSection] = useState('');
 
   // --- COMMON METADATA STATES ---
   const [testTitle, setTestTitle] = useState('');
@@ -72,7 +64,7 @@ const AiTests = ({ onStartTest }) => {
   const [fullDuration, setFullDuration] = useState('');
   const [fullType, setFullType] = useState('Objective');
   const [fullMarks, setFullMarks] = useState('2.0');
-  const [fullNeg, setFullNeg] = useState('0.66');
+  const [fullNeg, setFullNeg] = useState('0.5');
 
   // --- FULL TEST FLOW: MULTI-SECTIONS ACCUMULATOR ---
   const [aiSections, setAiSections] = useState([]); 
@@ -81,7 +73,7 @@ const AiTests = ({ onStartTest }) => {
   const [secTime, setSecTime] = useState('');
   const [secQCount, setSecQCount] = useState('');
   const [secMarks, setSecMarks] = useState('2.0');
-  const [secNeg, setSecNeg] = useState('0.66');
+  const [secNeg, setSecNeg] = useState('0.5');
   const [secType, setSecType] = useState('Objective');
   const [secDifficulty, setSecDifficulty] = useState('Medium');
   const [secLanguage, setSecLanguage] = useState('English');
@@ -90,17 +82,16 @@ const AiTests = ({ onStartTest }) => {
   // --- TOPIC TEST FLOW: DIRECT CONFIG STATES ---
   const [topicQCount, setTopicQCount] = useState('');
   const [topicMarks, setTopicMarks] = useState('2.0');
-  const [topicNeg, setTopicNeg] = useState('0.66');
+  const [topicNeg, setTopicNeg] = useState('0.5');
   const [topicType, setTopicType] = useState('Objective');
 
   // --- 🆕 AI LABS CREDITS (billed per question: Objective = 1, Subjective = 2) ---
-  // The balance (and the admin flag below) come from the shared user data
+  // The balance comes from the shared user data
   // context, which calls /api/credits once per authenticated user instead of
   // on every visit to this page. Deductions below push the new balance straight
   // into that context, so the badge still updates instantly, with no re-fetch.
   const {
     ai_labs_credits: aiLabsCredits, // null = not loaded yet
-    is_admin: sharedIsAdmin,
     updateCredits
   } = useUserData();
 
@@ -202,32 +193,6 @@ const AiTests = ({ onStartTest }) => {
     return (structure.questions_list || []).map(q => q.id).filter(Boolean);
   };
 
-  // 🚨 FIXED: DYNAMIC CLOUD MATRIX DROPDOWNS (MOVED TO THE TOP FOR GUARANTEED RENDER SCOPE)
-  const categoriesList = Array.from(new Set((cloudMockTestsPool || []).map(t => t.category_name))).filter(name => name && name !== 'AI Lab Generated');
-  const seriesList = selectedMoveCategory ? Array.from(new Set((cloudMockTestsPool || []).filter(t => t.category_name === selectedMoveCategory && t.series_name).map(t => t.series_name))) : [];
-  const subSectionsList = (selectedMoveCategory && selectedMoveSeries) ? Array.from(new Set((cloudMockTestsPool || []).filter(t => t.category_name === selectedMoveCategory && t.series_name === selectedMoveSeries && t.sub_section).map(t => t.sub_section))) : [];
-
-  // --- SILENT INTERNAL ADMIN VERIFIER ---
-  useEffect(() => {
-    const silentAdminCheck = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          if (user.email === 'aduhan776@gmail.com') {
-            setIsAdmin(true);
-          } else if (sharedIsAdmin === true) {
-            // is_admin now comes from the shared user data context instead of
-            // this page running its own profiles lookup.
-            setIsAdmin(true);
-          }
-        }
-      } catch (err) {
-        console.error("Admin verification log:", err);
-      }
-    };
-    silentAdminCheck();
-  }, [sharedIsAdmin]);
-
   useEffect(() => {
     if (cooldown <= 0) return;
     const intervalInstance = setInterval(() => {
@@ -235,27 +200,6 @@ const AiTests = ({ onStartTest }) => {
     }, 1000);
     return () => clearInterval(intervalInstance);
   }, [cooldown]);
-
-  // Hardened cloud database tree reader with active profile session parameters
-  const fetchCloudDatabaseTree = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { data, error } = await supabase
-        .from('mock_tests')
-        .select('id, category_name, series_name, sub_section')
-        .order('created_at', { ascending: false });
-        
-      if (!error && data) {
-        setCloudMockTestsPool(data);
-      } else if (error) {
-        console.error("Supabase branch query breakdown:", error.message);
-      }
-    } catch (err) {
-      console.error("Failed to sync matrix paths:", err);
-    }
-  };
 
   // ======================================================================
   // ⚡ HARDENED BATCHING ENGINE WITH DYNAMIC PARSER EXTRACTIONS
@@ -338,7 +282,7 @@ const AiTests = ({ onStartTest }) => {
             options: q.options || ["Option A", "Option B", "Option C", "Option D"],
             correct: null,
             marks: `+${parseFloat(marks || 2.0).toFixed(1)}`,
-            neg: `-${parseFloat(neg || 0.66).toFixed(2)}`,
+            neg: `-${parseFloat(neg || 0.5).toFixed(2)}`,
             explanation: null
           };
         } else {
@@ -669,45 +613,18 @@ const AiTests = ({ onStartTest }) => {
     setSecQCount('');
   };
 
-  const handlePublishToOfficialCloud = async () => {
-    if (!renamedTitle.trim() || !selectedMoveCategory || !selectedMoveSeries || !selectedMoveSection) {
-      alert("Bhai, Category, Series branch, aur Section tab paths specified hone mandatory hain!");
-      return;
-    }
-           
-    const cloudTestId = 'MOCK_MOVED_' + Date.now();
-    setLoading(true);
-    setLoadingMessage("Transmitting configuration packet onto the cloud schema...");
-    try {
-      const { error } = await supabase
-        .from('mock_tests')
-        .insert([
-          {
-            id: cloudTestId,
-            category_name: selectedMoveCategory,
-            series_name: selectedMoveSeries,
-            sub_section: selectedMoveSection,
-            title: renamedTitle.trim(),
-            questions: parseInt(aiTestDetails.questions),
-            time: parseInt(aiTestDetails.time),
-            sections: aiTestDetails.sections || null, 
-            questions_list: aiTestDetails.questions_list || null, 
-            has_sectional_timing: aiTestDetails.hasSectionalTiming || false
-          }
-        ]);
-      if (error) throw error;
-      alert(`Success: Test "${renamedTitle.trim()}" is now live inside the official path layout matrix!`);
-      setView('selection');
-    } catch (err) {
-      console.error("Cloud push failed:", err);
-      alert("Database Matrix failure while uploading current configurations packet data.");
-    } finally {
-      setLoading(false);
-      setLoadingMessage('');
-    }
-  };
-
   const singleFrameLock = ['selection', 'config-topic', 'confirm-topic'].includes(view) || (view === 'config-full' && !fullHasSections);
+
+  // --- 🔙 BACK PRESS: ONE STEP AT A TIME, NESTED (never re-register on back) ---
+  // The base hook stays open on EVERY screen except `selection`, so its marker sits
+  // at the bottom. The confirm screens stack a second marker on top of it.
+  // Back from confirm only closes the confirm marker (config is still registered, no new push);
+  // Back from config / summary closes the base marker -> selection.
+  // Nothing is pushed during a Back press (Chromium would otherwise skip this page on the next Back).
+  // Not gated on `loading`: toggling hooks when loading starts/ends would unregister and re-push markers.
+  useBackClose(view !== 'selection', () => setView('selection'));
+  useBackClose(view === 'confirm-full',  () => setView('config-full'));
+  useBackClose(view === 'confirm-topic', () => setView('config-topic'));
 
   return (
     <div style={containerStyle} className="ai-container">
@@ -986,7 +903,7 @@ const AiTests = ({ onStartTest }) => {
                     </select>
                   </div>
                   <div style={{ flex: 1 }}><label style={miniLabel}>Correct Mark (+)</label><input style={inputStyle} type="number" step="0.5" value={fullMarks} onChange={e => setFullMarks(e.target.value)} /></div>
-                  <div style={{ flex: 1 }}><label style={miniLabel}>Negative Mark (-)</label><input style={inputStyle} type="number" step="0.01" value={fullNeg} onChange={e => setFullNeg(e.target.value)} disabled={fullType === 'Subjective'} /></div>
+                  <div style={{ flex: 1 }}><label style={{ ...miniLabel, ...(fullType === 'Subjective' ? dimmedLabel : {}) }}>Negative Mark (-)</label><input style={{ ...inputStyle, ...(fullType === 'Subjective' ? dimmedInput : {}) }} type="number" step="0.01" value={fullNeg} onChange={e => setFullNeg(e.target.value)} disabled={fullType === 'Subjective'} /></div>
                 </div>
                 {fullType === 'Subjective' && <SubjectiveCostNote />}
               </div>
@@ -1026,7 +943,7 @@ const AiTests = ({ onStartTest }) => {
                 </div>
                 <div style={flexRow} className="ai-flex-row">
                   <div style={{ flex: 1 }}><label style={miniLabel}>Correct Mark (+)</label><input style={inputStyle} type="number" step="0.5" value={secMarks} onChange={e => setSecMarks(e.target.value)} /></div>
-                  <div style={{ flex: 1 }}><label style={miniLabel}>Negative Mark (-)</label><input style={inputStyle} type="number" step="0.01" value={secNeg} onChange={e => setSecNeg(e.target.value)} disabled={secType === 'Subjective'} /></div>
+                  <div style={{ flex: 1 }}><label style={{ ...miniLabel, ...(secType === 'Subjective' ? dimmedLabel : {}) }}>Negative Mark (-)</label><input style={{ ...inputStyle, ...(secType === 'Subjective' ? dimmedInput : {}) }} type="number" step="0.01" value={secNeg} onChange={e => setSecNeg(e.target.value)} disabled={secType === 'Subjective'} /></div>
                 </div>
                 {secType === 'Subjective' && <SubjectiveCostNote />}
                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -1124,7 +1041,7 @@ const AiTests = ({ onStartTest }) => {
             </div>
             <div style={flexRow} className="ai-flex-row">
               <div style={{ flex: 1 }}><label style={labelStyle}>Positive Marks <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" step="0.5" min="0" value={topicMarks} onChange={e => setTopicMarks(e.target.value)} /></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Negative Penalty <span style={mandatoryStar}>*</span></label><input style={inputStyle} type="number" step="0.01" min="0" value={topicNeg} onChange={e => setTopicNeg(e.target.value)} disabled={topicType === 'Subjective'} /></div>
+              <div style={{ flex: 1 }}><label style={{ ...labelStyle, ...(topicType === 'Subjective' ? dimmedLabel : {}) }}>Negative Penalty <span style={mandatoryStar}>*</span></label><input style={{ ...inputStyle, ...(topicType === 'Subjective' ? dimmedInput : {}) }} type="number" step="0.01" min="0" value={topicNeg} onChange={e => setTopicNeg(e.target.value)} disabled={topicType === 'Subjective'} /></div>
             </div>
             <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid #e2e8f0', paddingTop: '20px', marginTop: '10px' }}>
               <button onClick={() => setView('selection')} style={cancelBtn}>Back</button>
@@ -1245,146 +1162,7 @@ const AiTests = ({ onStartTest }) => {
             <button onClick={() => onStartTest(aiTestDetails)} style={{ ...actionBtn, background: ACCENT, padding: '14px', fontSize: '1rem', marginBottom: '12px', width: '100%', borderRadius: '12px' }}>
               Launch AI Engine Test Portal 
             </button>
-            {isAdmin && (
-              <div style={{ borderTop: '1px dashed #cbd5e1', marginTop: '18px', paddingTop: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <p style={{ margin: '0 0 4px 0', fontSize: '0.78rem', fontWeight: '800', color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}> Admin Actions:</p>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button 
-                     type="button"
-                    onClick={() => setView('admin-preview')} 
-                     style={{ ...actionBtn, background: '#1e293b', padding: '11px', fontSize: '0.85rem', borderRadius: '10px', flex: 1, fontWeight: '700' }}
-                  >
-                      Analyse Test
-                  </button>
-                  <button 
-                     type="button"
-                    onClick={() => {
-                      setRenamedTitle(aiTestDetails.title);
-                      setSelectedMoveCategory('');
-                      setSelectedMoveSeries('');
-                      setSelectedMoveSection('');
-                      fetchCloudDatabaseTree();
-                      setView('admin-push-cloud');
-                    }} 
-                     style={{ ...actionBtn, background: '#4f46e5', padding: '11px', fontSize: '0.85rem', borderRadius: '10px', flex: 1, fontWeight: '700' }}
-                  >
-                      Add to Series
-                  </button>
-                </div>
-              </div>
-            )}
             <button onClick={() => setView('selection')} style={{ ...cancelBtn, width: '100%', marginTop: '12px' }}>Discard Configuration</button>
-          </div>
-        </div>
-      )}
-
-      {view === 'admin-preview' && (
-        <div style={{ padding: '30px 10px', maxWidth: '850px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '1px solid #e2e8f0', paddingBottom: '18px' }}>
-            <div>
-              <h2 style={{ margin: 0, color: '#0f172a', fontWeight: '900', letterSpacing: '-0.5px' }}> Admin Blueprint Review</h2>
-              <p style={{ color: '#64748b', margin: '4px 0 0 0', fontSize: '0.9rem', fontWeight: '500' }}>Reviewing questions, right choices, and evaluation metrics mapping.</p>
-            </div>
-            <button onClick={() => setView('ai-summary')} style={{ ...cancelBtn, background: ACCENT, color: '#ffffff', borderRadius: '10px' }}>Back to Summary</button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-            {aiTestDetails && aiTestDetails.sections ? (
-              aiTestDetails.sections.map((sec, sIdx) => (
-                <div key={sIdx} style={{ background: '#f8fafc', padding: '20px', borderRadius: '18px', border: '1px solid #e2e8f0' }}>
-                  <h3 style={{ margin: '0 0 16px 0', color: '#4f46e5', fontWeight: '800', fontSize: '1.15rem' }}> Section Bundle: {sec.name} ({sec.time} Mins)</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {sec.questions.map((q, qIdx) => (
-                      <div key={qIdx} style={{ background: '#ffffff', padding: '20px', borderRadius: '14px', border: '1px solid #cbd5e1' }}>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                           <span style={{ fontWeight: '800', color: '#64748b', fontSize: '0.78rem', textTransform: 'uppercase' }}>Item #{qIdx + 1} {q.type}</span>
-                           <span style={{ fontWeight: '800', color: '#10b981', fontSize: '0.8rem' }}>Score: {q.marks} | Neg: {q.neg}</span>
-                         </div>
-                         <p style={{ fontSize: '1.05rem', fontWeight: '600', margin: '0 0 15px 0', color: '#0f172a', lineHeight: '1.4' }}><LatexText text={q.question} /></p>
-                                               
-                         {q.type === 'Objective' && q.options && (
-                           <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
-                             {q.options.map((opt, oIdx) => (
-                               <div key={oIdx} style={{ padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', fontSize: '0.9rem', fontWeight: '500' }}>
-                                 <span>{String.fromCharCode(64 + oIdx)}. <LatexText text={opt} /></span>
-                               </div>
-                             ))}
-                           </div>
-                         )}
-                         <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', borderLeft: '4px solid #94a3b8' }}>
-                           <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b', lineHeight: '1.5', fontWeight: '600' }}>🔒 Answer & explanation reveal after you attempt this question.</p>
-                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))
-            ) : (
-              aiTestDetails && aiTestDetails.questions_list && aiTestDetails.questions_list.map((q, qIdx) => (
-                <div key={qIdx} style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.01)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <span style={{ fontWeight: '800', color: '#64748b', fontSize: '0.78rem', textTransform: 'uppercase' }}>Item #{qIdx + 1} {q.type}</span>
-                    <span style={{ fontWeight: '800', color: '#10b981', fontSize: '0.8rem' }}>Score: {q.marks} | Neg: {q.neg}</span>
-                  </div>
-                  <p style={{ fontSize: '1.05rem', fontWeight: '600', margin: '0 0 15px 0', color: '#0f172a', lineHeight: '1.4' }}><LatexText text={q.question} /></p>
-                                   
-                  {q.type === 'Objective' && q.options && (
-                    <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
-                      {q.options.map((opt, oIdx) => (
-                        <div key={oIdx} style={{ padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', fontSize: '0.9rem', fontWeight: '500' }}>
-                          <span>{String.fromCharCode(64 + oIdx)}. <LatexText text={opt} /></span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', borderLeft: '4px solid #94a3b8' }}>
-                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b', lineHeight: '1.5', fontWeight: '600' }}>🔒 Answer & explanation reveal after you attempt this question.</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {view === 'admin-push-cloud' && (
-        <div style={formWrapper} className="ai-form-wrapper">
-          <div style={formCard} className="ai-form-card">
-            <h2 style={{ color: '#1e293b', marginBottom: '5px', fontWeight: '900' }}> Deploy to Official Series</h2>
-            <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem', fontWeight: '500' }}>Rename and position this AI generated exam blueprint inside official routing matrices.</p>
-                       
-            <div style={{ marginBottom: '16px' }}>
-              <label style={labelStyle}>Customize / Rename Title</label>
-              <input style={inputStyle} value={renamedTitle} onChange={e => setRenamedTitle(e.target.value)} placeholder="e.g. UPSC Prelims Sectional Mock" />
-            </div>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={labelStyle}>1. Main Exam Category Folder</label>
-              <select style={{ ...inputStyle, padding: '11px' }} value={selectedMoveCategory} onChange={e => { setSelectedMoveCategory(e.target.value); setSelectedMoveSeries(''); setSelectedMoveSection(''); }}>
-                <option value="">-- Choose Target Category --</option>
-                {categoriesList.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-            </div>
-            {selectedMoveCategory && (
-              <div style={{ marginBottom: '16px' }}>
-                <label style={labelStyle}>2. Target Test Series Branch</label>
-                <select style={{ ...inputStyle, padding: '11px' }} value={selectedMoveSeries} onChange={e => { setSelectedMoveSeries(e.target.value); setSelectedMoveSection(''); }}>
-                  <option value="">-- Choose Series Branch --</option>
-                  {seriesList.map(ser => <option key={ser} value={ser}>{ser}</option>)}
-                </select>
-              </div>
-            )}
-            {selectedMoveCategory && selectedMoveSeries && (
-              <div style={{ marginBottom: '22px' }}>
-                <label style={labelStyle}>3. Target Section Tab Placement</label>
-                <select style={{ ...inputStyle, padding: '11px' }} value={selectedMoveSection} onChange={e => setSelectedMoveSection(e.target.value)}>
-                  <option value="">-- Choose Section Tab Layer --</option>
-                  {subSectionsList.map(sec => <option key={sec} value={sec}>{sec}</option>)}
-                </select>
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
-              <button onClick={() => setView('ai-summary')} style={cancelBtn}>Cancel</button>
-              <button onClick={handlePublishToOfficialCloud} style={{ ...actionBtn, background: '#4f46e5', borderRadius: '12px' }}>Transmit to Cloud Matrix</button>
-            </div>
           </div>
         </div>
       )}
@@ -1412,5 +1190,9 @@ const miniSectionActionControlBtn = {
   cursor: 'pointer',
   transition: 'all 0.15s ease'
 };
+
+// Look of the Negative Mark field while it is disabled (Subjective question type).
+const dimmedLabel = { opacity: 0.45 };
+const dimmedInput = { background: '#ECEBF3', color: '#94a3b8', WebkitTextFillColor: '#94a3b8', cursor: 'not-allowed', opacity: 0.6 };
 
 export default AiTests;
