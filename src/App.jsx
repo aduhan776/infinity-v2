@@ -17,6 +17,8 @@ import { supabase } from './supabaseClient';
 import { deriveUsernameFromEmail } from './utils/authHelpers';
 import { UserDataProvider, useUserData } from './context/UserDataContext';
 import useBackClose from './hooks/useBackClose';
+import TestRouteGate from './components/TestRouteGate';
+import { grantTestTicket, revokeTestTicket } from './utils/testTicket';
 
 function AppShell() {
   // --- 🛰️ GLOBAL AUTH STATES ---
@@ -306,6 +308,7 @@ function AppShell() {
   }, []);
 
   const startTestHandler = (test) => {
+    grantTestTicket();
     setCurrentTestData(test);
     setIsTestActive(true);
     setTestResults(null);
@@ -313,6 +316,7 @@ function AppShell() {
   };
 
   const handleResumeTest = (savedSnapshot) => {
+    grantTestTicket();
     setCurrentTestData(savedSnapshot); 
     setIsTestActive(true);
     setTestResults(null);
@@ -333,6 +337,7 @@ function AppShell() {
   };
 
   const finishTestHandler = (finalReport) => {
+    revokeTestTicket();
     setIsTestActive(false);
     if (finalReport) {
       setTestResults(finalReport);
@@ -774,7 +779,9 @@ function AppShell() {
                 :testId when currentTestData isn't in memory (e.g. after a
                 reload) — so it always renders, no longer gated on currentTestData. */}
             <Route path="/test-portal/:testId" element={
-              <TestPortal testData={currentTestData} onExit={finishTestHandler} />
+              <TestRouteGate>
+                <TestPortal testData={currentTestData} onExit={finishTestHandler} />
+              </TestRouteGate>
             } />
             {/* 🧭 AnalysisPortal now resolves its own data from the URL's
                 :attemptId when testResults isn't in memory (e.g. after a
