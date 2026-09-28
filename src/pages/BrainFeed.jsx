@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; // 👈 YEH IMPORT GAYAB THA BHAI, AB FIXED HAI!
 import { useUserData } from '../context/UserDataContext';
+import { registerOverlay, unregisterOverlay } from '../utils/backStack';
 
 // --- BRAND ACCENT (same indigo used across the app — single source of truth) ---
 const ACCENT = '#7065BA';
@@ -943,23 +944,60 @@ const BrainFeed = () => {
     }
   };
 
+  // 🐛 FIX: leaving via the browser Back button used to fall through a gap.
+  // Back press #1 opened the exit-warning modal, which DISARMED the guard, so
+  // Back press #2 left the route with no exit handler running at all: the
+  // "same tab" marker stayed set and the next BrainFeed open in this tab
+  // silently resumed instead of offering Continue / Start Fresh. The nested
+  // guard below routes that second press here instead — the same save-and-
+  // leave the "Save and Exit" button performs.
+  const exitSessionSavingProgress = () => {
+    saveSessionMetricsToProfile(undefined, undefined, false);
+    handleForceClearFeed();
+    // Deliberately leaving, so the next open in this tab must ASK rather than
+    // resume silently. The saved session data itself is kept, for that modal
+    // to offer. (The "Save and Exit" button does the same thing inline.)
+    try { sessionStorage.removeItem(BRAINFEED_TAB_MARKER_KEY); } catch (e) { /* ignore */ }
+    navigate('/dashboard');
+  };
+
   // 🧭 PHASE 5: BROWSER BACK-BUTTON INTERCEPTION
   // While a live feed session is active, browser back should trigger the
   // same exit-confirm flow as the in-app "End Session" button — never
-  // silently lose the student's place. Same dummy-history-entry technique
-  // as TestPortal: push one extra entry while the feed is active, catch the
-  // resulting popstate, and re-arm the guard so Cancel doesn't disarm it.
+  // silently lose the student's place.
+  //
+  // --- 🔙 TWO NESTED OVERLAYS, so that no marker is EVER pushed in response
+  // to a Back press (Chromium marks the entry a no-activation push came from
+  // as skippable, and the next Back press jumps clean over it and leaves the
+  // site — the bug fixed in TestPortal and here previously). backStack.js
+  // spells out the rule: a screen must not RE-register itself after a Back
+  // press; nest instead, and let the lower overlay stay registered while the
+  // upper one is open. Both markers below are pushed together, at the click
+  // that starts the session — never during a traversal.
+  //
+  // Back #1 pops the inner overlay  -> the exit-warning modal.
+  // Back #2 pops the outer overlay  -> actually leave, clearing the marker.
+  // "Resume Session" re-arms the inner one from a CLICK, which is safe.
+
+  // OUTER: stays armed for the whole live session, underneath the warning
+  // modal. Deps are isFeedActive alone, so showExitWarning flipping never
+  // re-runs it — that is what keeps it from re-pushing during a Back press.
   useEffect(() => {
     if (!isFeedActive) return;
-    window.history.pushState({ infinityBrainFeedGuard: true }, '');
-    const handlePopState = () => {
-      handleTriggerExit();
-      window.history.pushState({ infinityBrainFeedGuard: true }, '');
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    const id = registerOverlay(() => exitSessionSavingProgress());
+    return () => unregisterOverlay(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFeedActive]);
+
+  // INNER: shows the warning first. handleTriggerExit's own "everything
+  // answered" branch exits directly without setting showExitWarning, and
+  // clears the marker itself via clearSavedBrainFeedSession.
+  useEffect(() => {
+    if (!isFeedActive || showExitWarning) return;
+    const id = registerOverlay(() => handleTriggerExit());
+    return () => unregisterOverlay(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFeedActive, showExitWarning]);
 
   const handleForceClearFeed = () => {
     clearTimeout(lastQuestionTimerRef.current);

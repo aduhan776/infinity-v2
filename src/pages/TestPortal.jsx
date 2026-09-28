@@ -5,6 +5,7 @@ import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText';
 import { QRCodeCanvas } from 'qrcode.react';
 import { saveToLocalStore, deleteFromLocalStore, getFromLocalStore } from '../utils/localDb';
+import { registerOverlay, unregisterOverlay } from '../utils/backStack';
 
 // --- 📱 MOBILE BREAKPOINT DETECTION ---
 const useIsMobile = (breakpoint = 768) => {
@@ -276,6 +277,11 @@ const TestPortal = ({ testData, onExit }) => {
   // doesn't need to (and shouldn't) also try to clear it again.
   const intentionalExitRef = useRef(false);
 
+  // True once the real test is loaded (never for the placeholder data used while resolving).
+  const draftSaveReadyRef = useRef(false);
+  // Latest draft writers, so the unmount cleanup (which only re-runs on data.id) never uses stale closures.
+  const latestDraftWritersRef = useRef({ writeLibraryVisibleDraft: null, syncDraftToCloud: null });
+
   // 🧭 BROWSER BACK-BUTTON → PAUSE MODAL (safe version)
   // Requirement: pressing the browser's own back button mid-test must
   // always show the same pause-confirmation modal as the in-app Pause
@@ -288,23 +294,22 @@ const TestPortal = ({ testData, onExit }) => {
   // caused real corruption (back button landing on the Google account
   // picker, a stuck submitting flag that silently broke the Submit button).
   //
-  // This version is deliberately minimal: push one guard entry when the
-  // test screen mounts, and re-push it after a cancelled back-press so the
-  // guard still fires next time too. It NEVER calls history.back() or any
-  // other history method during submit/save/exit — those flows are left
-  // entirely alone, using plain onExit(...) so App.jsx's own
-  // replace-navigation (already correct) is never interfered with.
+  // --- 🔙 ONE overlay, not a nested pair. Back #1 pops it and shows the
+  // pause modal (url unchanged); Back #2 is then ordinary navigation to the
+  // previous page, and the unmount cleanup below leaves a resumable draft
+  // behind. The modal's "No, Resume Active Session" CLICK re-arms the guard,
+  // and a click is user activation, so that re-push is safe: Chromium marks
+  // the entry a no-activation push came from as skippable, which is why a
+  // marker must never be pushed in response to a Back press.
+  //
+  // Guards registered at mount must stay single: StrictMode's dev
+  // double-mount leaves a dead marker under any nested pair, which swallows
+  // the next Back press.
   useEffect(() => {
-    if (isResolving || resolveError) return; // only guard the real, interactive test screen
-    window.history.pushState({ infinityTestGuard: true }, '');
-    const handlePopState = () => {
-      setIsPaused(true);
-      window.history.pushState({ infinityTestGuard: true }, '');
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isResolving, resolveError]);
+    if (isPaused || isResolving || resolveError) return; // only guard the real, interactive test screen
+    const innerId = registerOverlay(() => setIsPaused(true));
+    return () => unregisterOverlay(innerId);
+  }, [isPaused, isResolving, resolveError]);
 
   // --- 📱 MOBILE UI STATES ---
   const isMobile = useIsMobile();
@@ -455,25 +460,28 @@ const TestPortal = ({ testData, onExit }) => {
     return () => {
       if (isRealPageUnloadRef.current) return; // genuine reload/close — keep marker + autosave + background draft intact (tab-close should leave a resumable Library draft, by design)
       try { sessionStorage.removeItem(TEST_TAB_MARKER_KEY + data.id); } catch (e) { /* ignore */ }
-      // 🧭 REQUIREMENT: leaving without submitting or explicitly saving means
-      // nothing should be resumable later — clear the autosave AND the
-      // background Library-visible draft too. If handleFinalSubmit or
-      // handleSaveForLater already ran, they've set intentionalExitRef and
-      // already cleaned up themselves; this only fires for every other way
-      // of leaving in-app (browser back navigating away for real within the
-      // SPA, switching routes without going through Pause → Save, etc.) —
-      // a genuine tab/window close is the ONE case that should leave the
-      // background draft behind, and that's handled by the early return above.
+      // 🧭 REQUIREMENT: any non-submit exit with at least one answer leaves a
+      // resumable paused draft. Only a real submit removes it (handleFinalSubmit
+      // deletes the record itself). Nothing is ever deleted from here.
+      //
+      // This fires for every in-app way of leaving that is not submit or
+      // Save-for-Later: browser Back navigating away for real within the SPA,
+      // switching routes via the sidebar/bottom bar, and so on. If
+      // handleFinalSubmit or handleSaveForLater already ran they set
+      // intentionalExitRef, so they've already handled their own cleanup and
+      // this skips entirely. A genuine tab/window close is handled by the
+      // beforeunload early return above, which preserves everything as-is.
       if (!intentionalExitRef.current) {
         clearAutosave(data.id);
-        deleteFromLocalStore("test_sessions", data.id).catch(() => {});
-        // Best-effort cloud cleanup too — the periodic 60s sync may have
-        // already pushed this draft to Supabase before the student backed
-        // out in-app, so it needs the same explicit delete IndexedDB gets
-        // above, or it would linger there as a phantom resumable draft.
-        authFetch(`${import.meta.env.VITE_API_BASE_URL}/api/tests/drafts/${encodeURIComponent(data.id)}`, {
-          method: 'DELETE'
-        }).catch(() => {});
+        // Leaving without submitting keeps progress resumable: if the student answered anything,
+        // write a final draft (IndexedDB + cloud). Never delete here. In-app navigation does not
+        // cancel these requests. Nothing answered = nothing saved (no empty drafts).
+        const hasProgress = Object.values(stateRef.current.answers || {}).some(v => v !== undefined && v !== null && v !== '');
+        if (draftSaveReadyRef.current && hasProgress) {
+          const { writeLibraryVisibleDraft: writeLocal, syncDraftToCloud: writeCloud } = latestDraftWritersRef.current;
+          if (writeLocal) writeLocal();
+          if (writeCloud) writeCloud();
+        }
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -509,9 +517,10 @@ const TestPortal = ({ testData, onExit }) => {
   // record continuously up to date throughout the test (same cadence as the
   // existing autosave). By the time a tab-close happens, the draft sitting
   // in IndexedDB is already current — nothing needs to race the unload.
-  // Every OTHER way of leaving (submit, in-app back-without-saving) must
-  // still explicitly delete this record, since only a genuine tab/window
-  // close should leave it behind as a resumable draft.
+  // A real submit is the ONLY thing that removes this record (see
+  // handleFinalSubmit); every other way of leaving — tab close, browser Back,
+  // switching routes in-app — deliberately leaves it behind as a resumable
+  // paused draft, as long as at least one question was answered.
   const writeLibraryVisibleDraft = useCallback(async () => {
     if (stateRef.current.isSubmitting) return;
     const snapshot = stateRef.current;
@@ -594,6 +603,20 @@ const TestPortal = ({ testData, onExit }) => {
     writeAutosave(data.id, buildAutosaveSnapshot());
     writeLibraryVisibleDraft();
   }, [data.id, buildAutosaveSnapshot, writeLibraryVisibleDraft]);
+
+  useEffect(() => { draftSaveReadyRef.current = !isResolving && !resolveError; }, [isResolving, resolveError]);
+  useEffect(() => { latestDraftWritersRef.current = { writeLibraryVisibleDraft, syncDraftToCloud }; }, [writeLibraryVisibleDraft, syncDraftToCloud]);
+
+  // Pause modal open (in-app Pause button or Back #1): push the draft now, while the student
+  // is reading the modal, so it already exists whichever way they leave.
+  useEffect(() => {
+    if (!isPaused || !draftSaveReadyRef.current) return;
+    const hasProgress = Object.values(stateRef.current.answers || {}).some(v => v !== undefined && v !== null && v !== '');
+    if (!hasProgress) return;
+    flushAutosave();
+    syncDraftToCloud();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPaused]);
 
   // Debounced write whenever the things worth saving change.
   useEffect(() => {
