@@ -247,9 +247,20 @@ const AiTests = ({ onStartTest }) => {
         data = JSON.parse(cleanPayload);
       } catch (e) {
         try {
+          // Never execute response text. Valid JSON can fail the backslash cleanup above
+          // (e.g. LaTeX like "\\alpha"), so retry with plain JSON.parse: the whole text,
+          // then only the {...} part, then the {...} part with the same cleanup.
           const isolatedObjectString = rawText.substring(rawText.indexOf('{'), rawText.lastIndexOf('}') + 1);
-          const dynamicExtractor = new Function(`return ${isolatedObjectString}`);
-          data = dynamicExtractor();
+          const candidates = [
+            rawText,
+            isolatedObjectString,
+            isolatedObjectString.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, "\\\\")
+          ];
+          let parsedOk = false;
+          for (const candidate of candidates) {
+            try { data = JSON.parse(candidate); parsedOk = true; break; } catch { /* try the next candidate */ }
+          }
+          if (!parsedOk) throw new Error('No JSON candidate could be parsed');
         } catch (innerError) {
           console.log("🚨 --- INFINITY CRIME SCENE INSPECTION --- 🚨");
           console.log("Raw Response Dump:", rawText);
