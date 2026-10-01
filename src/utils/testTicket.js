@@ -17,6 +17,17 @@ const KEY = 'infinity_test_ticket';
 
 let memoryTicket = false;
 
+// A real reload or tab close must NOT revoke the ticket: sessionStorage survives
+// it, so a mid-test F5 still resumes. The gate checks this before revoking on
+// unmount, which is otherwise indistinguishable from an in-app exit.
+let pageUnloading = false;
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => { pageUnloading = true; });
+  window.addEventListener('beforeunload', () => { pageUnloading = true; });
+}
+
+export const isPageUnloading = () => pageUnloading;
+
 export const grantTestTicket = () => {
   memoryTicket = true;
   try {

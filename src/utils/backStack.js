@@ -45,6 +45,13 @@
 // screen must NOT re-register it; nest overlays instead (the lower one stays
 // registered while the upper one is open).
 //
+// Never push before the page has had a user interaction. After a reload the page
+// has no activation; Chromium marks the entry a no-activation push was made from
+// as skippable and the next Back jumps past it (confirmed: reload + Back left the
+// site). Markers registered before the first interaction wait in
+// awaitingActivationIds and are pushed on the first pointer/key event. A Back
+// press before that still closes the top overlay via rule 4, with nothing pushed.
+//
 // Plain JS on purpose — no React — so a future Capacitor Android back-button
 // listener can call closeTopOverlay() directly.
 
@@ -60,6 +67,13 @@ let skipping = false;
 let listenerAttached = false;
 let deferredIds = [];
 let failsafeTimer = null;
+
+// Sticky user activation: true once the user has clicked/tapped/typed on this page load.
+// navigator.userActivation is missing in very old browsers -> treat as active (old behaviour).
+const pageHasActivation = () => !navigator.userActivation || navigator.userActivation.hasBeenActive;
+let awaitingActivationIds = [];   // registered overlays whose marker waits for the first interaction
+let activationListenersAttached = false;
+const ACTIVATION_EVENTS = ['pointerdown', 'pointerup', 'keydown', 'touchend', 'click'];
 
 // One of our own programmatic backs is still travelling.
 const isBackInFlight = () => pendingBacks > 0 || skipping;
@@ -91,6 +105,38 @@ const pushMarker = (id) => {
   window.history.pushState({ [MARKER_KEY]: id, [SESSION_KEY]: SESSION }, '');
 };
 
+const flushAwaitingActivation = () => {
+  if (!pageHasActivation()) return;
+  detachActivationListeners();
+  const ids = awaitingActivationIds;
+  awaitingActivationIds = [];
+  ids.forEach(id => { if (stack.some(o => o.id === id)) schedulePush(id); }); // keeps stack order
+};
+
+const onActivationEvent = () => {
+  if (pageHasActivation()) flushAwaitingActivation();
+  else setTimeout(flushAwaitingActivation, 0); // some engines set activation just after dispatch
+};
+
+function attachActivationListeners() {
+  if (activationListenersAttached) return;
+  activationListenersAttached = true;
+  ACTIVATION_EVENTS.forEach(e => window.addEventListener(e, onActivationEvent, { capture: true, passive: true }));
+}
+
+function detachActivationListeners() {
+  if (!activationListenersAttached) return;
+  activationListenersAttached = false;
+  ACTIVATION_EVENTS.forEach(e => window.removeEventListener(e, onActivationEvent, { capture: true }));
+}
+
+// Single place that decides WHEN a marker may be pushed.
+function schedulePush(id) {
+  if (!pageHasActivation()) { awaitingActivationIds.push(id); attachActivationListeners(); return; }
+  if (isBackInFlight()) { deferredIds.push(id); return; }
+  pushMarker(id);
+}
+
 const clearFailsafe = () => {
   if (failsafeTimer !== null) {
     clearTimeout(failsafeTimer);
@@ -105,7 +151,8 @@ const flushDeferred = () => {
     const id = deferredIds.shift();
     // Skip overlays that were closed again before their marker was pushed.
     if (stack.some(o => o.id === id)) {
-      pushMarker(id);
+      if (pageHasActivation()) pushMarker(id);
+      else { awaitingActivationIds.push(id); attachActivationListeners(); }
     }
   }
 };
@@ -157,6 +204,11 @@ const handlePopState = () => {
   const top = stack[stack.length - 1];
   if (top && landed !== top.id) {
     stack.pop();
+    // Its marker may never have been pushed (registered before the page had any
+    // interaction). Drop the pending push: the overlay is closing now, and this
+    // is what lets a Back press with no prior click still close it.
+    const awaitingIdx = awaitingActivationIds.indexOf(top.id);
+    if (awaitingIdx !== -1) awaitingActivationIds.splice(awaitingIdx, 1);
     top.close();
   }
 };
@@ -168,13 +220,10 @@ export const registerOverlay = (close) => {
 
   ensureListener();
 
-  if (isBackInFlight()) {
-    // A swap: pushing now would be overtaken by the in-flight traversal.
-    deferredIds.push(id);
-  } else {
-    // No URL argument: same URL, marker entry only.
-    pushMarker(id);
-  }
+  // No URL argument when it is eventually pushed: same URL, marker entry only.
+  // schedulePush decides whether that is now, after the first interaction, or
+  // after an in-flight programmatic back has landed.
+  schedulePush(id);
   return id;
 };
 
@@ -184,6 +233,13 @@ export const unregisterOverlay = (id) => {
   // Already removed — a real back press closed it, and history is correct.
   if (index === -1) return;
   stack.splice(index, 1);
+
+  const aIdx = awaitingActivationIds.indexOf(id);
+  if (aIdx !== -1) {
+    // Its marker was never pushed (still waiting for the first interaction).
+    awaitingActivationIds.splice(aIdx, 1);
+    return;
+  }
 
   const deferredIndex = deferredIds.indexOf(id);
   if (deferredIndex !== -1) {

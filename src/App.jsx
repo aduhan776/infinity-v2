@@ -57,30 +57,6 @@ function AppShell() {
   const [currentTestData, setCurrentTestData] = useState(null);
   const [testResults, setTestResults] = useState(null);
 
-  // 🧭 REQUIREMENT: browser back button on Analysis Portal must always land
-  // on Dashboard, strictly — never back into the finished test itself.
-  // Same safe pattern as TestPortal's pause guard: push one entry when this
-  // screen is showing, and on a back-press force-navigate to Dashboard
-  // (replace, so Analysis Portal doesn't linger in history either). Never
-  // calls history.back() itself, so it doesn't interact with real browser
-  // history depth (e.g. an earlier OAuth redirect) at all.
-  useEffect(() => {
-    if (!isAnalysisPortalActive) return;
-    window.history.pushState({ infinityAnalysisGuard: true }, '');
-    const handlePopState = () => {
-      // 🧭 The Detailed Review popup pushes its own entry on top of this
-      // guard entry, so popping the popup away lands us back on THIS guard
-      // entry — meaning the portal is still open and only the popup was
-      // dismissed. Don't force-navigate in that case. A real exit pops the
-      // guard entry itself, landing on the previous page's router state,
-      // which never carries this flag.
-      if (window.history.state && window.history.state.infinityAnalysisGuard) return;
-      navigate('/dashboard', { replace: true });
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
   const [sharedTestInvite, setSharedTestInvite] = useState(null); 
   const [testSeriesFolder, setTestSeriesFolder] = useState(null);
   

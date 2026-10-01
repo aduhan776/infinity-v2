@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { authFetch } from '../utils/apiClient';
 import LatexText from '../components/LatexText'; 
 import { getFromLocalStore, saveToLocalStore } from '../utils/localDb';
+import useBackClose from '../hooks/useBackClose';
 
 // 🚨 SECTION FIELD KEY — change this in ONE place if your question objects
 // use a different key name (e.g. 'sectionName', 'topic') instead of 'section'.
@@ -241,38 +242,15 @@ const AnalysisPortal = ({ results, onBackToDashboard }) => {
     }
   };
 
-  // 🔙 Make the device/browser back button close the Detailed Review popup
-  // instead of leaving the page entirely. We push one extra history entry
-  // when the popup opens; if the person hits back, popstate fires and we
-  // just close the popup (no page navigation happens). If they close via
-  // the on-screen Close button instead, we undo that extra history entry
-  // ourselves so a *second* back press still behaves normally afterwards.
-  useEffect(() => {
-    if (selectedQIdx === null) return;
-    window.history.pushState({ analysisPopup: true }, '');
-    const handlePopState = () => {
-      setSelectedQIdx(null);
-      setShowExplanation(false);
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [selectedQIdx]);
-
   const closeDetailedReview = () => {
     setSelectedQIdx(null);
     setShowExplanation(false);
-    // Undo the extra history entry pushed when the popup opened, so back
-    // navigation continues to behave normally instead of stacking up.
-    // This POPS the entry rather than overwriting it in place: overwriting
-    // left a second guard-flagged entry behind, which App.jsx's Analysis
-    // Portal back-guard can't tell apart from the popup's own entry — the
-    // next back press would then be swallowed instead of leaving the
-    // portal. Popping restores the stack to exactly its pre-popup shape.
-    if (window.history.state && window.history.state.analysisPopup) {
-      window.history.back();
-    }
   };
   const [showExplanation, setShowExplanation] = useState(false); 
+
+  // 🔙 Back closes the Detailed Review popup (one marker for the whole time it is open;
+  // next/prev inside the popup does not add history entries).
+  useBackClose(selectedQIdx !== null, () => { setSelectedQIdx(null); setShowExplanation(false); });
   const [savedStatus, setSavedStatus] = useState({}); 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [activeTab, setActiveTab] = useState('analysis'); // mobile only: 'analysis' | 'solutions'
